@@ -1,6 +1,7 @@
 import { Category } from "./category";
 import { Tag } from "./tag";
 import { TypeTransaction } from "../enums/typeTransaction";
+import { Attachment } from "./attachment";
 
 export class Transaction{
     private readonly id: number;
@@ -9,7 +10,7 @@ export class Transaction{
     private ammount: number;
     private type: TypeTransaction
     private details: string;
-    //private PJ
+    private attachments: Attachment[];
     private category: Category;
     private tags: Tag[];
 
@@ -20,6 +21,7 @@ export class Transaction{
         ammount: number,
         type: TypeTransaction,
         details: string,
+        attachments: Attachment[],
         category: Category,
         tags: Tag[]
     ) {
@@ -29,6 +31,7 @@ export class Transaction{
         this.ammount = ammount;
         this.type = type;
         this.details = details;
+        this.attachments = attachments
         this.category = category;
         this.tags = tags;
     }
