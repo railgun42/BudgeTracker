@@ -1,13 +1,13 @@
 import { Transaction } from "./transaction";
-import { Recurrrence } from "./recurrrence";
+import { Recurrence } from "./recurrence";
 
 export class Account{
     private readonly id: number;
     private name: string;
     private history: Transaction[];
-    private recurrences: Recurrrence[];
+    private recurrences: Recurrence[];
 
-    constructor(id: number, name: string, history: Transaction[], recurrences: Recurrrence[]) {
+    constructor(id: number, name: string, history: Transaction[], recurrences: Recurrence[]) {
         this.id = id;
         this.name = name;
         this.history = history;
