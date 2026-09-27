@@ -1,4 +1,7 @@
 import { IntervalUnit } from "../enums/intervalUnit";
+import { Transaction } from "./transaction";
+import { TransactionTemplate } from "./transactionTemplate";
+
 
 export class Recurrence{
     private readonly id: number;
@@ -7,6 +10,8 @@ export class Recurrence{
     private interval: number;
     private unit: IntervalUnit;
     private lastGeneraion: Date;
+    private template: TransactionTemplate;
+    private generatedTranscations: Transaction[]
 
     constructor(
         id: number,
@@ -15,6 +20,8 @@ export class Recurrence{
         interval: number,
         unit: IntervalUnit,
         lastGeneraion: Date,
+        template: TransactionTemplate,
+        generatedTranscations: Transaction[]
     ) {
         this.id = id;
         this.startDate = startDate;
@@ -22,5 +29,7 @@ export class Recurrence{
         this.interval = interval;
         this.unit = unit;
         this.lastGeneraion = lastGeneraion;
+        this.template = template;
+        this.generatedTranscations = generatedTranscations;
     }
 }
