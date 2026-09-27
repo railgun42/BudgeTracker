@@ -88,6 +88,8 @@ package "Domaine" {
         - intervalle : number
         - unite : UniteIntervalle
         - derniereGeneration : Date
+        - template : TransactionTemplate
+        - transactionsGenerees : Transaction[]
         + genererTransactionsDues() : Transaction[]
     }
     note right of Recurrence
@@ -98,10 +100,13 @@ package "Domaine" {
         juste intervalle=1 (1 SEMAINE,
         1 MOIS...) : pas de cas spécial.
 
-        genererTransactionsDues() rattrape
-        TOUTES les occurrences dues depuis
-        derniereGeneration (pas juste la
-        dernière) puis met à jour ce champ.
+        genererTransactionsDues() copie les
+        champs de "template" (nom, montant,
+        type, categorie, tags...) dans une
+        nouvelle Transaction par occurrence
+        due depuis derniereGeneration, puis
+        met à jour derniereGeneration et
+        transactionsGenerees.
     end note
 
     class Account {
@@ -140,7 +145,7 @@ package "Domaine" {
     Transaction "0..*" -- "0..*" Tag : tags
     TransactionTemplate "0..*" --> "1" Categorie : categorie
     TransactionTemplate "0..*" -- "0..*" Tag : tags
-    Recurrence "1" *-- "1" TransactionTemplate : template
+    Recurrence "0..*" --> "1" TransactionTemplate : template
     Recurrence "1" o-- "0..*" Transaction : transactionsGenerees
     Account "1" *-- "0..*" Transaction : history
     Account "1" *-- "0..*" Recurrence : recurrences
