@@ -20,7 +20,7 @@ export class Transaction{
         ammount: number,
         type: TypeTransaction,
         details: string,
-        category: Categorie,
+        category: Category,
         tags: Tag[]
     ) {
         this.id = id;
