@@ -7,7 +7,7 @@ export class Transaction{
     private readonly id: number;
     private name: string;
     private date: Date;
-    private ammount: number;
+    private amount: number;
     private type: TypeTransaction
     private details: string;
     private attachments: Attachment[];
@@ -18,7 +18,7 @@ export class Transaction{
         id: number,
         name: string,
         date: Date,
-        ammount: number,
+        amount: number,
         type: TypeTransaction,
         details: string,
         attachments: Attachment[],
@@ -28,7 +28,7 @@ export class Transaction{
         this.id = id;
         this.name = name;
         this.date = date;
-        this.ammount = ammount;
+        this.amount = amount;
         this.type = type;
         this.details = details;
         this.attachments = attachments

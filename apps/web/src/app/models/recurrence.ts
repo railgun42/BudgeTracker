@@ -9,9 +9,9 @@ export class Recurrence{
     private endDate: Date;
     private interval: number;
     private unit: IntervalUnit;
-    private lastGeneraion: Date;
+    private lastGeneration: Date;
     private template: TransactionTemplate;
-    private generatedTranscations: Transaction[]
+    private generatedTransactions: Transaction[]
 
     constructor(
         id: number,
@@ -19,17 +19,17 @@ export class Recurrence{
         endDate: Date,
         interval: number,
         unit: IntervalUnit,
-        lastGeneraion: Date,
+        lastGeneration: Date,
         template: TransactionTemplate,
-        generatedTranscations: Transaction[]
+        generatedTransactions: Transaction[]
     ) {
         this.id = id;
         this.startDate = startDate;
         this.endDate = endDate;
         this.interval = interval;
         this.unit = unit;
-        this.lastGeneraion = lastGeneraion;
+        this.lastGeneration = lastGeneration;
         this.template = template;
-        this.generatedTranscations = generatedTranscations;
+        this.generatedTransactions = generatedTransactions;
     }
 }

@@ -4,7 +4,7 @@ import { TypeTransaction } from "../enums/typeTransaction";
 
 export class TransactionTemplate{
     private name: string;
-    private ammount: number;
+    private amount: number;
     private type: TypeTransaction
     private details: string;
     private category: Category;
@@ -12,14 +12,14 @@ export class TransactionTemplate{
     
     constructor(
         name: string,
-        ammount: number,
+        amount: number,
         type: TypeTransaction,
         details: string,
         category: Category,
         tags: Tag[]
     ) {
         this.name = name;
-        this.ammount = ammount;
+        this.amount = amount;
         this.type = type;
         this.details = details;
         this.category = category;
