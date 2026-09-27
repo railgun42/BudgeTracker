@@ -1,0 +1,256 @@
+@startuml
+
+' ============================================================
+' DOMAIN (shared between the Angular client and the future API)
+' ============================================================
+package "Domain" {
+
+    enum TypeTransaction {
+        DEBIT
+        CREDIT
+    }
+
+    enum IntervalUnit {
+        DAY
+        WEEK
+        MONTH
+        YEAR
+    }
+
+    class Attachment {
+        - id : number
+        - fileName : string
+        - mimeType : string
+        - url : string
+        - addedAt : Date
+    }
+
+    class Transaction {
+        - id : number
+        - name : string
+        - date : Date
+        - amount : float
+        - type : TypeTransaction
+        - details : string
+        - attachments : Attachment[]
+        - category : Category
+        - tags : Tag[]
+    }
+
+    class TransactionTemplate {
+        - name : string
+        - amount : float
+        - type : TypeTransaction
+        - details : string
+        - category : Category
+        - tags : Tag[]
+    }
+    note right of TransactionTemplate
+        Acts as a "blueprint" used to
+        generate recurring transactions.
+        Holds neither a date nor attachments
+        (specific to each occurrence).
+    end note
+
+    class Category {
+        - id : number
+        - name : string
+        - icon : string
+        - color : string
+        - parent : Category
+    }
+    note right of Category
+        2-level hierarchy, single parent
+        (no multi-parent):
+        e.g. "Entertainment" > "Video games".
+        Used to compute the charts
+        (breakdown by category).
+    end note
+
+    class Tag {
+        - id : number
+        - name : string
+    }
+    note right of Tag
+        Free-form, multiple, cross-cutting
+        with respect to categories. Allows
+        grouping such as "all my
+        subscriptions" regardless of the
+        category of each expense.
+    end note
+
+    Category "0..1" -- "0..*" Category : parent
+
+    class Recurrence {
+        - id : number
+        - startDate : Date
+        - endDate : Date
+        - interval : number
+        - unit : IntervalUnit
+        - lastGeneration : Date
+        - template : TransactionTemplate
+        - generatedTransactions : Transaction[]
+        + generateDueTransactions() : Transaction[]
+    }
+    note right of Recurrence
+        Frequency = interval + unit,
+        e.g. interval=4, unit=WEEK
+        → "every 4 weeks".
+        "Standard" frequencies are
+        just interval=1 (1 WEEK,
+        1 MONTH...): no special case.
+
+        generateDueTransactions() copies the
+        fields of "template" (name, amount,
+        type, category, tags...) into a
+        new Transaction for each occurrence
+        due since lastGeneration, then
+        updates lastGeneration and
+        generatedTransactions.
+    end note
+
+    class Account {
+        - id : number
+        - name : string
+        - history : Transaction[]
+        - recurrences : Recurrence[]
+        + getBalance() : float
+    }
+    note bottom of Account
+        No "balance" or "initialBalance" field:
+        getBalance() computes it on the fly by
+        summing the transactions (credit +, debit -).
+        The "starting balance" is simply a first
+        CREDIT transaction created along with the
+        account, not a dedicated field.
+    end note
+
+    class User {
+        - id : number
+        - name : string
+        - mail : string
+        - phoneNumber : string
+        - lastConnection : Date
+        - accounts : Account[]
+    }
+    note bottom of User
+        Contains NO authentication
+        data. This is the profile
+        shared with the Angular
+        client.
+    end note
+
+    Transaction "1" *-- "0..*" Attachment : attachments
+    Transaction "0..*" --> "1" Category : category
+    Transaction "0..*" -- "0..*" Tag : tags
+    TransactionTemplate "0..*" --> "1" Category : category
+    TransactionTemplate "0..*" -- "0..*" Tag : tags
+    Recurrence "0..*" --> "1" TransactionTemplate : template
+    Recurrence "1" o-- "0..*" Transaction : generatedTransactions
+    Account "1" *-- "0..*" Transaction : history
+    Account "1" *-- "0..*" Recurrence : recurrences
+    User "1" *-- "0..*" Account : accounts
+}
+
+' ============================================================
+' ANGULAR CLIENT
+' ============================================================
+package "Angular Client" {
+
+    class AccountsService {
+        + addTransaction(a:Account, t:Transaction) : void
+        + removeTransaction(a:Account, t:Transaction) : void
+        + getHistory(a:Account) : Transaction[]
+        - autoUpdateTransaction() : void
+        .. applies recurring transactions \n not yet recorded ..
+    }
+
+    class UserService {
+        + editUsername(name:string) : void
+        + editMail(mail:string) : void
+        + editPhoneNumber(phone:string) : void
+    }
+
+    class LogInService {
+        + logIn(mail:string, pass:string) : User
+        + signUp(...) : User
+        + logOut() : void
+        + changePassword(oldPass:string, newPass:string) : void
+    }
+
+    class AccountsApiClient {
+        + fetchAccounts() : Account[]
+        + postTransaction(t:Transaction) : void
+        + deleteTransaction(id:number) : void
+    }
+
+    class UserApiClient {
+        + fetchCurrentUser() : User
+        + updateUser(u:User) : void
+    }
+
+    class AuthApiClient {
+        + login(...) : User
+        + signUp(...) : User
+        + changePassword(oldPass:string, newPass:string) : void
+    }
+
+    AccountsService --> AccountsApiClient : HTTP calls
+    UserService --> UserApiClient : HTTP calls
+    LogInService --> AuthApiClient : HTTP calls
+}
+
+' ============================================================
+' API / BACKEND (upcoming - overview)
+' ============================================================
+package "API (future)" {
+
+    class AccountsController {
+        + GET /accounts
+        + POST /accounts/{id}/transactions
+        + DELETE /transactions/{id}
+    }
+
+    class UserController {
+        + GET /users/me
+        + PATCH /users/me
+    }
+
+    class AuthController {
+        + POST /auth/login
+        + POST /auth/signup
+        + PATCH /auth/password
+    }
+
+    interface AccountsRepository
+    interface UserRepository
+    interface CredentialsRepository
+
+    class Credentials {
+        - id : number
+        - userId : number
+        - passwordHash : string
+        - salt : string
+        + verifyPassword(plainPassword:string) : boolean
+    }
+    note right of Credentials
+        Exists ONLY on the API/DB side.
+        Is NEVER sent to the Angular
+        client nor included in the
+        shared "Domain" package.
+    end note
+
+    AccountsController --> AccountsRepository
+    UserController --> UserRepository
+    AuthController --> CredentialsRepository
+    AccountsController ..> "Domain.Account"
+    UserController ..> "Domain.User"
+    AuthController ..> "Domain.User"
+    Credentials "1" -- "1" "Domain.User" : userId
+}
+
+AccountsApiClient ..> AccountsController : HTTP/REST
+UserApiClient ..> UserController : HTTP/REST
+AuthApiClient ..> AuthController : HTTP/REST
+
+@enduml
