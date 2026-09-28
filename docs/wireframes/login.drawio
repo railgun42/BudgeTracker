@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="htBYvlIrfoQSrdALhir8" name="Page-1">
-        <mxGraphModel dx="553" dy="394" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+        <mxGraphModel dx="382" dy="251" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -131,16 +131,7 @@
                     <mxGeometry height="30" width="155" x="219" y="778" as="geometry"/>
                 </mxCell>
                 <mxCell id="vAABE1uc7FLdkyiUle_Y-36" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B90504;strokeColor=#10739e;fontColor=#F6F6F6;" value="Créer un compte" vertex="1">
-                    <mxGeometry height="30" width="180" x="220" y="811" as="geometry"/>
-                </mxCell>
-                <mxCell id="vAABE1uc7FLdkyiUle_Y-37" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
-                    <mxGeometry height="10" width="12.5" x="220" y="848" as="geometry"/>
-                </mxCell>
-                <mxCell id="vAABE1uc7FLdkyiUle_Y-38" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=9;" value="Rester connecté" vertex="1">
-                    <mxGeometry height="30" width="75" x="232.5" y="838" as="geometry"/>
-                </mxCell>
-                <mxCell id="vAABE1uc7FLdkyiUle_Y-39" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=9;fontColor=#CCCCCC;" value="mot de passe oublié" vertex="1">
-                    <mxGeometry height="30" width="90" x="315" y="838" as="geometry"/>
+                    <mxGeometry height="30" width="180" x="220" y="833" as="geometry"/>
                 </mxCell>
                 <mxCell id="vAABE1uc7FLdkyiUle_Y-41" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;fontColor=#333333;strokeColor=#666666;" value="" vertex="1">
                     <mxGeometry height="20" width="180" x="216" y="702" as="geometry"/>
@@ -159,6 +150,12 @@
                 </mxCell>
                 <mxCell id="vAABE1uc7FLdkyiUle_Y-46" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;span style=&quot;color: rgb(204, 204, 204);&quot;&gt;mot de passe&lt;/span&gt;" vertex="1">
                     <mxGeometry height="30" width="90" x="217" y="737" as="geometry"/>
+                </mxCell>
+                <mxCell id="AmNcYsqqMjCUmRujCjl2-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+                    <mxGeometry height="10" width="12.5" x="226.5" y="813" as="geometry"/>
+                </mxCell>
+                <mxCell id="AmNcYsqqMjCUmRujCjl2-2" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=9;" value="&lt;font style=&quot;font-size: 7px;&quot;&gt;J&#39;accepte les condition général d&#39;utilisation *&lt;/font&gt;" vertex="1">
+                    <mxGeometry height="30" width="155" x="235" y="803" as="geometry"/>
                 </mxCell>
             </root>
         </mxGraphModel>
