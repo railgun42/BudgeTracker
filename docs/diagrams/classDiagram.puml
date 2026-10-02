@@ -171,7 +171,7 @@ package "Angular Client" {
         + editPhoneNumber(phone:string) : void
     }
 
-    class LogInService {
+    class AuthService {
         + logIn(mail:string, pass:string) : User
         + signUp(...) : User
         + logOut() : void
@@ -197,7 +197,7 @@ package "Angular Client" {
 
     AccountsService --> AccountsApiClient : HTTP calls
     UserService --> UserApiClient : HTTP calls
-    LogInService --> AuthApiClient : HTTP calls
+    AuthService --> AuthApiClient : HTTP calls
 }
 
 ' ============================================================
