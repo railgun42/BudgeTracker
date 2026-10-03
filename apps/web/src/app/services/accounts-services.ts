@@ -28,4 +28,15 @@ export class AccountsServices {
 
     account.addTransaction(t);
   }
+
+  public removeTransaction(a:Account,t:Transaction):void{
+    a.removeTransaction(t);
+  }
+
+  public getHistory(a:Account):Transaction[]{
+    return a.getHistory()
+  }
+
+  //private autoUpdateTransaction()
+  // applique les transcation récurrente
 }

@@ -35,4 +35,8 @@ export class Transaction{
         this.category = category;
         this.tags = tags;
     }
+
+    public getId():number{
+        return this.id;
+    }
 }

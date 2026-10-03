@@ -38,6 +38,10 @@ export class Account {
         this.history.push(t);
     }
 
+    public removeTransaction(t: Transaction): void {
+        this.history = this.history.filter(tr => tr.getId() !== t.getId());
+    }
+
     public getRecurrences(): Recurrence[] {
         return this.recurrences;
     }
