@@ -16,5 +16,9 @@ export class User{
         this.lastConnection = lastConnection;
         this.accounts = accounts;    
     }
+
+    public getAccounts():Account[] {
+        return this.accounts;
+    }
 }
 
