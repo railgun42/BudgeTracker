@@ -1,0 +1,8 @@
+<label for="account-name">Account</label>
+<select id="account-name" name="accountName">
+@for(account of accounts; track account.getId()) {
+    <option>
+        {{account.getName()}}
+    </option>
+}
+</select>
