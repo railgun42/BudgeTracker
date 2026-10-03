@@ -1,8 +1,21 @@
-<label for="account-name">Account</label>
-<select id="account-name" name="accountName">
+<label for="account">Compte cible</label>
+<select id="account" name="account">
 @for(account of accounts; track account.getId()) {
-    <option>
+    <option [ngValue]="account">
         {{account.getName()}}
     </option>
 }
 </select>
+
+<h2>Historique</h2>
+
+<ul class="history-list">
+    @for (transaction of transactions; track transaction.getId()){
+        <li [class.debit]="transaction.getType()" [class.credit]="!transaction.getType()">
+            {{transaction.getId()}}
+            {{transaction.getName()}}
+            {{transaction.getDate() | date:'MMMM d yyyy'}}
+            <span class="amount">@if(transaction.getType()){ - } @else { + }{{transaction.getAmount()}}</span>
+        </li>
+    }
+</ul>

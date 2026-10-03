@@ -11,7 +11,7 @@ export class Transaction{
     private type: TypeTransaction
     private details: string;
     private attachments: Attachment[];
-    private category: Category;
+    private category?: Category;
     private tags: Tag[];
 
     constructor(
@@ -22,7 +22,7 @@ export class Transaction{
         type: TypeTransaction,
         details: string,
         attachments: Attachment[],
-        category: Category,
+        category: Category | undefined,
         tags: Tag[]
     ) {
         this.id = id;
@@ -39,4 +39,21 @@ export class Transaction{
     public getId():number{
         return this.id;
     }
+
+    public getName():string{
+        return this.name;
+    }
+
+    public getDate():Date{
+        return this.date;
+    }
+
+    public getAmount():number{
+        return this.amount;
+    }
+
+    public getType():TypeTransaction{
+        return this.type;
+    }
+
 }
