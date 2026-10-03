@@ -1,0 +1,117 @@
+<main class="page">
+  <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+    <div class="page-header">
+      <h1>Ajouter une transaction</h1>
+      <div class="account-picker">
+        <label for="accountId">Compte :</label>
+        <select id="accountId" formControlName="accountId">
+          @for (account of accounts; track account.getId()) {
+            <option [value]="account.getId()">{{ account.getName() }}</option>
+          }
+        </select>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="col col-1">
+        <div class="field">
+          <label for="name">Nom :</label>
+          <input id="name" type="text" formControlName="name" placeholder="nom"
+            [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid">
+          @if (form.controls.name.touched && form.controls.name.invalid) {
+            <p class="field-error" role="alert">Nom requis</p>
+          }
+        </div>
+
+        <div class="field">
+          <label for="date">Date :</label>
+          <input id="date" type="date" formControlName="date">
+          @if (form.controls.date.touched && form.controls.date.invalid) {
+            <p class="field-error" role="alert">Date requise</p>
+          }
+        </div>
+      </div>
+
+      <div class="col col-2">
+        <div class="field">
+          <label for="amount">Montant :</label>
+          <input id="amount" type="number" step="0.01" min="0" formControlName="amount" placeholder="10.00€"
+            [attr.aria-invalid]="form.controls.amount.touched && form.controls.amount.invalid">
+          @if (form.controls.amount.touched && form.controls.amount.invalid) {
+            <p class="field-error" role="alert">Montant supérieur à 0 requis</p>
+          }
+        </div>
+
+        <div class="field">
+          <label for="categoryId">Catégorie :</label>
+          <select id="categoryId" formControlName="categoryId" (change)="onCategoryChange()">
+            <option [value]="0">Aucune</option>
+            @for (c of categories; track c.getId()) {
+              <option [value]="c.getId()">{{ c.getName() }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="subCategoryId">Sous-catégorie :</label>
+          <select id="subCategoryId" formControlName="subCategoryId">
+            <option [value]="0">Aucune</option>
+            @for (s of subCategories(); track s.getId()) {
+              <option [value]="s.getId()">{{ s.getName() }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="tag">Tags :</label>
+          <input #tagInput id="tag" type="text" placeholder="Entrez un tag (Entrée pour ajouter)"
+            (keydown.enter)="$event.preventDefault(); addTag(tagInput)">
+          @if (tags().length) {
+            <ul class="chips">
+              @for (tag of tags(); track tag) {
+                <li>
+                  {{ tag }}
+                  <button type="button" (click)="removeTag(tag)" [attr.aria-label]="'Retirer le tag ' + tag">×</button>
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+      <div class="col col-3">
+        <fieldset class="type">
+          <legend class="visually-hidden">Type de transaction</legend>
+          <label><input type="radio" formControlName="type" [value]="TypeTransaction.CREDIT"> Entrant</label>
+          <label><input type="radio" formControlName="type" [value]="TypeTransaction.DEBIT"> Sortant</label>
+        </fieldset>
+
+        <div class="field">
+          <label for="details">Détails :</label>
+          <textarea id="details" formControlName="details" rows="4" placeholder="add a description"></textarea>
+        </div>
+
+        <div class="field">
+          <div class="file-row">
+            <span>Pièce jointe :</span>
+            <label class="btn-file">
+              ajouter un fichier
+              <input #fileInput type="file" multiple class="visually-hidden" (change)="addFiles(fileInput)">
+            </label>
+          </div>
+          @for (file of files(); track file) {
+            <div class="file">
+              <span>{{ file.name }}</span>
+              <button type="button" (click)="removeFile(file)" [attr.aria-label]="'Retirer ' + file.name">×</button>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn-reset" (click)="reset()">Tout réinitialiser</button>
+        <button type="submit" class="btn-submit">Valider la transaction</button>
+      </div>
+    </div>
+  </form>
+</main>
