@@ -1,4 +1,56 @@
-<h1>Sign up</h1>
-<input #username placeholder="Username" />
-<input #password type="password" placeholder="Password" />
-<button (click)="signUp(username.value, password.value)">Sign up</button>
+<div class="signup-container">
+  <section class="signup-left">
+    <h1>Créer un compte</h1>
+
+    @if (errorMessage()) {
+      <p class="error-message" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <form [formGroup]="signUpForm" (ngSubmit)="onSubmit()" novalidate>
+      <label for="username">nom d'utilisateur :</label>
+      <input id="username" type="text" formControlName="username" placeholder="nom d'utilisateur"
+        autocomplete="username" [attr.aria-invalid]="signUpForm.controls.username.touched && signUpForm.controls.username.invalid">
+      @if (signUpForm.controls.username.touched && signUpForm.controls.username.errors) {
+        <p class="field-error" role="alert">3 caractères minimum</p>
+      }
+
+      <label for="email">email :</label>
+      <input id="email" type="email" formControlName="email" placeholder="email"
+        autocomplete="email" [attr.aria-invalid]="signUpForm.controls.email.touched && signUpForm.controls.email.invalid">
+      @if (signUpForm.controls.email.touched && signUpForm.controls.email.errors) {
+        <p class="field-error" role="alert">Email invalide</p>
+      }
+
+      <label for="password">mot de passe :</label>
+      <input id="password" type="password" formControlName="password" placeholder="mot de passe"
+        autocomplete="new-password" [attr.aria-invalid]="signUpForm.controls.password.touched && signUpForm.controls.password.invalid">
+      @if (signUpForm.controls.password.touched && signUpForm.controls.password.errors) {
+        <p class="field-error" role="alert">8 caractères minimum</p>
+      }
+
+      <label for="confirmPassword">confirmer le mot de passe :</label>
+      <input id="confirmPassword" type="password" formControlName="confirmPassword" placeholder="confirmer le mot de passe"
+        autocomplete="new-password" [attr.aria-invalid]="signUpForm.controls.confirmPassword.touched && signUpForm.hasError('mismatch')">
+      @if (signUpForm.controls.confirmPassword.touched && signUpForm.hasError('mismatch')) {
+        <p class="field-error" role="alert">Les mots de passe ne correspondent pas</p>
+      }
+
+      <label class="terms">
+        <input type="checkbox" formControlName="terms">
+        J'accepte les conditions générales d'utilisation *
+      </label>
+      @if (signUpForm.controls.terms.touched && signUpForm.controls.terms.invalid) {
+        <p class="field-error" role="alert">Vous devez accepter les conditions</p>
+      }
+
+      <button type="submit" class="btn-signup-submit" [disabled]="loading()">
+        {{ loading() ? 'Création...' : 'Créer un compte' }}
+      </button>
+    </form>
+  </section>
+
+  <section class="signup-right">
+    <h2>Déjà un compte ?</h2>
+    <a routerLink="/login" class="btn-login-link">Se connecter</a>
+  </section>
+</div>

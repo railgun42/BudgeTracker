@@ -1,0 +1,153 @@
+$light: #f6f6f6;
+$grey: #e8e8e8;
+$dark: #333333;
+$red-dark: #990100;
+$red: #b90504;
+
+:host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1rem;
+  box-sizing: border-box;
+  background: $grey;
+}
+
+.signup-container {
+  display: flex;
+  width: min(100%, 52rem);
+  min-height: 24rem;
+  border: 1px solid $dark;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  color: $dark;
+}
+
+.signup-left,
+.signup-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.signup-left {
+  background: $light;
+
+  h1 {
+    margin: 0 0 1rem;
+    font-size: clamp(1.25rem, 3vw, 1.5rem);
+    font-weight: 500;
+  }
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+label {
+  font-size: 0.9rem;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'] {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid $dark;
+  border-radius: 0.4rem;
+  background: $grey;
+  color: $dark;
+  font: inherit;
+
+  &::placeholder {
+    color: $dark;
+    opacity: 0.6;
+  }
+}
+
+.terms {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.btn-signup-submit {
+  margin-top: 0.75rem;
+  padding: 0.6rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: $red;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: $red-dark;
+  }
+}
+
+.field-error,
+.error-message {
+  margin: 0;
+  color: $red-dark;
+  font-size: 0.8rem;
+}
+
+.signup-right {
+  align-items: center;
+  gap: 2rem;
+  background: $red;
+  text-align: center;
+
+  h2 {
+    margin: 0;
+    color: #fff;
+    font-size: clamp(1.15rem, 3vw, 1.5rem);
+  }
+}
+
+.btn-login-link {
+  padding: 1.5rem 2.5rem;
+  border: 1px solid $dark;
+  border-radius: 0.75rem;
+  background: $light;
+  color: $red-dark;
+  font-weight: 700;
+  text-decoration: none;
+
+  &:hover {
+    background: $grey;
+  }
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid $dark;
+  outline-offset: 2px;
+}
+
+.signup-right a:focus-visible {
+  outline-color: #fff;
+}
+
+// Mobile : les deux panneaux s'empilent
+@media (max-width: 40rem) {
+  .signup-container {
+    flex-direction: column;
+  }
+
+  .signup-right {
+    gap: 1rem;
+  }
+
+  .btn-login-link {
+    padding: 1rem 1.5rem;
+  }
+}
