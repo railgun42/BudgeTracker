@@ -29,10 +29,12 @@ export class AccountsServices {
     }
 
     account.addTransaction(t);
+    this.us.save();
   }
 
   public removeTransaction(a:Account,t:Transaction):void{
     a.removeTransaction(t);
+    this.us.save();
   }
 
   public getHistory(a:Account):Transaction[]{

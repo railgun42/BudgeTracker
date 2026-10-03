@@ -56,4 +56,16 @@ export class Transaction{
         return this.type;
     }
 
+    public getDetails():string{
+        return this.details;
+    }
+
+    public getAttachments():Attachment[]{
+        return this.attachments;
+    }
+
+    public getCategory():Category | undefined{
+        return this.category;
+    }
+
 }

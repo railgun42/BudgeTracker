@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { User } from '../models/user';
 import { Account } from '../models/account';
 import { Transaction } from '../models/transaction';
+import { Category } from '../models/category';
 
 const USERS_KEY = 'users';
 
@@ -67,8 +68,14 @@ export class UserService {
     }
   }
 
+  private reviveCategory(c: Category): Category {
+    const category = Object.assign(Object.create(Category.prototype), c);
+    if (category.parent) category.parent = this.reviveCategory(category.parent);
+    return category;
+  }
+
   // JSON.parse renvoie des objets sans méthodes ni Date : on les reconstruit
-  // ponytail: Category/Tag/Attachment/Recurrence non reconstruits, à ajouter quand ils auront des méthodes
+  // ponytail: Tag/Attachment/Recurrence non reconstruits, à ajouter quand ils auront des méthodes
   private revive(u: User): User {
     const user = Object.assign(Object.create(User.prototype), u);
     user.accounts = user.accounts.map((a: Account) => {
@@ -76,6 +83,7 @@ export class UserService {
       account.history = account.history.map((t: Transaction) => {
         const tr = Object.assign(Object.create(Transaction.prototype), t);
         tr.date = new Date(tr.date);
+        if (tr.category) tr.category = this.reviveCategory(tr.category);
         return tr;
       });
       return account;

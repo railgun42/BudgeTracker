@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../services/auth-service';
 
@@ -7,6 +7,7 @@ import { AuthService } from '../../services/auth-service';
   imports: [RouterLink],
   templateUrl: './nav-bar.html',
   styleUrl: './nav-bar.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class NavBar {
   private auth = inject(AuthService);

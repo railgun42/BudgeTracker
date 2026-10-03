@@ -1,18 +1,42 @@
-<aside class="sidebar">
-  <div class="sidebar-header">
-    <a routerLink="/signup">SignUp</a>
-    <a routerLink="/login">Login</a>
-  </div>
+<header class="navbar">
+  <a routerLink="/" class="brand">BudgeTracker</a>
 
-  <nav class="sidebar-nav">
-    <a routerLink="/accounts">Mes Comptes</a>
-    <a routerLink="/transaction">Transaction</a>
-    <a routerLink="/history">Historique</a>
-    <a routerLink="/stats">Statistiques</a>
+  <nav class="menu" aria-label="Navigation principale">
+    <!-- Pas de route pour le moment : boutons à transformer en routerLink -->
+    <button type="button" class="nav-item active">Tableau de Bord</button>
+
+    <div class="dropdown">
+      <button type="button" class="nav-item" aria-haspopup="true">Comptes</button>
+      <ul class="dropdown-menu">
+        <li><button type="button">Gestion de comptes</button></li>
+        <li><button type="button">Nouvelle transaction</button></li>
+        <li><a routerLink="/history">Historique</a></li>
+      </ul>
+    </div>
+
+    <button type="button" class="nav-item">Statistiques</button>
+    <button type="button" class="nav-item">Simulation</button>
+
+    <button type="button" class="icon-btn" aria-label="Profil">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="11"/>
+        <circle cx="12" cy="9.5" r="3.5"/>
+        <path d="M5.5 19.5c1.5-3 4-4.5 6.5-4.5s5 1.5 6.5 4.5"/>
+      </svg>
+    </button>
+
+    <div class="dropdown dropdown-end">
+      <button type="button" class="icon-btn" aria-label="Paramètres" aria-haspopup="true">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+      <ul class="dropdown-menu">
+        <li><button type="button">Paramètres</button></li>
+        <li><a routerLink="/login">Se connecter</a></li>
+        <li><button type="button" (click)="logout()">Se déconnecter</button></li>
+      </ul>
+    </div>
   </nav>
-
-  <div class="sidebar-footer">
-    <a routerLink="/settings">Parametres</a>
-    <button type="button" (click)="logout()">Déconnexion</button>
-  </div>
-</aside>
+</header>

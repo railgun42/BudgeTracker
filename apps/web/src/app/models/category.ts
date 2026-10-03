@@ -11,4 +11,12 @@ export class Category {
         this.color = color;
         this.parent = parent;
     }
+
+    public getName(): string {
+        return this.name;
+    }
+
+    public getParent(): Category | undefined {
+        return this.parent;
+    }
 }

@@ -1,21 +1,65 @@
-<label for="account">Compte cible</label>
-<select id="account" name="account">
-@for(account of accounts; track account.getId()) {
-    <option [ngValue]="account">
-        {{account.getName()}}
-    </option>
-}
-</select>
+<main class="history">
+  <h1>Historique des transactions</h1>
 
-<h2>Historique</h2>
+  <div class="toolbar">
+    <label for="account">Compte :</label>
+    <select id="account" (change)="onAccountChange($any($event.target).value)">
+      <option value="all">Tous</option>
+      @for (account of accounts(); track account.getId()) {
+        <option [value]="account.getId()">{{ account.getName() }}</option>
+      }
+    </select>
 
-<ul class="history-list">
-    @for (transaction of transactions; track transaction.getId()){
-        <li [class.debit]="transaction.getType()" [class.credit]="!transaction.getType()">
-            {{transaction.getId()}}
-            {{transaction.getName()}}
-            {{transaction.getDate() | date:'MMMM d yyyy'}}
-            <span class="amount">@if(transaction.getType()){ - } @else { + }{{transaction.getAmount()}}</span>
-        </li>
-    }
-</ul>
+    <label for="sort" class="visually-hidden">Trier par</label>
+    <select id="sort" class="sort" (change)="newestFirst.set($any($event.target).value === 'desc')">
+      <option value="desc">Trier par : Plus récent</option>
+      <option value="asc">Trier par : Plus ancien</option>
+    </select>
+
+    <!-- Pas encore de filtres : voir TODO dans le .ts -->
+    <button type="button" class="btn-filter">Filtrer</button>
+  </div>
+
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Nom</th>
+          <th scope="col">Montant</th>
+          <th scope="col">Date</th>
+          <th scope="col">Catégorie</th>
+          <th scope="col">Sous-catégorie</th>
+          <th scope="col">Détails</th>
+          <th scope="col">PJ</th>
+          <th scope="col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.transaction.getId()) {
+          <tr>
+            <td>{{ row.transaction.getName() }}</td>
+            <td [class]="row.transaction.getType() === TypeTransaction.DEBIT ? 'debit' : 'credit'">
+              {{ row.transaction.getType() === TypeTransaction.DEBIT ? '-' : '+' }} {{ row.transaction.getAmount() }}€
+            </td>
+            <td>{{ row.transaction.getDate() | date: 'dd/MM/yy' }}</td>
+            <td>{{ category(row.transaction) }}</td>
+            <td>{{ subCategory(row.transaction) }}</td>
+            <td>{{ row.transaction.getDetails() || 'X' }}</td>
+            <td>{{ row.transaction.getAttachments().length }}</td>
+            <td class="actions">
+              <!-- Modifier : pas encore implémenté -->
+              <button type="button" [attr.aria-label]="'Modifier ' + row.transaction.getName()">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+              </button>
+              <button type="button" (click)="delete(row)" [attr.aria-label]="'Supprimer ' + row.transaction.getName()">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+              </button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="8" class="empty">Aucune transaction</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</main>

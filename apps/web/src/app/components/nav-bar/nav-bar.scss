@@ -1,0 +1,127 @@
+$light: #f6f6f6;
+$grey: #e8e8e8;
+$dark: #333333;
+$red-dark: #990100;
+
+:host {
+  display: block;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  padding: 0.6rem clamp(1rem, 4vw, 2.5rem);
+  background: $grey;
+  border-bottom: 1px solid $dark;
+  color: $dark;
+}
+
+.brand {
+  color: $red-dark;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.menu {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+}
+
+button,
+a {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nav-item {
+  padding: 0.4rem 0.25rem;
+  border: 0;
+  background: none;
+  font-weight: 700;
+
+  &:hover,
+  &.active {
+    color: $red-dark;
+  }
+}
+
+.icon-btn {
+  display: flex;
+  padding: 0.15rem;
+  border: 0;
+  background: none;
+
+  svg {
+    width: 2rem;
+    height: 2rem;
+    fill: none;
+    stroke: $dark;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  &:hover svg {
+    stroke: $red-dark;
+  }
+}
+
+// Menus déroulants : au survol ET au focus clavier
+.dropdown {
+  position: relative;
+
+  &:hover .dropdown-menu,
+  &:focus-within .dropdown-menu {
+    display: block;
+  }
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 10;
+  min-width: 12rem;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: $light;
+  border: 1px solid $dark;
+  border-radius: 0.4rem;
+
+  .dropdown-end & {
+    left: auto;
+    right: 0;
+  }
+
+  a,
+  button {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: 0;
+    background: none;
+    text-align: left;
+    text-decoration: none;
+    box-sizing: border-box;
+
+    &:hover {
+      background: $grey;
+      color: $red-dark;
+    }
+  }
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid $dark;
+  outline-offset: 2px;
+}
