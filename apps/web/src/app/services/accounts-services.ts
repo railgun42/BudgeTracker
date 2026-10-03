@@ -10,10 +10,12 @@ import { Transaction } from '../models/transaction';
 export class AccountsServices {
   private accounts: Account[] = [];
 
-  constructor(private us:UserService){}
+  constructor(private us:UserService){
+    this.accounts = us.getAccounts()
+  }
 
-  public setAccounts(user:User):void{
-    this.accounts = this.us.getAccounts(user);
+  public getAccounts():Account[]{
+    return this.accounts = this.us.getAccounts();
   }
 
   public addTransaction(a:Account, t:Transaction):void{
@@ -38,5 +40,5 @@ export class AccountsServices {
   }
 
   //private autoUpdateTransaction()
-  // applique les transcation récurrente
+  //applique les transcations récurrentes
 }

@@ -6,17 +6,13 @@ import { Account } from '../models/account';
   providedIn: 'root',
 })
 export class UserService {
-  private user:User
-
-  constructor(user:User){
-    this.user = user;
-  }
+  private user?: User;
 
   public setUser(user: User): void {
     this.user = user;
   }
 
-  public getAccounts(user:User):Account[]{
-    return this.user.getAccounts();
+  public getAccounts():Account[]{
+    return this.user?.getAccounts() ?? [];
   }
 }
