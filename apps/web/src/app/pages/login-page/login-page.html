@@ -1,1 +1,41 @@
-<p>login-page works!</p>
+<div class="login-container">
+  <section class="login-left">
+    <h1>Se connecter :</h1>
+
+    @if (errorMessage()) {
+      <p class="error-message" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" novalidate>
+      <label for="login">nom d'utilisateur</label>
+      <input id="login" type="text" formControlName="login" placeholder="nom d'utilisateur"
+        autocomplete="username" [attr.aria-invalid]="loginForm.controls.login.touched && loginForm.controls.login.invalid">
+      @if (loginForm.controls.login.touched && loginForm.controls.login.hasError('required')) {
+        <p class="field-error" role="alert">Nom d'utilisateur requis</p>
+      }
+
+      <label for="password">mot de passe :</label>
+      <input id="password" type="password" formControlName="password" placeholder="mot de passe"
+        autocomplete="current-password" [attr.aria-invalid]="loginForm.controls.password.touched && loginForm.controls.password.invalid">
+      @if (loginForm.controls.password.touched && loginForm.controls.password.hasError('required')) {
+        <p class="field-error" role="alert">Mot de passe requis</p>
+      }
+
+      <button type="submit" class="btn-login" [disabled]="loading()">
+        {{ loading() ? 'Connexion...' : 'Se connecter' }}
+      </button>
+
+      <div class="login-options">
+        <label class="remember">
+          <input type="checkbox" formControlName="remember"> Rester connecté
+        </label>
+        <!-- ponytail: lien retiré tant que la route "mot de passe oublié" n'existe pas -->
+      </div>
+    </form>
+  </section>
+
+  <section class="login-right">
+    <h2>Pas encore de compte ?</h2>
+    <a routerLink="/signup" class="btn-signup">Créer un compte -></a>
+  </section>
+</div>
