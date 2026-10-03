@@ -1,1 +1,4 @@
-<p>sign-up-page works!</p>
+<h1>Sign up</h1>
+<input #username placeholder="Username" />
+<input #password type="password" placeholder="Password" />
+<button (click)="signUp(username.value, password.value)">Sign up</button>
