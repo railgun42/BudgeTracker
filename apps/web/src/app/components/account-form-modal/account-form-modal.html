@@ -1,0 +1,37 @@
+<dialog #dialog aria-labelledby="modal-title" (click)="onDialogClick($event)" (cancel)="$event.preventDefault(); closed.emit()">
+  <button type="button" class="btn-close" aria-label="Fermer" (click)="closed.emit()">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18M21 3L3 21"/></svg>
+  </button>
+
+  <form [formGroup]="form" (ngSubmit)="onSubmit()" novalidate>
+    <h2 id="modal-title">Nouveau compte :</h2>
+
+    <div class="field">
+      <label for="name">Nom :</label>
+      <input id="name" type="text" formControlName="name" placeholder="nom"
+        [attr.aria-invalid]="form.controls.name.touched && form.controls.name.invalid">
+      @if (form.controls.name.touched && form.controls.name.invalid) {
+        <p class="field-error" role="alert">Nom requis</p>
+      }
+    </div>
+
+    <div class="field">
+      <label for="tracking">Type de suivi :</label>
+      <select id="tracking" formControlName="tracking">
+        <option [ngValue]="TrackingType.NORMAL">Normal</option>
+        <option [ngValue]="TrackingType.WITH_INTEREST">Avec intérêts</option>
+        <option [ngValue]="TrackingType.NOT_TRACKED">Non suivi</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="startingBalance">Solde de départ :</label>
+      <input id="startingBalance" type="number" step="0.01" formControlName="startingBalance" placeholder="0">
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn-reset" (click)="form.reset()">Réinitialiser</button>
+      <button type="submit" class="btn-submit">Valider</button>
+    </div>
+  </form>
+</dialog>

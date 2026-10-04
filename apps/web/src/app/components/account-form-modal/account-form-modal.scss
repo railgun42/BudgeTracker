@@ -1,0 +1,143 @@
+$light: #f6f6f6;
+$grey: #e8e8e8;
+$dark: #333333;
+$red-dark: #990100;
+
+dialog {
+  width: min(92vw, 22rem);
+  padding: 0;
+  border: 1px solid $dark;
+  border-radius: 2rem;
+  background: #fff;
+  color: $dark;
+  overflow: visible; // le bouton fermer dépasse du coin
+
+  // Fond gris transparent par-dessus le site
+  &::backdrop {
+    background: rgba($dark, 0.5);
+  }
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.75rem 1.75rem 1.5rem;
+}
+
+h2 {
+  margin: 0;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+label {
+  font-size: 0.9rem;
+}
+
+input,
+select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid $dark;
+  border-radius: 0.4rem;
+  background: $light;
+  color: $dark;
+  font: inherit;
+  box-sizing: border-box;
+  width: 100%;
+
+  &::placeholder {
+    color: $dark;
+    opacity: 0.6;
+  }
+}
+
+select {
+  cursor: pointer;
+}
+
+// Champ désactivé (ex : solde de départ d'un compte non suivi)
+input:disabled {
+  background: #b5b5b5;
+  border-color: #777;
+  color: $dark;
+  cursor: not-allowed;
+
+  &::placeholder {
+    opacity: 0.8;
+  }
+}
+
+.field-error {
+  margin: 0;
+  color: $red-dark;
+  font-size: 0.8rem;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 2rem;
+
+  button {
+    padding: 0.6rem;
+    border: 1px solid $dark;
+    border-radius: 0.4rem;
+    font: inherit;
+    color: $dark;
+    cursor: pointer;
+  }
+}
+
+.btn-reset {
+  background: #fff;
+}
+
+.btn-submit {
+  background: #d5e8d4;
+  border-color: #82b366 !important;
+
+  &:hover {
+    background: #c3dcc1;
+  }
+}
+
+.btn-close {
+  position: absolute;
+  top: -1rem;
+  right: -1rem;
+  display: flex;
+  padding: 0.5rem;
+  border: 1px solid $red-dark;
+  border-radius: 50%;
+  background: #f8cecc;
+  cursor: pointer;
+
+  svg {
+    width: 1.75rem;
+    height: 1.75rem;
+    fill: none;
+    stroke: $dark;
+    stroke-width: 1.5;
+    stroke-linecap: round;
+  }
+
+  &:hover {
+    background: #f4b9b6;
+  }
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible {
+  outline: 3px solid $dark;
+  outline-offset: 2px;
+}
