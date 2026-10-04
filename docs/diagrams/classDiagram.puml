@@ -10,6 +10,26 @@ package "Domain" {
         CREDIT
     }
 
+    enum TrackingType {
+        NORMAL
+        WITH_INTEREST
+        NOT_TRACKED
+    }
+    note right of TrackingType
+        NORMAL: regular account, balance
+        computed from the transactions.
+
+        WITH_INTEREST: interest is computed
+        and added automatically
+        (logic not implemented yet).
+
+        NOT_TRACKED: the balance is neither
+        computed nor displayed (e.g. a wallet
+        where only cash expenses are recorded,
+        not the cash received). Such an account
+        is mainly used for the statistics.
+    end note
+
     enum IntervalUnit {
         DAY
         WEEK
@@ -114,6 +134,7 @@ package "Domain" {
         - name : string
         - history : Transaction[]
         - recurrences : Recurrence[]
+        - tracking : TrackingType
         + getBalance() : float
     }
     note bottom of Account
@@ -147,6 +168,7 @@ package "Domain" {
     TransactionTemplate "0..*" -- "0..*" Tag : tags
     Recurrence "0..*" --> "1" TransactionTemplate : template
     Recurrence "1" o-- "0..*" Transaction : generatedTransactions
+    Account "0..*" --> "1" TrackingType : tracking
     Account "1" *-- "0..*" Transaction : history
     Account "1" *-- "0..*" Recurrence : recurrences
     User "1" *-- "0..*" Account : accounts

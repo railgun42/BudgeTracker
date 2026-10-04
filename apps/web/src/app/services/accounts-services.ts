@@ -18,6 +18,24 @@ export class AccountsServices {
     return this.accounts = this.us.getAccounts();
   }
 
+  public addAccount(name:string):void{
+    const id = Math.max(0, ...this.getAccounts().map(a => a.getId())) + 1;
+    this.getAccounts().push(new Account(id, name, [], []));
+    this.us.save();
+  }
+
+  public renameAccount(a:Account, name:string):void{
+    a.setName(name);
+    this.us.save();
+  }
+
+  public removeAccount(a:Account):void{
+    const accounts = this.getAccounts();
+    const i = accounts.indexOf(a);
+    if (i >= 0) accounts.splice(i, 1);
+    this.us.save();
+  }
+
   public addTransaction(a:Account, t:Transaction):void{
     const account = this.accounts.find((item) => item === a || item.getId() === a.getId());
     if (!account) {

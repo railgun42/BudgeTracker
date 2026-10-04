@@ -1,0 +1,63 @@
+<main class="page">
+  <div class="page-header">
+    <h1>Mes Comptes</h1>
+    <button type="button" class="btn-add" (click)="add()">Ajouter un compte +</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Comptes</th>
+        <th scope="col">Solde</th>
+        <th scope="col">Type de suivi</th>
+        <th scope="col" class="actions-col">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (account of accounts(); track account.getId()) {
+        <tr>
+          <td>{{ account.getName() }}</td>
+          <td>
+            @if (account.getTracking() === TrackingType.NOT_TRACKED) {
+              X
+            } @else {
+              <span [class]="account.getBalance() < 0 ? 'negative' : 'positive'">{{ account.getBalance() }}€</span>
+            }
+          </td>
+          <td>
+            @switch (account.getTracking()) {
+              @case (TrackingType.NOT_TRACKED) { Non suivi }
+              @case (TrackingType.WITH_INTEREST) { Avec intérêts }
+              @default { Normal }
+            }
+          </td>
+          <td class="actions">
+            <div class="dropdown">
+              <button type="button" aria-haspopup="true" [attr.aria-label]="'Menu du compte ' + account.getName()">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 7h6l2 2h10v11H3z"/>
+                  <circle cx="17" cy="14.5" r="0.8"/>
+                </svg>
+              </button>
+              <ul class="dropdown-menu">
+                <li><a routerLink="/new-transaction" [queryParams]="{ account: account.getId() }">Ajouter une transaction</a></li>
+                <li><a routerLink="/history" [queryParams]="{ account: account.getId() }">Historique des transactions</a></li>
+                <!-- Page des transactions récurrentes : pas encore faite -->
+                <li><button type="button">Liste des transactions récurrentes</button></li>
+              </ul>
+            </div>
+
+            <button type="button" (click)="rename(account)" [attr.aria-label]="'Modifier ' + account.getName()">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+            </button>
+            <button type="button" (click)="delete(account)" [attr.aria-label]="'Supprimer ' + account.getName()">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
+            </button>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="4" class="empty">Aucun compte</td></tr>
+      }
+    </tbody>
+  </table>
+</main>

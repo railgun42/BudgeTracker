@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { ActivatedRoute } from '@angular/router';
 import { AccountsServices } from '../../services/accounts-services';
 import { Account } from '../../models/account';
 import { Transaction } from '../../models/transaction';
@@ -19,7 +20,8 @@ export class HistoryPage {
 
   protected readonly TypeTransaction = TypeTransaction;
   protected accounts = signal(this.accountsService.getAccounts());
-  protected selectedAccountId = signal<number | null>(null); // null = tous les comptes
+  // ?account=<id> (depuis la page des comptes) ; null = tous les comptes
+  protected selectedAccountId = signal<number | null>(this.accountFromUrl());
   protected newestFirst = signal(true);
 
   protected rows = computed<Row[]>(() => {
@@ -30,6 +32,11 @@ export class HistoryPage {
     const dir = this.newestFirst() ? -1 : 1;
     return rows.sort((a, b) => dir * (a.transaction.getDate().getTime() - b.transaction.getDate().getTime()));
   });
+
+  private accountFromUrl(): number | null {
+    const id = Number(inject(ActivatedRoute).snapshot.queryParamMap.get('account'));
+    return this.accountsService.getAccounts().some((a) => a.getId() === id) ? id : null;
+  }
 
   onAccountChange(value: string): void {
     this.selectedAccountId.set(value === 'all' ? null : Number(value));

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AccountsServices } from '../../services/accounts-services';
 import { Attachment } from '../../models/attachment';
@@ -36,14 +36,21 @@ const today = () => new Date().toISOString().slice(0, 10);
 export class NewTransactionPage {
   private accountsService = inject(AccountsServices);
   private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
   protected accounts = this.accountsService.getAccounts();
   protected categories = CATEGORIES.map((c) => c.category);
   protected tags = signal<string[]>([]);
   protected files = signal<File[]>([]);
 
+  // Compte ciblé par ?account=<id> (depuis la page des comptes), sinon le premier
+  private initialAccountId(): number {
+    const id = Number(this.route.snapshot.queryParamMap.get('account'));
+    return this.accounts.find((a) => a.getId() === id)?.getId() ?? this.accounts.at(0)?.getId() ?? 0;
+  }
+
   protected form = inject(FormBuilder).nonNullable.group({
-    accountId: [this.accounts.at(0)?.getId() ?? 0, Validators.required],
+    accountId: [this.initialAccountId(), Validators.required],
     name: ['', Validators.required],
     amount: [null as number | null, [Validators.required, Validators.min(0.01)]],
     type: [TypeTransaction.CREDIT, Validators.required],

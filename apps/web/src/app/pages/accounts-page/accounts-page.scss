@@ -1,0 +1,164 @@
+$light: #f6f6f6;
+$grey: #e8e8e8;
+$dark: #333333;
+$red-dark: #990100;
+$green: #1a7a1a;
+
+:host {
+  display: block;
+  background: $light;
+  color: $dark;
+  min-height: 100vh;
+}
+
+.page {
+  padding: 1rem clamp(1rem, 4vw, 2.5rem) 2rem;
+}
+
+.page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+
+  h1 {
+    margin: 0;
+    color: $red-dark;
+    font-size: clamp(1.5rem, 4vw, 2rem);
+  }
+}
+
+.btn-add {
+  padding: 0.6rem 1.25rem;
+  border: 1px solid $dark;
+  border-radius: 0.5rem;
+  background: $light;
+  color: $dark;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: $grey;
+  }
+}
+
+// Pas d'overflow sur le tableau : il couperait le menu déroulant du portefeuille
+table {
+  width: 100%;
+  border: 1px solid $dark;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+th,
+td {
+  padding: 0.75rem 0.5rem;
+}
+
+thead {
+  border-bottom: 1px solid $dark;
+}
+
+tbody tr + tr {
+  border-top: 1px solid $dark;
+}
+
+.actions-col,
+.actions {
+  border-left: 1px solid $dark;
+}
+
+.positive {
+  color: $green;
+}
+
+.negative {
+  color: $red-dark;
+}
+
+.empty {
+  padding: 1.5rem;
+}
+
+.actions {
+  white-space: nowrap;
+
+  > button,
+  .dropdown > button {
+    padding: 0.25rem;
+    margin: 0 0.25rem;
+    border: 0;
+    background: none;
+    cursor: pointer;
+  }
+
+  svg {
+    width: 1.6rem;
+    height: 1.6rem;
+    fill: none;
+    stroke: $dark;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  button:hover svg {
+    stroke: $red-dark;
+  }
+}
+
+// Menu du portefeuille : au survol, ou au clavier (:focus-visible, pas :focus-within : voir nav-bar.scss)
+.dropdown {
+  display: inline-block;
+  position: relative;
+
+  &:hover .dropdown-menu,
+  &:has(:focus-visible) .dropdown-menu {
+    display: block;
+  }
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 10;
+  min-width: 14rem;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  background: $light;
+  border: 1px solid $dark;
+  border-radius: 0.4rem;
+  text-align: left;
+
+  a,
+  button {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 1rem;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: $dark;
+    text-align: left;
+    text-decoration: none;
+    box-sizing: border-box;
+    white-space: normal;
+    cursor: pointer;
+
+    &:hover {
+      background: $grey;
+      color: $red-dark;
+    }
+  }
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid $dark;
+  outline-offset: 2px;
+}

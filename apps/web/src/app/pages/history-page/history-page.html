@@ -4,9 +4,9 @@
   <div class="toolbar">
     <label for="account">Compte :</label>
     <select id="account" (change)="onAccountChange($any($event.target).value)">
-      <option value="all">Tous</option>
+      <option value="all" [selected]="selectedAccountId() === null">Tous</option>
       @for (account of accounts(); track account.getId()) {
-        <option [value]="account.getId()">{{ account.getName() }}</option>
+        <option [value]="account.getId()" [selected]="selectedAccountId() === account.getId()">{{ account.getName() }}</option>
       }
     </select>
 
