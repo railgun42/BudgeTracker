@@ -73,12 +73,14 @@ a {
   }
 }
 
-// Menus déroulants : au survol ET au focus clavier
+// Menus déroulants : au survol, ou au focus clavier uniquement (:focus-visible).
+// Avec :focus-within, un clic souris laissait le lien focalisé (la nav bar survit au changement de page)
+// et le menu restait ouvert.
 .dropdown {
   position: relative;
 
   &:hover .dropdown-menu,
-  &:focus-within .dropdown-menu {
+  &:has(:focus-visible) .dropdown-menu {
     display: block;
   }
 }

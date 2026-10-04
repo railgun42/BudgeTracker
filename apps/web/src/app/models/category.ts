@@ -12,6 +12,10 @@ export class Category {
         this.parent = parent;
     }
 
+    public getId(): number {
+        return this.id;
+    }
+
     public getName(): string {
         return this.name;
     }

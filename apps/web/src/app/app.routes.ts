@@ -5,6 +5,7 @@ import { SignUpPage } from './pages/sign-up-page/sign-up-page';
 import { Page404 } from './pages/page404/page404';
 import { HistoryPage } from './pages/history-page/history-page';
 import { AuthGuard } from './guards/auth-guard';
+import { NewTransactionPage } from './pages/new-transaction-page/new-transaction-page';
 
 export const routes: Routes = [
     { 
@@ -22,6 +23,11 @@ export const routes: Routes = [
     {
         path: 'history',
         component: HistoryPage,
+        canActivate: [AuthGuard]
+    },
+    {
+        path: 'new-transaction',
+        component: NewTransactionPage,
         canActivate: [AuthGuard]
     },
 

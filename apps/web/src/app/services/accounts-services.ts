@@ -32,6 +32,11 @@ export class AccountsServices {
     this.us.save();
   }
 
+  // Id unique sur tous les comptes (les lignes de l'historique "Tous" sont suivies par id)
+  public nextTransactionId():number{
+    return Math.max(0, ...this.getAccounts().flatMap(a => a.getHistory().map(t => t.getId()))) + 1;
+  }
+
   public removeTransaction(a:Account,t:Transaction):void{
     a.removeTransaction(t);
     this.us.save();
