@@ -3,10 +3,11 @@ import { RouterLink } from '@angular/router';
 import { AccountsServices } from '../../services/accounts-services';
 import { Account } from '../../models/account';
 import { TrackingType } from '../../enums/trackingType';
+import { AccountFormModal, AccountFormValue } from '../../components/account-form-modal/account-form-modal';
 
 @Component({
   selector: 'app-accounts-page',
-  imports: [RouterLink],
+  imports: [RouterLink, AccountFormModal],
   templateUrl: './accounts-page.html',
   styleUrl: './accounts-page.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -16,19 +17,19 @@ export class AccountsPage {
 
   protected readonly TrackingType = TrackingType;
   protected accounts = signal(this.accountsService.getAccounts());
+  protected showForm = signal(false);
 
   private refresh(): void {
     this.accounts.set([...this.accountsService.getAccounts()]);
   }
 
-  // ponytail: window.prompt/confirm en attendant une vraie modale / un formulaire de compte
-  add(): void {
-    const name = prompt('Nom du nouveau compte :')?.trim();
-    if (!name) return;
-    this.accountsService.addAccount(name);
+  create(v: AccountFormValue): void {
+    this.accountsService.addAccount(v.name, v.tracking, v.startingBalance);
+    this.showForm.set(false);
     this.refresh();
   }
 
+  // ponytail: window.prompt/confirm en attendant la modale de modification / de confirmation
   rename(account: Account): void {
     const name = prompt('Nouveau nom du compte :', account.getName())?.trim();
     if (!name) return;
@@ -46,7 +47,8 @@ export class AccountsPage {
 /*
  * TODO quand l'API sera branchée :
  * - Charger / créer / modifier / supprimer les comptes via AccountsServices (GET/POST/PUT/DELETE /api/accounts).
- * - Formulaire dédié (nom, type de suivi, taux d'intérêt...) pour "Ajouter un compte" et "Modifier" au lieu de prompt().
+ * - Réutiliser AccountFormModal pour "Modifier" (au lieu de prompt()) ; ajouter le taux d'intérêt pour WITH_INTEREST.
+ * - Création : envoyer le solde de départ au serveur (qui crée la transaction "Solde de départ").
  * - Modale de confirmation pour la suppression ; gérer l'erreur réseau.
  * - Solde : calculé par le serveur (une page de comptes avec beaucoup de transactions ne doit pas tout sommer côté client).
  * - Pagination / "charger plus" (les ".........." de la maquette) si beaucoup de comptes.

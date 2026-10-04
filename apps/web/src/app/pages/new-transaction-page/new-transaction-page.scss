@@ -33,6 +33,15 @@ $red-dark: #990100;
   display: flex;
   align-items: center;
   gap: 0.5rem;
+
+  // Le select est à width: 100% par défaut (règle plus bas) : il écrasait le label
+  label {
+    white-space: nowrap;
+  }
+
+  select {
+    width: auto;
+  }
 }
 
 .card {

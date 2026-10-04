@@ -3,6 +3,8 @@ import { UserService } from './user-service';
 import { Account } from '../models/account';
 import { User } from '../models/user';
 import { Transaction } from '../models/transaction';
+import { TrackingType } from '../enums/trackingType';
+import { TypeTransaction } from '../enums/typeTransaction';
 
 @Injectable({
   providedIn: 'root',
@@ -18,9 +20,24 @@ export class AccountsServices {
     return this.accounts = this.us.getAccounts();
   }
 
-  public addAccount(name:string):void{
+  // Un solde de départ non nul crée une première transaction "Solde de départ" (crédit, ou débit si négatif)
+  public addAccount(name:string, tracking:TrackingType = TrackingType.NORMAL, startingBalance:number = 0):void{
     const id = Math.max(0, ...this.getAccounts().map(a => a.getId())) + 1;
-    this.getAccounts().push(new Account(id, name, [], []));
+    const history: Transaction[] = [];
+    if (startingBalance !== 0) {
+      history.push(new Transaction(
+        this.nextTransactionId(),
+        'Solde de départ',
+        new Date(),
+        Math.abs(startingBalance),
+        startingBalance > 0 ? TypeTransaction.CREDIT : TypeTransaction.DEBIT,
+        '',
+        [],
+        undefined,
+        []
+      ));
+    }
+    this.getAccounts().push(new Account(id, name, history, [], tracking));
     this.us.save();
   }
 
