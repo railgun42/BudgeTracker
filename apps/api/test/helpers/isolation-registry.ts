@@ -51,6 +51,30 @@ const tagOfB = async ({ b }: TwoUsers) => {
   };
 };
 
+// Transaction créée par B sur son compte, avec un tag ; intacte = relue telle quelle par B.
+const transactionOfB = async (users: TwoUsers) => {
+  const { b } = users;
+  const account = await accountOfB(users);
+  const tag = await tagOfB(users);
+  const { body: category } = await b.call('get', '/api/v1/categories').expect(200);
+  const { body } = await b
+    .call('post', '/api/v1/transactions')
+    .send({ accountId: account.id, categoryId: category[0].id, amountCents: 1234, date: '2026-03-01', tagIds: [tag.id] })
+    .expect(201);
+  return {
+    id: body.id as string,
+    accountId: account.id,
+    tagId: tag.id,
+    intact: async () => expect((await b.call('get', `/api/v1/transactions/${body.id}`).expect(200)).body).toEqual(body),
+  };
+};
+
+// Compte de A, pour les tentatives de référence croisée vers les données de B.
+const accountOfA = async ({ a }: TwoUsers) =>
+  (await a.call('post', '/api/v1/accounts').send({ name: 'Compte de A', trackingType: 'NORMAL' }).expect(201)).body.id as string;
+const systemCategory = async ({ a }: TwoUsers) =>
+  ((await a.call('get', '/api/v1/categories').expect(200)).body as { id: string; system: boolean }[]).find((c) => c.system)!.id;
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -137,5 +161,58 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     const { id, intact } = await tagOfB(users);
     await users.a.call('delete', `/api/v1/tags/${id}`).expect(404);
     await intact();
+  },
+  'GET /api/v1/transactions': async (users) => {
+    const { id, accountId, tagId } = await transactionOfB(users);
+    const { body } = await users.a.call('get', '/api/v1/transactions').expect(200);
+    expect(body.items.map((t: { id: string }) => t.id)).not.toContain(id);
+    await users.a.call('get', `/api/v1/transactions?accountId=${accountId}`).expect(404);
+    await users.a.call('get', `/api/v1/transactions?tagId=${tagId}`).expect(404);
+    const { id: categoryId } = await categoryOfB(users);
+    await users.a.call('get', `/api/v1/transactions?categoryId=${categoryId}`).expect(404);
+  },
+  'POST /api/v1/transactions': async (users) => {
+    const { accountId, tagId, intact } = await transactionOfB(users);
+    const { id: categoryOfBId } = await categoryOfB(users);
+    const ownAccount = await accountOfA(users);
+    const categoryId = await systemCategory(users);
+    const send = (body: object) => users.a.call('post', '/api/v1/transactions').send({ accountId: ownAccount, categoryId, amountCents: 100, date: '2026-03-01', ...body });
+    await send({ accountId }).expect(404); // compte de B
+    await send({ categoryId: categoryOfBId }).expect(404); // catégorie perso de B
+    await send({ tagIds: [tagId] }).expect(404); // tag de B
+    const { body } = await send({}).expect(201);
+    await users.b.call('get', `/api/v1/transactions/${body.id}`).expect(404);
+    await intact();
+  },
+  'GET /api/v1/transactions/:id': async (users) => {
+    const { id, intact } = await transactionOfB(users);
+    await users.a.call('get', `/api/v1/transactions/${id}`).expect(404);
+    await intact();
+  },
+  'PATCH /api/v1/transactions/:id': async (users) => {
+    const { id, accountId, tagId, intact } = await transactionOfB(users);
+    await users.a.call('patch', `/api/v1/transactions/${id}`).send({ version: 1, amountCents: 1 }).expect(404);
+    // Sa propre transaction, déplacée vers des références de B ⇒ 404.
+    const categoryId = await systemCategory(users);
+    const ownAccount = await accountOfA(users);
+    const { body: own } = await users.a
+      .call('post', '/api/v1/transactions')
+      .send({ accountId: ownAccount, categoryId, amountCents: 100, date: '2026-03-01' })
+      .expect(201);
+    await users.a.call('patch', `/api/v1/transactions/${own.id}`).send({ version: 1, accountId }).expect(404);
+    await users.a.call('patch', `/api/v1/transactions/${own.id}`).send({ version: 1, tagIds: [tagId] }).expect(404);
+    expect((await users.a.call('get', `/api/v1/transactions/${own.id}`).expect(200)).body).toEqual(own);
+    await intact();
+  },
+  'DELETE /api/v1/transactions/:id': async (users) => {
+    const { id, intact } = await transactionOfB(users);
+    await users.a.call('delete', `/api/v1/transactions/${id}`).expect(404);
+    await intact();
+  },
+  'POST /api/v1/transactions/:id/restore': async (users) => {
+    const { id } = await transactionOfB(users);
+    await users.b.call('delete', `/api/v1/transactions/${id}`).expect(204);
+    await users.a.call('post', `/api/v1/transactions/${id}/restore`).expect(404);
+    await users.b.call('get', `/api/v1/transactions/${id}`).expect(404); // toujours supprimée pour B
   },
 };

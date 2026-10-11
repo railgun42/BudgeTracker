@@ -86,6 +86,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Tags : nom unique par utilisateur sans tenir compte de la casse (**409**) ; suppression physique, les liens aux transactions partent avec.
 - Code : [apps/api/src/categories/](apps/api/src/categories/), [apps/api/src/tags/](apps/api/src/tags/) ; contrats dans `packages/shared/src/dto/category.ts`.
 
+## Transactions (E10)
+
+- Routes (authentifiées, préfixe `/api/v1`) : `GET/POST /transactions`, `GET/PATCH/DELETE /transactions/:id`, `POST /transactions/:id/restore`.
+- Création : `accountId`, `categoryId`, `amountCents` (entier > 0, sinon **400**) et `date` (`YYYY-MM-DD`, validée) ; `type` (`DEBIT` par défaut), `name`, `details` et `tagIds` facultatifs. Compte, catégorie ou tag d'un autre utilisateur (ou compte supprimé) ⇒ **404** ; `CREDIT` sur un compte `NOT_TRACKED` ⇒ **422**.
+- `PATCH` exige la `version` lue (périmée ⇒ **409**) ; `tagIds` remplace l'ensemble des tags. Le champ `transferId` n'est pas accepté (virements : E12).
+- Liste `GET /transactions` : pagination par curseur opaque (`limit` 1–100, 50 par défaut ; `nextCursor` nul sur la dernière page), tri `(date, id)` décroissant sans doublon ni trou, filtres `from`/`to` (inclusifs), `accountId`, `categoryId` (exacte, sous-catégories exclues), `tagId`.
+- Suppression logique : `DELETE` masque la transaction, `POST …/restore` l'annule (purge à 30 jours en E13). Les transactions d'un compte supprimé sont masquées, et réapparaissent à la restauration du compte.
+- Code : [apps/api/src/transactions/](apps/api/src/transactions/), [cursor.ts](apps/api/src/common/cursor.ts) ; contrats dans `packages/shared/src/dto/transaction.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -102,6 +111,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E7 — Harnais d'isolation (`createTwoUsers`, registre, test méta des routes) | ✅ |
 | E8 — Comptes (CRUD, 3 `trackingType`, solde de départ, suppression logique + restauration, 409) | ✅ |
 | E9 — Catégories (système en lecture seule + perso, 2 niveaux, réaffectation) et tags | ✅ |
-| E10 → E32 | ⏳ transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E10 — Transactions (création, édition versionnée, suppression logique + restauration, liste paginée par curseur, filtres, tags) | ✅ |
+| E11 → E32 | ⏳ solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories et les tags, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Pas encore de transactions ni de solde calculé. Le front (`apps/web`) est l'ancien code, remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags et les transactions, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Pas encore de solde calculé ni de virements. Le front (`apps/web`) est l'ancien code, remplacé en E14.
