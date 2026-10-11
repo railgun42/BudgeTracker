@@ -35,7 +35,9 @@ npm run db:migrate -w api   # migrations Prisma (npm run db:reset -w api = reset
 npm run build -w api && npm run start -w api
 ```
 
-Front (E14-E15) : shell mobile-first avec routes lazy ; les écrans sont des placeholders jusqu'à E16-E18. Client API dans `apps/web/src/app/core/` : `ApiClient` (chemins relatifs à `/api/v1`), intercepteur de session (cookies, 401 ⇒ un seul refresh puis rejeu, 409 ⇒ événement `conflicts`), en-tête CSRF, pipe `eur` et `amountValidator` (centimes via `@budgetracker/shared`). `npm start -w web` proxifie `/api` vers `localhost:3000` (`apps/web/proxy.conf.json`).
+Front (E14-E16) : shell mobile-first avec routes lazy ; les écrans métier sont des placeholders jusqu'à E17-E18. Client API dans `apps/web/src/app/core/` : `ApiClient` (chemins relatifs à `/api/v1`), intercepteur de session (cookies, 401 ⇒ un seul refresh puis rejeu, 409 ⇒ événement `conflicts`), en-tête CSRF, pipe `eur` et `amountValidator` (centimes via `@budgetracker/shared`). `npm start -w web` proxifie `/api` vers `localhost:3000` (`apps/web/proxy.conf.json`).
+
+Authentification front (E16) : écrans connexion, inscription, vérification d'e-mail (`/verify-email?token=`), mot de passe oublié et reset (`/reset-password?token=`), bouton Google (`apps/web/src/app/features/auth/`). `Session` (`core/auth/session.ts`) garde l'utilisateur dans un signal — jamais de token côté JS, cookies httpOnly uniquement — et `GET /me` est appelé au démarrage (restauration de session + pose du cookie CSRF). `authGuard` protège les écrans métier et redirige vers `/login?returnUrl=…`.
 
 Santé : `GET http://localhost:3000/api/health`. Les e-mails de dev (vérification) arrivent dans Mailpit : http://localhost:8025.
 
@@ -144,6 +146,9 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E11 — Solde (actuel / prévisionnel par `SUM` SQL indexé, `NOT_TRACKED` ⇒ `null`) | ✅ |
 | E12 — Virements (2 jambes, verrou unique, suppression/restauration jumelées, vers portefeuille ⇒ « Espèces ») | ✅ |
 | E13 — Purge des suppressions logiques à 30 jours (job quotidien, virements purgés en entier) | ✅ |
-| E14 → E32 | ⏳ front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E14 — Front reconstruit (shell mobile-first, routes lazy, tokens) | ✅ |
+| E15 — Client API (`ApiClient`, intercepteurs session/CSRF, proxy dev, utilitaires €) | ✅ |
+| E16 — Authentification front (connexion, inscription, vérification, reset, Google, `authGuard`) | ✅ |
+| E17 → E32 | ⏳ comptes/transactions/historique front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) est l'ancien code, remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter et de gérer son mot de passe ; les écrans métier arrivent en E17-E18.

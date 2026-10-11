@@ -2,18 +2,23 @@
 
 <header class="header">
   <a routerLink="/" class="brand">BudgeTracker</a>
-  <nav class="nav" aria-label="Navigation principale">
-    @for (link of links; track link.path) {
-      <a
-        [routerLink]="link.path"
-        routerLinkActive="active"
-        ariaCurrentWhenActive="page"
-        [routerLinkActiveOptions]="{ exact: link.exact }"
-        >{{ link.label }}</a
-      >
-    }
-  </nav>
-  <a routerLink="/transactions/new" class="button">+ Transaction</a>
+  @if (session.user(); as user) {
+    <nav class="nav" aria-label="Navigation principale">
+      @for (link of links; track link.path) {
+        <a
+          [routerLink]="link.path"
+          routerLinkActive="active"
+          ariaCurrentWhenActive="page"
+          [routerLinkActiveOptions]="{ exact: link.exact }"
+          >{{ link.label }}</a
+        >
+      }
+    </nav>
+    <a routerLink="/transactions/new" class="button">+ Transaction</a>
+    <button type="button" class="link-button" (click)="logout()">
+      Se déconnecter<span class="visually-hidden"> ({{ user.name }})</span>
+    </button>
+  }
 </header>
 
 <main id="main" tabindex="-1">
