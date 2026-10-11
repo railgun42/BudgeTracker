@@ -22,6 +22,7 @@ ne pas passer à la suivante tant que sa « Vérif » n'est pas verte.
 - CI : `.github/workflows/ci.yml` = `npm ci` → lint → build → `npm test` → `npm test -w api`
 - Tests : `npm test` (racine, node:test sur `test/*.test.mjs` ; nécessite `shared` buildé)
 - Env dev : `cp .env.example .env` puis `docker compose up -d` (`COMPOSE_FILE` pointe sur docker-compose.dev.yml) ; `docker compose exec db pg_isready`
+- BDD (Prisma 7, `apps/api/prisma.config.ts`, lit `.env` racine) : `npm run db:migrate -w api` (deploy) ; `npm run db:reset -w api` (reset + seed, base de dev) ; nouvelle migration : `npx prisma migrate dev --create-only --name x` dans `apps/api`, puis SQL brut si besoin (CHECK, index sur expression, DEFERRABLE). Client généré dans `apps/api/src/generated` (ignoré par git, regénéré par build/pretest)
 - API : `npm test -w api` (Jest : `src/**/*.spec.ts` + `test/e2e/*.e2e-spec.ts`) ; `npm run build -w api` puis `npm run start -w api` (lit `.env` racine) → `GET localhost:3000/api/health`
 
 ## Environnement

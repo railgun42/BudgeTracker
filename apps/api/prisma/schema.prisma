@@ -1,0 +1,355 @@
+// Schéma v1 (PLAN §3). Contraintes non exprimables en Prisma (CHECK, index sur
+// expression) : SQL brut dans la migration initiale.
+// Conventions : ids uuid générés par la BDD (utilisables en SQL brut), montants en
+// centimes BigInt, jours en DATE, horodatages techniques en timestamptz (UTC).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TrackingType {
+  NORMAL
+  NOT_TRACKED
+  WITH_INTEREST
+}
+
+enum TransactionType {
+  DEBIT
+  CREDIT
+}
+
+enum IntervalUnit {
+  DAY
+  WEEK
+  MONTH
+  YEAR
+}
+
+enum EmailTokenType {
+  VERIFY
+  RESET
+}
+
+// ─── Utilisateurs et authentification ───────────────────────────────────────
+
+model User {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Normalisé en minuscules (CHECK en migration).
+  email             String    @unique
+  emailVerifiedAt   DateTime? @db.Timestamptz(3)
+  name              String
+  lastConnection    DateTime? @db.Timestamptz(3)
+  // 200 Mo par défaut ; valeur par utilisateur pour une future offre à quota élevé.
+  storageQuotaBytes BigInt    @default(209715200)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  credential      Credential?
+  oauthIdentities OAuthIdentity[]
+  emailTokens     EmailToken[]
+  refreshTokens   RefreshToken[]
+  accounts        Account[]
+  transfers       Transfer[]
+  transactions    Transaction[]
+  categories      Category[]
+  tags            Tag[]
+  attachments     Attachment[]
+  recurrences     Recurrence[]
+  interestRates   InterestRate[]
+  scenarios       Scenario[]
+}
+
+model Credential {
+  userId       String   @id @db.Uuid
+  // Argon2id ; NULL si le compte n'utilise que Google.
+  passwordHash String?
+  updatedAt    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OAuthIdentity {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @db.Uuid
+  provider   String
+  providerId String
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@index([userId])
+}
+
+model EmailToken {
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String         @db.Uuid
+  type      EmailTokenType
+  // Seul le hash est stocké.
+  tokenHash String         @unique
+  expiresAt DateTime       @db.Timestamptz(3)
+  usedAt    DateTime?      @db.Timestamptz(3)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @db.Uuid
+  familyId  String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+// ─── Domaine ────────────────────────────────────────────────────────────────
+
+model Account {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String       @db.Uuid
+  name         String
+  trackingType TrackingType
+  // EUR figé (SPEC §3.1) : colonne présente mais non exploitée.
+  currency     String       @default("EUR") @db.Char(3)
+  version      Int          @default(1)
+  deletedAt    DateTime?    @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+  recurrences     Recurrence[]
+  interestRates   InterestRate[]
+  interestCredits InterestCredit[]
+
+  @@index([userId, deletedAt])
+}
+
+// Porte la version et la suppression logique des deux jambes d'un virement.
+model Transfer {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @db.Uuid
+  version   Int       @default(1)
+  deletedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+model Transaction {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String          @db.Uuid
+  accountId      String          @db.Uuid
+  name           String
+  date           DateTime        @db.Date
+  // > 0 (CHECK en migration) ; le sens est porté par `type`.
+  amountCents    BigInt
+  type           TransactionType
+  details        String?
+  categoryId     String          @db.Uuid
+  transferId     String?         @db.Uuid
+  recurrenceId   String?         @db.Uuid
+  occurrenceDate DateTime?       @db.Date
+  version        Int             @default(1)
+  deletedAt      DateTime?       @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account        Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  // NoAction + DEFERRABLE (migration) : une catégorie utilisée se réaffecte avant
+  // suppression, mais la cascade de suppression d'un utilisateur passe.
+  category       Category         @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+  transfer       Transfer?        @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  recurrence     Recurrence?      @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
+  tags           TransactionTag[]
+  attachment     Attachment?
+  interestCredit InterestCredit?
+
+  // Non partielle : une occurrence supprimée logiquement bloque sa régénération.
+  @@unique([recurrenceId, occurrenceDate])
+  @@index([accountId, date])
+  @@index([userId, date(sort: Desc), id])
+  @@index([categoryId])
+  @@index([transferId])
+}
+
+// userId NULL = catégorie système (nameKey traduisible) ; sinon perso (name).
+model Category {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?  @db.Uuid
+  parentId  String?  @db.Uuid
+  nameKey   String?  @unique
+  name      String?
+  color     String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user         User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent       Category?             @relation("CategoryTree", fields: [parentId], references: [id], onDelete: NoAction)
+  children     Category[]            @relation("CategoryTree")
+  transactions Transaction[]
+  templates    TransactionTemplate[]
+
+  @@index([userId])
+  @@index([parentId])
+}
+
+// Unicité (userId, lower(name)) : index sur expression en migration.
+model Tag {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions TransactionTag[]
+  templates    TemplateTag[]
+}
+
+model TransactionTag {
+  transactionId String @db.Uuid
+  tagId         String @db.Uuid
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tag         Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([transactionId, tagId])
+  @@index([tagId])
+}
+
+model Attachment {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @db.Uuid
+  // Unique ⇒ 0..1 pièce par transaction.
+  transactionId String   @unique @db.Uuid
+  // Clé générée serveur ; originalName sert à l'affichage seulement.
+  s3Key         String   @unique
+  originalName  String
+  mime          String
+  sizeBytes     Int
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Recurrence {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String       @db.Uuid
+  accountId      String       @db.Uuid
+  interval       Int
+  unit           IntervalUnit
+  startDate      DateTime     @db.Date
+  endDate        DateTime?    @db.Date
+  // Jour d'ancrage (31 ⇒ dernier jour des mois courts, sans dérive).
+  anchorDay      Int
+  lastGeneration DateTime?    @db.Date
+  version        Int          @default(1)
+  deletedAt      DateTime?    @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account      Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  template     TransactionTemplate?
+  transactions Transaction[]
+
+  @@index([userId, deletedAt])
+  @@index([accountId])
+}
+
+// Lu au moment de la génération ⇒ une modification ne vaut que pour le futur.
+model TransactionTemplate {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recurrenceId String          @unique @db.Uuid
+  name         String
+  amountCents  BigInt
+  type         TransactionType
+  categoryId   String          @db.Uuid
+  details      String?
+  updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+
+  recurrence Recurrence    @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
+  category   Category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+  tags       TemplateTag[]
+
+  @@index([categoryId])
+}
+
+model TemplateTag {
+  templateId String @db.Uuid
+  tagId      String @db.Uuid
+
+  template TransactionTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  tag      Tag                 @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([templateId, tagId])
+  @@index([tagId])
+}
+
+model InterestRate {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String   @db.Uuid
+  accountId     String   @db.Uuid
+  // Taux annuel en points de base (300 = 3,00 %).
+  rateBp        Int
+  effectiveDate DateTime @db.Date
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, effectiveDate])
+  @@index([userId])
+}
+
+// Idempotence du crédit d'intérêts du 31/12.
+model InterestCredit {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId     String   @db.Uuid
+  year          Int
+  transactionId String   @unique @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+
+  account     Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, year])
+}
+
+model Scenario {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  name      String
+  // Validé par un DTO à union discriminée (E27), jamais du JSON libre.
+  params    Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}

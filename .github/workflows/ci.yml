@@ -33,5 +33,6 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
+      - run: npm run db:migrate -w api
       - run: npm test -w api
       # Tests de apps/web ajoutés en E14 (ancien front, reconstruit) ; images Docker en E30.

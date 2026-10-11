@@ -3,7 +3,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   // apps/web : ancien front, reconstruit et ajouté au lint en E14.
-  { ignores: ['**/dist/**', '**/node_modules/**', 'apps/web/**', 'graphify-out/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', 'apps/web/**', 'graphify-out/**', '**/generated/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
