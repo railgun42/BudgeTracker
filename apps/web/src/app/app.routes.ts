@@ -1,50 +1,20 @@
 import { Routes } from '@angular/router';
-import { HomePage } from './pages/home-page/home-page';
-import { LoginPage } from './pages/login-page/login-page';
-import { SignUpPage } from './pages/sign-up-page/sign-up-page';
-import { Page404 } from './pages/page404/page404';
-import { HistoryPage } from './pages/history-page/history-page';
-import { AuthGuard } from './guards/auth-guard';
-import { AccountsPage } from './pages/accounts-page/accounts-page';
-import { NewTransactionPage } from './pages/new-transaction-page/new-transaction-page';
+
+// Écrans issus de docs/wireframes ; chaque étape E15+ remplace son placeholder par la vraie page.
+const placeholder = () => import('./shared-ui/placeholder-page').then((m) => m.PlaceholderPage);
 
 export const routes: Routes = [
-    { 
-        path: '', 
-        component: HomePage
-    },
-    { 
-        path: 'login', 
-        component: LoginPage
-    },
-    { 
-        path: 'signup', 
-        component: SignUpPage 
-    },
-    {
-        path: 'history',
-        component: HistoryPage,
-        canActivate: [AuthGuard]
-    },
-    {
-        path: 'accounts',
-        component: AccountsPage,
-        canActivate: [AuthGuard]
-    },
-    {
-        path: 'new-transaction',
-        component: NewTransactionPage,
-        canActivate: [AuthGuard]
-    },
-
-
-
-
-
-
-
-    { 
-        path: '**', 
-        component: Page404
-    }
+  { path: '', title: 'Tableau de bord', loadComponent: placeholder },
+  { path: 'accounts', title: 'Mes comptes', loadComponent: placeholder },
+  { path: 'transactions/new', title: 'Ajouter une transaction', loadComponent: placeholder },
+  { path: 'history', title: 'Historique des transactions', loadComponent: placeholder },
+  { path: 'stats', title: 'Statistiques', loadComponent: placeholder },
+  { path: 'simulations', title: 'Simulations', loadComponent: placeholder },
+  { path: 'login', title: 'Connexion', loadComponent: placeholder },
+  { path: 'signup', title: 'Créer un compte', loadComponent: placeholder },
+  {
+    path: '**',
+    title: 'Page introuvable',
+    loadComponent: () => import('./shared-ui/not-found-page').then((m) => m.NotFoundPage),
+  },
 ];

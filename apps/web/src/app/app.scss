@@ -1,0 +1,84 @@
+:host {
+  display: block;
+  min-height: 100dvh;
+  // Place pour la barre de navigation fixée en bas sur mobile.
+  padding-bottom: var(--nav-height);
+}
+
+.skip-link {
+  position: absolute;
+  left: var(--space-2);
+  top: -100%;
+  z-index: 10;
+  &:focus {
+    top: var(--space-2);
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+.nav {
+  position: fixed;
+  inset: auto 0 0 0;
+  height: var(--nav-height);
+  display: flex;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+
+  a {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+
+  a.active {
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+}
+
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: var(--space-3);
+  outline: none;
+}
+
+@media (min-width: 768px) {
+  :host {
+    padding-bottom: 0;
+  }
+
+  .nav {
+    position: static;
+    height: auto;
+    border: 0;
+    gap: var(--space-3);
+    margin-right: auto;
+
+    a {
+      flex: none;
+      font-size: 1rem;
+    }
+  }
+}

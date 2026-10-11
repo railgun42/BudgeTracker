@@ -35,15 +35,18 @@ npm run db:migrate -w api   # migrations Prisma (npm run db:reset -w api = reset
 npm run build -w api && npm run start -w api
 ```
 
+Front (E14) : shell mobile-first avec routes lazy ; les écrans sont des placeholders jusqu'à E15-E18. L'ancien front a été supprimé.
+
 Santé : `GET http://localhost:3000/api/health`. Les e-mails de dev (vérification) arrivent dans Mailpit : http://localhost:8025.
 
 ## Commandes
 
-- `npm run lint` — ESLint (racine ; `apps/web` exclu jusqu'à E14)
+- `npm run lint` — ESLint (racine, inclut `apps/web`)
 - `npm run build` — build de tous les workspaces (`-w @budgetracker/shared` / `-w api` / `-w web` pour un seul)
 - `npm test` — tests du monorepo (node:test sur `test/*.test.mjs`, nécessite `shared` buildé)
 - `npm test -w @budgetracker/shared` — tests de `shared` (Vitest)
 - `npm test -w api` — tests de l'API (Jest : unitaires `src/**/*.spec.ts` + e2e `test/e2e/*.e2e-spec.ts`, contre le vrai Postgres)
+- `npm test -w web` — tests du front (Vitest via `ng test`) ; `npm start -w web` lance le serveur de dev (http://localhost:4200)
 - `npm run db:migrate -w api` / `npm run db:reset -w api` — migrations / reset + seed de la base de dev
 
 ## Authentification (E5)

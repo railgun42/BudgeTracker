@@ -1,2 +1,21 @@
-<app-nav-bar></app-nav-bar>
-<router-outlet></router-outlet>
+<a class="skip-link" href="#main">Aller au contenu</a>
+
+<header class="header">
+  <a routerLink="/" class="brand">BudgeTracker</a>
+  <nav class="nav" aria-label="Navigation principale">
+    @for (link of links; track link.path) {
+      <a
+        [routerLink]="link.path"
+        routerLinkActive="active"
+        ariaCurrentWhenActive="page"
+        [routerLinkActiveOptions]="{ exact: link.exact }"
+        >{{ link.label }}</a
+      >
+    }
+  </nav>
+  <a routerLink="/transactions/new" class="button">+ Transaction</a>
+</header>
+
+<main id="main" tabindex="-1">
+  <router-outlet />
+</main>
