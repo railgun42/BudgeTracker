@@ -1,6 +1,7 @@
 import { Body, Controller, Get, INestApplication, Post } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { IsString } from 'class-validator';
+import * as shared from '@budgetracker/shared';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { bootstrap, configureApp } from '../../src/main';
@@ -82,6 +83,6 @@ describe('Démarrage (e2e)', () => {
 
   it('@budgetracker/shared se résout depuis l’API (point de contrôle R1)', () => {
     expect(require.resolve('@budgetracker/shared')).toMatch(/packages[\\/]shared[\\/]dist[\\/]index\.js$/);
-    expect(typeof require('@budgetracker/shared')).toBe('object');
+    expect(typeof shared).toBe('object');
   });
 });
