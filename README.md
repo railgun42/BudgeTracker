@@ -60,6 +60,14 @@ Santé : `GET http://localhost:3000/api/health`. Les e-mails de dev (vérificati
 - Google OAuth (code + `state` + PKCE) : `GET /api/v1/auth/google` puis `/google/callback`, qui redirige vers le front. Liaison à un compte existant **uniquement** si l'e-mail Google est vérifié et le compte local vérifié.
 - Configuration facultative : `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (URI de redirection : `${APP_URL}/api/v1/auth/google/callback`) ; absents, `/auth/google` répond 404.
 
+## Harnais d'isolation (E7)
+
+Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Chaque route de l'API est soit **publique** (`publicRoutes`), soit associée à un test d'isolation dans `isolationRegistry` ([apps/api/test/helpers/isolation-registry.ts](apps/api/test/helpers/isolation-registry.ts)).
+
+- `createTwoUsers(app)` ([two-users.ts](apps/api/test/helpers/two-users.ts)) : deux utilisateurs vérifiés avec session et CSRF prêts, `a.call('get', url)`.
+- Le test méta ([isolation-meta.e2e-spec.ts](apps/api/test/e2e/isolation-meta.e2e-spec.ts)) énumère les routes Nest (`DiscoveryService`) et échoue si une route n'est pas enregistrée, si une entrée est orpheline, ou si la présence de `JwtAuthGuard` contredit le registre.
+- **Toute nouvelle route** s'ajoute au registre dans la même étape : B crée la ressource, A la lit/modifie/supprime ⇒ 404, la ressource reste intacte pour B.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -73,6 +81,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E4 — `shared` : enums, DTO, helpers `money` et `LocalDate` | ✅ |
 | E5 — Auth e-mail/mot de passe | ✅ |
 | E6 — Reset de mot de passe + Google OAuth | ✅ |
-| E7 → E32 | ⏳ harnais d'isolation, comptes, catégories, transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E7 — Harnais d'isolation (`createTwoUsers`, registre, test méta des routes) | ✅ |
+| E8 → E32 | ⏳ comptes, catégories, transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe et la connexion Google, sur un schéma de base complet. Il n'y a pas encore de ressource métier (comptes, transactions). Le front (`apps/web`) est l'ancien code, remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe et la connexion Google, sur un schéma de base complet, et un harnais garantit que toute future route aura son test d'isolation entre utilisateurs. Il n'y a pas encore de ressource métier (comptes, transactions). Le front (`apps/web`) est l'ancien code, remplacé en E14.
