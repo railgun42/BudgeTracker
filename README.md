@@ -77,6 +77,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Suppression logique (`deletedAt`) : le compte disparaît des listes ; `POST /accounts/:id/restore` l'annule (purge définitive à 30 jours en E13). `DELETE` et `restore` incrémentent la version.
 - Code : [apps/api/src/accounts/](apps/api/src/accounts/) ; contrats d'entrée `CreateAccountInput` / `UpdateAccountInput` dans `packages/shared`.
 
+## Catégories et tags (E9)
+
+- Routes (authentifiées, préfixe `/api/v1`) : `GET/POST /categories`, `PATCH/DELETE /categories/:id`, `GET/POST /tags`, `PATCH/DELETE /tags/:id`.
+- `GET /categories` renvoie les catégories système (`system: true`, libellé à traduire via `nameKey`) et les catégories perso de l'utilisateur. Système ⇒ `PATCH`/`DELETE` **403**.
+- 2 niveaux max : `parentId` doit être une racine (système ou perso) ; sinon **422**. Une catégorie qui a des sous-catégories ne peut pas devenir enfant (422) ni être supprimée (409).
+- Suppression d'une catégorie perso utilisée (transactions, y compris supprimées logiquement, ou modèles de récurrence) : `DELETE /categories/:id?reassignTo=<id>` réaffecte puis supprime ; sans cible ⇒ **409**. Catégorie d'un autre utilisateur (cible, parent ou ressource) ⇒ **404**.
+- Tags : nom unique par utilisateur sans tenir compte de la casse (**409**) ; suppression physique, les liens aux transactions partent avec.
+- Code : [apps/api/src/categories/](apps/api/src/categories/), [apps/api/src/tags/](apps/api/src/tags/) ; contrats dans `packages/shared/src/dto/category.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -92,6 +101,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E6 — Reset de mot de passe + Google OAuth | ✅ |
 | E7 — Harnais d'isolation (`createTwoUsers`, registre, test méta des routes) | ✅ |
 | E8 — Comptes (CRUD, 3 `trackingType`, solde de départ, suppression logique + restauration, 409) | ✅ |
-| E9 → E32 | ⏳ catégories et tags, transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E9 — Catégories (système en lecture seule + perso, 2 niveaux, réaffectation) et tags | ✅ |
+| E10 → E32 | ⏳ transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google et les comptes (premier objet métier), sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Pas encore de catégories modifiables, de transactions ni de solde calculé. Le front (`apps/web`) est l'ancien code, remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories et les tags, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Pas encore de transactions ni de solde calculé. Le front (`apps/web`) est l'ancien code, remplacé en E14.
