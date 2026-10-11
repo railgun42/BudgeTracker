@@ -35,7 +35,7 @@ npm run db:migrate -w api   # migrations Prisma (npm run db:reset -w api = reset
 npm run build -w api && npm run start -w api
 ```
 
-Front (E14) : shell mobile-first avec routes lazy ; les écrans sont des placeholders jusqu'à E15-E18. L'ancien front a été supprimé.
+Front (E14-E15) : shell mobile-first avec routes lazy ; les écrans sont des placeholders jusqu'à E16-E18. Client API dans `apps/web/src/app/core/` : `ApiClient` (chemins relatifs à `/api/v1`), intercepteur de session (cookies, 401 ⇒ un seul refresh puis rejeu, 409 ⇒ événement `conflicts`), en-tête CSRF, pipe `eur` et `amountValidator` (centimes via `@budgetracker/shared`). `npm start -w web` proxifie `/api` vers `localhost:3000` (`apps/web/proxy.conf.json`).
 
 Santé : `GET http://localhost:3000/api/health`. Les e-mails de dev (vérification) arrivent dans Mailpit : http://localhost:8025.
 

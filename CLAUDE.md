@@ -19,7 +19,7 @@ ne pas passer à la suivante tant que sa « Vérif » n'est pas verte.
 - Installation : `npm ci` (racine uniquement ; un seul lockfile, workspaces `apps/*`, `packages/*`)
 - Build : `npm run build` (tous) ou `npm run build -w @budgetracker/shared` / `-w web`
 - Lint : `npm run lint` (ESLint racine, `eslint.config.mjs`, inclut `apps/web`)
-- Front : `npm test -w web` (Vitest via `ng test`, `src/**/*.spec.ts`) ; `npm run build -w web` ; `npm start -w web`. `@budgetracker/shared` est CommonJS, autorisé par `allowedCommonJsDependencies` (angular.json)
+- Front : `npm test -w web` (Vitest via `ng test`, `src/**/*.spec.ts`) ; `npm run build -w web` ; `npm start -w web` (proxifie `/api` → localhost:3000 via `proxy.conf.json`). `@budgetracker/shared` est CommonJS, autorisé par `allowedCommonJsDependencies` (angular.json)
 - CI : `.github/workflows/ci.yml` = `npm ci` → lint → build → `npm test` → `npm test -w @budgetracker/shared` → `npm test -w api` → `npm test -w web`
 - Tests : `npm test` (racine, node:test sur `test/*.test.mjs` ; nécessite `shared` buildé)
 - Shared : `npm test -w @budgetracker/shared` (Vitest, `packages/shared/test/*.test.ts`)
