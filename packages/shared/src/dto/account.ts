@@ -31,3 +31,10 @@ export interface InterestRateDto {
   rateBp: number;
   effectiveDate: LocalDate;
 }
+
+// GET /accounts/:id/balance[?today=YYYY-MM-DD] (jour du client ; défaut : jour UTC du serveur).
+// Actuel = transactions datées ≤ today ; prévisionnel = toutes. `null` pour un compte NOT_TRACKED.
+export interface AccountBalanceDto {
+  currentCents: number | null;
+  forecastCents: number | null;
+}

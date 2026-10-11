@@ -71,7 +71,7 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 ## Comptes (E8)
 
 - Routes (toutes authentifiées, préfixe `/api/v1`) : `GET/POST /accounts`, `GET/PATCH/DELETE /accounts/:id`, `POST /accounts/:id/restore`.
-- Trois `trackingType` : `NORMAL`, `WITH_INTEREST`, `NOT_TRACKED` (portefeuille). **Pas de champ solde** : un `balance` en entrée est refusé (400), le solde sera calculé en E11.
+- Trois `trackingType` : `NORMAL`, `WITH_INTEREST`, `NOT_TRACKED` (portefeuille). **Pas de champ solde** : un `balance` en entrée est refusé (400), le solde est calculé (voir E11).
 - Création avec `openingBalance` facultatif `{ amountCents, date }` (entier ≠ 0, date `YYYY-MM-DD`) : crée, dans la même transaction SQL, une transaction « Solde de départ » (CREDIT si > 0, DEBIT si < 0, catégorie système `opening_balance`). Refusé (422) sur `NOT_TRACKED`.
 - Verrou optimiste : `PATCH` exige la `version` lue ; version périmée ⇒ **409**, ressource d'un autre utilisateur ou absente ⇒ **404**.
 - Suppression logique (`deletedAt`) : le compte disparaît des listes ; `POST /accounts/:id/restore` l'annule (purge définitive à 30 jours en E13). `DELETE` et `restore` incrémentent la version.
@@ -95,6 +95,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Suppression logique : `DELETE` masque la transaction, `POST …/restore` l'annule (purge à 30 jours en E13). Les transactions d'un compte supprimé sont masquées, et réapparaissent à la restauration du compte.
 - Code : [apps/api/src/transactions/](apps/api/src/transactions/), [cursor.ts](apps/api/src/common/cursor.ts) ; contrats dans `packages/shared/src/dto/transaction.ts`.
 
+## Solde (E11)
+
+- Route (authentifiée) : `GET /api/v1/accounts/:id/balance[?today=YYYY-MM-DD]` → `{ currentCents, forecastCents }`.
+- **Actuel** = transactions datées ≤ `today` ; **prévisionnel** = toutes les transactions (futures incluses). CREDIT +, DEBIT −, solde de départ inclus. Supprimées logiquement exclues ; une transaction antidatée change naturellement le solde actuel.
+- Un seul `SUM` SQL (`$queryRaw` paramétré) sur l'index `(accountId, date)`, sans charger les lignes ; un test `EXPLAIN` le vérifie.
+- Compte `NOT_TRACKED` ⇒ `null` / `null`. Compte d'un autre utilisateur ou supprimé ⇒ **404**.
+- `today` est facultatif : c'est le jour du client (évite le décalage de fuseau autour de minuit) ; absent, le jour UTC du serveur est utilisé.
+- Code : [apps/api/src/balance/](apps/api/src/balance/) ; contrat `AccountBalanceDto` dans `packages/shared/src/dto/account.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -112,6 +121,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E8 — Comptes (CRUD, 3 `trackingType`, solde de départ, suppression logique + restauration, 409) | ✅ |
 | E9 — Catégories (système en lecture seule + perso, 2 niveaux, réaffectation) et tags | ✅ |
 | E10 — Transactions (création, édition versionnée, suppression logique + restauration, liste paginée par curseur, filtres, tags) | ✅ |
-| E11 → E32 | ⏳ solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E11 — Solde (actuel / prévisionnel par `SUM` SQL indexé, `NOT_TRACKED` ⇒ `null`) | ✅ |
+| E12 → E32 | ⏳ virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags et les transactions, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Pas encore de solde calculé ni de virements. Le front (`apps/web`) est l'ancien code, remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions et le calcul du solde, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Pas encore de virements. Le front (`apps/web`) est l'ancien code, remplacé en E14.

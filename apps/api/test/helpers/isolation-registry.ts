@@ -113,6 +113,12 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await users.b.call('get', `/api/v1/accounts/${id}`).expect(404); // toujours supprimé pour B
   },
 
+  'GET /api/v1/accounts/:id/balance': async (users) => {
+    const { accountId } = await transactionOfB(users);
+    await users.a.call('get', `/api/v1/accounts/${accountId}/balance`).expect(404);
+    expect((await users.b.call('get', `/api/v1/accounts/${accountId}/balance`).expect(200)).body).toEqual({ currentCents: -1234, forecastCents: -1234 });
+  },
+
   'GET /api/v1/categories': async (users) => {
     const { id } = await categoryOfB(users);
     const { body } = await users.a.call('get', '/api/v1/categories').expect(200);
