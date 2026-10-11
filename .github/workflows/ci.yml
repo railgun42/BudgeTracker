@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Base jetable propre au job ; identifiants de test, aucun secret.
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: budgetracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci -d budgetracker"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/budgetracker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      - run: npm test -w api
+      # Tests de apps/web ajoutés en E14 (ancien front, reconstruit) ; images Docker en E30.
