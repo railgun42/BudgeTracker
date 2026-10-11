@@ -86,6 +86,7 @@ describe('Routes', () => {
     ['/', 'Tableau de bord'],
     ['/accounts', 'Mes comptes'],
     ['/transactions/new', 'Ajouter une transaction'],
+    ['/transfers/new', 'Nouveau virement'],
     ['/history', 'Historique des transactions'],
     ['/stats', 'Statistiques'],
     ['/simulations', 'Simulations'],
@@ -131,6 +132,6 @@ describe('authGuard', () => {
     await restore(USER);
     const harness = await RouterTestingHarness.create('/accounts');
     expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toBe('Mes comptes');
-    TestBed.inject(HttpTestingController).verify();
+    TestBed.inject(HttpTestingController).expectNone('/api/v1/me');
   });
 });

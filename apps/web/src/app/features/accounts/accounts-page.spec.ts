@@ -1,0 +1,198 @@
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { AccountDto, TrackingType } from '@budgetracker/shared';
+import { routes } from '../../app.routes';
+import { Session } from '../../core/auth/session';
+import { provideApiHttp } from '../../core/http';
+import { today } from '../../core/today';
+
+const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
+const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, version: 1 };
+const WALLET: AccountDto = { id: 'a2', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, version: 3 };
+const status = (code: number) => ({ status: code, statusText: String(code) });
+const balanceUrl = (id: string) => `/api/v1/accounts/${id}/balance?today=${today()}`;
+
+let harness: RouterTestingHarness;
+let http: HttpTestingController;
+let el: HTMLElement;
+
+const text = (selector: string) => el.querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim();
+const button = (label: string) => [...el.querySelectorAll('button')].find((b) => b.textContent?.includes(label))!;
+
+function type(id: string, value: string): void {
+  const input = el.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!;
+  input.value = value;
+  input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? 'change' : 'input'));
+  input.dispatchEvent(new Event('blur'));
+}
+
+const stable = () => harness.fixture.whenStable();
+
+/** Ouvre /accounts et répond à GET /accounts puis aux soldes des comptes suivis. */
+async function open(accounts: AccountDto[], currentCents = 10000): Promise<void> {
+  harness = await RouterTestingHarness.create('/accounts');
+  el = harness.routeNativeElement!;
+  await respond(accounts, currentCents);
+}
+
+async function respond(accounts: AccountDto[], currentCents = 10000): Promise<void> {
+  http.expectOne('/api/v1/accounts').flush(accounts);
+  for (const a of accounts.filter((a) => a.trackingType !== TrackingType.NOT_TRACKED)) {
+    http.expectOne(balanceUrl(a.id)).flush({ currentCents, forecastCents: currentCents });
+  }
+  await stable();
+}
+
+beforeEach(async () => {
+  TestBed.configureTestingModule({ providers: [provideRouter(routes), provideApiHttp(), provideHttpClientTesting()] });
+  http = TestBed.inject(HttpTestingController);
+  const restored = TestBed.inject(Session).restore();
+  http.expectOne('/api/v1/me').flush(USER);
+  await restored;
+});
+
+afterEach(() => http.verify());
+
+describe('Comptes : liste', () => {
+  it('solde du jour pour un compte suivi, aucun solde ni requête pour un portefeuille NOT_TRACKED', async () => {
+    await open([COURANT, WALLET], -1234);
+
+    const cards = [...el.querySelectorAll('li.card')].map((li) => li.textContent!.replace(/\s+/g, ' '));
+    expect(cards[0]).toContain('Courant');
+    expect(cards[0]).toContain('Solde : -12,34 €');
+    expect(cards[1]).toContain('Non suivi (portefeuille)');
+    expect(cards[1]).not.toContain('Solde');
+    // afterEach : http.verify() garantit qu'aucun solde n'a été demandé pour a2.
+  });
+
+  it('solde prévisionnel affiché seulement s’il diffère du solde actuel', async () => {
+    harness = await RouterTestingHarness.create('/accounts');
+    el = harness.routeNativeElement!;
+    http.expectOne('/api/v1/accounts').flush([COURANT]);
+    http.expectOne(balanceUrl('a1')).flush({ currentCents: 5000, forecastCents: 2000 });
+    await stable();
+    expect(text('li.card')).toContain('Prévisionnel : 20,00 €');
+  });
+});
+
+describe('Comptes : création', () => {
+  it('solde de départ « -12,34 » ⇒ openingBalance de -1234 centimes à la date du jour', async () => {
+    await open([]);
+    type('account-name', 'Livret');
+    type('account-type', TrackingType.WITH_INTEREST);
+    type('account-opening', '-12,34');
+    button('Créer le compte').click();
+
+    const req = http.expectOne('/api/v1/accounts');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      name: 'Livret',
+      trackingType: 'WITH_INTEREST',
+      openingBalance: { amountCents: -1234, date: today() },
+    });
+    req.flush({ ...COURANT, name: 'Livret' });
+    await respond([{ ...COURANT, name: 'Livret' }], -1234);
+    expect(text('li.card')).toContain('Solde : -12,34 €');
+  });
+
+  it('NOT_TRACKED : champ de solde de départ masqué, aucun openingBalance envoyé', async () => {
+    await open([]);
+    type('account-name', 'Poche');
+    type('account-opening', '50');
+    type('account-type', TrackingType.NOT_TRACKED);
+    await stable();
+    expect(el.querySelector('#account-opening')).toBeNull();
+
+    button('Créer le compte').click();
+    const req = http.expectOne('/api/v1/accounts');
+    expect(req.request.body).toEqual({ name: 'Poche', trackingType: 'NOT_TRACKED' });
+    req.flush(WALLET);
+    await respond([WALLET]);
+  });
+
+  it('nom vide ou solde de départ invalide ⇒ aucune requête, erreurs reliées aux champs', async () => {
+    await open([]);
+    type('account-opening', '0');
+    button('Créer le compte').click();
+    await stable();
+
+    http.expectNone('/api/v1/accounts');
+    const name = el.querySelector('#account-name')!;
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector(`#${name.getAttribute('aria-describedby')}`)?.textContent).toContain('Saisissez un nom');
+    expect(el.querySelector('#account-opening')!.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#account-opening-hint')!.className).toBe('field-error');
+  });
+});
+
+describe('Comptes : édition', () => {
+  it('Modifier : formulaire prérempli, focus sur le nom, PATCH avec la version', async () => {
+    await open([COURANT]);
+    button('Modifier').click();
+    await stable();
+
+    const name = el.querySelector<HTMLInputElement>('#account-name')!;
+    expect(name.value).toBe('Courant');
+    expect(document.activeElement).toBe(name);
+    expect(el.querySelector('#account-opening')).toBeNull();
+
+    type('account-name', 'Compte joint');
+    button('Enregistrer').click();
+    const req = http.expectOne('/api/v1/accounts/a1');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ version: 1, name: 'Compte joint', trackingType: 'NORMAL' });
+    req.flush({ ...COURANT, name: 'Compte joint', version: 2 });
+    await respond([{ ...COURANT, name: 'Compte joint', version: 2 }]);
+
+    expect(text('h2')).toBe('Nouveau compte');
+    expect(text('li.card')).toContain('Compte joint');
+  });
+
+  it('409 ⇒ message clair et bouton « Recharger » qui relit les comptes', async () => {
+    await open([COURANT]);
+    button('Modifier').click();
+    await stable();
+    button('Enregistrer').click();
+    http.expectOne('/api/v1/accounts/a1').flush(null, status(409));
+    await stable();
+
+    expect(text('[role="alert"]')).toContain('modifié depuis un autre écran');
+    button('Recharger').click();
+    await respond([{ ...COURANT, version: 2 }]);
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+  });
+});
+
+describe('Comptes : suppression et annulation', () => {
+  it('Supprimer ⇒ DELETE, bannière « Annuler » ⇒ POST restore puis le compte revient', async () => {
+    await open([COURANT]);
+    button('Supprimer').click();
+    const del = http.expectOne('/api/v1/accounts/a1');
+    expect(del.request.method).toBe('DELETE');
+    del.flush(null, status(204));
+    await respond([]);
+
+    expect(text('[role="status"]')).toContain('Compte « Courant » supprimé');
+    button('Annuler').click();
+    const restore = http.expectOne('/api/v1/accounts/a1/restore');
+    expect(restore.request.method).toBe('POST');
+    restore.flush(COURANT);
+    await respond([COURANT]);
+
+    expect(el.querySelector('[role="status"]')).toBeNull();
+    expect(text('li.card')).toContain('Courant');
+  });
+});
+
+describe('Comptes : accessibilité', () => {
+  it('chaque champ a un libellé, boutons explicites, aucun tabindex positif', async () => {
+    await open([COURANT]);
+    for (const control of el.querySelectorAll('input, select')) {
+      expect(el.querySelector(`label[for="${control.id}"]`), control.id).not.toBeNull();
+    }
+    expect(button('Supprimer').textContent).toContain('Supprimer Courant');
+    expect([...el.querySelectorAll('[tabindex]')].filter((e) => Number(e.getAttribute('tabindex')) > 0)).toEqual([]);
+  });
+});

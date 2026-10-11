@@ -7,8 +7,24 @@ const authed = { canActivate: [authGuard] };
 
 export const routes: Routes = [
   { path: '', title: 'Tableau de bord', ...authed, loadComponent: placeholder },
-  { path: 'accounts', title: 'Mes comptes', ...authed, loadComponent: placeholder },
-  { path: 'transactions/new', title: 'Ajouter une transaction', ...authed, loadComponent: placeholder },
+  {
+    path: 'accounts',
+    title: 'Mes comptes',
+    ...authed,
+    loadComponent: () => import('./features/accounts/accounts-page').then((m) => m.AccountsPage),
+  },
+  {
+    path: 'transactions/new',
+    title: 'Ajouter une transaction',
+    ...authed,
+    loadComponent: () => import('./features/transactions/transaction-form-page').then((m) => m.TransactionFormPage),
+  },
+  {
+    path: 'transfers/new',
+    title: 'Nouveau virement',
+    ...authed,
+    loadComponent: () => import('./features/transactions/transfer-form-page').then((m) => m.TransferFormPage),
+  },
   { path: 'history', title: 'Historique des transactions', ...authed, loadComponent: placeholder },
   { path: 'stats', title: 'Statistiques', ...authed, loadComponent: placeholder },
   { path: 'simulations', title: 'Simulations', ...authed, loadComponent: placeholder },
