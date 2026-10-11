@@ -7,4 +7,5 @@ export * from './dto/user';
 export * from './dto/account';
 export * from './dto/category';
 export * from './dto/transaction';
+export * from './dto/transfer';
 export * from './dto/recurrence';

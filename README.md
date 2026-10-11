@@ -90,7 +90,7 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 
 - Routes (authentifiées, préfixe `/api/v1`) : `GET/POST /transactions`, `GET/PATCH/DELETE /transactions/:id`, `POST /transactions/:id/restore`.
 - Création : `accountId`, `categoryId`, `amountCents` (entier > 0, sinon **400**) et `date` (`YYYY-MM-DD`, validée) ; `type` (`DEBIT` par défaut), `name`, `details` et `tagIds` facultatifs. Compte, catégorie ou tag d'un autre utilisateur (ou compte supprimé) ⇒ **404** ; `CREDIT` sur un compte `NOT_TRACKED` ⇒ **422**.
-- `PATCH` exige la `version` lue (périmée ⇒ **409**) ; `tagIds` remplace l'ensemble des tags. Le champ `transferId` n'est pas accepté (virements : E12).
+- `PATCH` exige la `version` lue (périmée ⇒ **409**) ; `tagIds` remplace l'ensemble des tags. Le champ `transferId` n'est pas accepté (virements : voir E12) ; modifier directement une jambe de virement ⇒ **422**.
 - Liste `GET /transactions` : pagination par curseur opaque (`limit` 1–100, 50 par défaut ; `nextCursor` nul sur la dernière page), tri `(date, id)` décroissant sans doublon ni trou, filtres `from`/`to` (inclusifs), `accountId`, `categoryId` (exacte, sous-catégories exclues), `tagId`.
 - Suppression logique : `DELETE` masque la transaction, `POST …/restore` l'annule (purge à 30 jours en E13). Les transactions d'un compte supprimé sont masquées, et réapparaissent à la restauration du compte.
 - Code : [apps/api/src/transactions/](apps/api/src/transactions/), [cursor.ts](apps/api/src/common/cursor.ts) ; contrats dans `packages/shared/src/dto/transaction.ts`.
@@ -103,6 +103,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Compte `NOT_TRACKED` ⇒ `null` / `null`. Compte d'un autre utilisateur ou supprimé ⇒ **404**.
 - `today` est facultatif : c'est le jour du client (évite le décalage de fuseau autour de minuit) ; absent, le jour UTC du serveur est utilisé.
 - Code : [apps/api/src/balance/](apps/api/src/balance/) ; contrat `AccountBalanceDto` dans `packages/shared/src/dto/account.ts`.
+
+## Virements (E12)
+
+- Routes (authentifiées, préfixe `/api/v1`) : `POST /transfers`, `GET /transfers/:id`, `PATCH /transfers/:id`. Suppression et restauration : `DELETE /transactions/:id` et `POST /transactions/:id/restore` sur n'importe quelle jambe.
+- Un virement = **une opération, deux transactions** (DEBIT sur la source, CREDIT sur la cible) jumelées par `transferId`, en catégorie système `transfer`. `Transfer.version` est le **seul verrou** : `PATCH` (`amountCents`, `date`, `name`, `details`) s'applique aux deux jambes, version périmée ⇒ **409** (de deux PATCH concurrents, un seul passe).
+- Suppression d'une jambe ⇒ les deux disparaissent ; restauration ⇒ les deux reviennent (refusée en 404 si l'un des deux comptes est supprimé).
+- Vers un compte `NOT_TRACKED` (retrait d'espèces) : une seule jambe DEBIT, catégorie système `cash`, sans `transferId` — dépense ordinaire (réponse avec `id`, `version`, `credit` à `null`).
+- Refus : source = cible ou source `NOT_TRACKED` ⇒ **422** ; compte d'un autre utilisateur, inconnu ou supprimé ⇒ **404**.
+- Code : [apps/api/src/transfers/](apps/api/src/transfers/) ; contrats dans `packages/shared/src/dto/transfer.ts`.
 
 ## État actuel
 
@@ -122,6 +131,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E9 — Catégories (système en lecture seule + perso, 2 niveaux, réaffectation) et tags | ✅ |
 | E10 — Transactions (création, édition versionnée, suppression logique + restauration, liste paginée par curseur, filtres, tags) | ✅ |
 | E11 — Solde (actuel / prévisionnel par `SUM` SQL indexé, `NOT_TRACKED` ⇒ `null`) | ✅ |
-| E12 → E32 | ⏳ virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E12 — Virements (2 jambes, verrou unique, suppression/restauration jumelées, vers portefeuille ⇒ « Espèces ») | ✅ |
+| E13 → E32 | ⏳ purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions et le calcul du solde, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Pas encore de virements. Le front (`apps/web`) est l'ancien code, remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) est l'ancien code, remplacé en E14.

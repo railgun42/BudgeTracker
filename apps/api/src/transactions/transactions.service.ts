@@ -5,11 +5,11 @@ import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto, TransactionListQueryDto, UpdateTransactionDto } from './transactions.dto';
 
-const include = { tags: { select: { tagId: true } }, attachment: true } satisfies Prisma.TransactionInclude;
-type TransactionRow = Prisma.TransactionGetPayload<{ include: typeof include }>;
+export const include = { tags: { select: { tagId: true } }, attachment: true } satisfies Prisma.TransactionInclude;
+export type TransactionRow = Prisma.TransactionGetPayload<{ include: typeof include }>;
 
 // 'YYYY-MM-DD' ⇄ minuit UTC : jour inchangé en @db.Date quel que soit le fuseau du serveur.
-const toDate = (d: LocalDate) => new Date(d);
+export const toDate = (d: LocalDate) => new Date(d);
 const toLocalDate = (d: Date): LocalDate => d.toISOString().slice(0, 10);
 
 export const toTransactionDto = (t: TransactionRow): TransactionDto => ({
@@ -105,6 +105,7 @@ export class TransactionsService {
   // Verrou optimiste : l'écriture n'a lieu que si la version lue est encore la version en base.
   async update(userId: string, id: string, { version, accountId, categoryId, amountCents, date, tagIds, ...rest }: UpdateTransactionDto): Promise<TransactionRow> {
     const current = await this.get(userId, id);
+    if (current.transferId) throw new UnprocessableEntityException('Jambe de virement : modifier via /transfers/:id');
     await this.checkAccount(userId, accountId ?? current.accountId, rest.type ?? (current.type as TransactionType));
     if (categoryId) await this.checkCategory(userId, categoryId);
     if (tagIds) await this.checkTags(userId, tagIds);
@@ -129,7 +130,22 @@ export class TransactionsService {
     return this.get(userId, id);
   }
 
+  // Virement : le Transfer et ses jambes partagent la suppression logique ; seule la version du Transfer bouge.
+  private async setTransferDeleted(userId: string, transferId: string, deletedAt: Date | null): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const { count } = await tx.transfer.updateMany({
+        where: { id: transferId, userId, deletedAt: deletedAt ? null : { not: null } },
+        data: { deletedAt, version: { increment: 1 } },
+      });
+      if (count === 0) throw new NotFoundException();
+      await tx.transaction.updateMany({ where: { transferId, userId }, data: { deletedAt } });
+    });
+  }
+
+  // Jambe de virement ⇒ les deux jambes sont supprimées (SPEC §3.4).
   async remove(userId: string, id: string): Promise<void> {
+    const { transferId } = await this.get(userId, id);
+    if (transferId) return this.setTransferDeleted(userId, transferId, new Date());
     const { count } = await this.prisma.transaction.updateMany({
       where: { id, ...live(userId) },
       data: { deletedAt: new Date(), version: { increment: 1 } },
@@ -139,6 +155,13 @@ export class TransactionsService {
 
   // Seule requête qui vise les supprimées : annulation depuis l'UI, avant la purge à 30 jours.
   async restore(userId: string, id: string): Promise<TransactionRow> {
+    const deleted = await this.prisma.transaction.findFirst({ where: { id, userId, deletedAt: { not: null } }, select: { transferId: true } });
+    if (deleted?.transferId) {
+      // Les deux comptes doivent être visibles, sinon le virement réapparaîtrait à moitié.
+      if (await this.prisma.transaction.count({ where: { transferId: deleted.transferId, userId, account: { deletedAt: { not: null } } } })) throw new NotFoundException();
+      await this.setTransferDeleted(userId, deleted.transferId, null);
+      return this.get(userId, id);
+    }
     const { count } = await this.prisma.transaction.updateMany({
       where: { id, userId, deletedAt: { not: null }, account: { deletedAt: null } },
       data: { deletedAt: null, version: { increment: 1 } },

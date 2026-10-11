@@ -69,6 +69,17 @@ const transactionOfB = async (users: TwoUsers) => {
   };
 };
 
+// Virement entre deux comptes de B ; intact = relu tel quel par B.
+const transferOfB = async (users: TwoUsers) => {
+  const [from, to] = [await accountOfB(users), await accountOfB(users)];
+  const { body } = await users.b.call('post', '/api/v1/transfers').send({ fromAccountId: from.id, toAccountId: to.id, amountCents: 500, date: '2026-03-01' }).expect(201);
+  return {
+    id: body.id as string,
+    fromAccountId: from.id,
+    intact: async () => expect((await users.b.call('get', `/api/v1/transfers/${body.id}`).expect(200)).body).toEqual(body),
+  };
+};
+
 // Compte de A, pour les tentatives de référence croisée vers les données de B.
 const accountOfA = async ({ a }: TwoUsers) =>
   (await a.call('post', '/api/v1/accounts').send({ name: 'Compte de A', trackingType: 'NORMAL' }).expect(201)).body.id as string;
@@ -220,5 +231,26 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await users.b.call('delete', `/api/v1/transactions/${id}`).expect(204);
     await users.a.call('post', `/api/v1/transactions/${id}/restore`).expect(404);
     await users.b.call('get', `/api/v1/transactions/${id}`).expect(404); // toujours supprimée pour B
+  },
+
+  'POST /api/v1/transfers': async (users) => {
+    const { fromAccountId, intact } = await transferOfB(users);
+    const ownAccount = await accountOfA(users);
+    const send = (body: object) => users.a.call('post', '/api/v1/transfers').send({ amountCents: 100, date: '2026-03-01', ...body });
+    await send({ fromAccountId, toAccountId: ownAccount }).expect(404); // débiter B
+    await send({ fromAccountId: ownAccount, toAccountId: fromAccountId }).expect(404); // créditer B
+    const { body } = await send({ fromAccountId: ownAccount, toAccountId: await accountOfA(users) }).expect(201);
+    await users.b.call('get', `/api/v1/transfers/${body.id}`).expect(404);
+    await intact();
+  },
+  'GET /api/v1/transfers/:id': async (users) => {
+    const { id, intact } = await transferOfB(users);
+    await users.a.call('get', `/api/v1/transfers/${id}`).expect(404);
+    await intact();
+  },
+  'PATCH /api/v1/transfers/:id': async (users) => {
+    const { id, intact } = await transferOfB(users);
+    await users.a.call('patch', `/api/v1/transfers/${id}`).send({ version: 1, amountCents: 1 }).expect(404);
+    await intact();
   },
 };

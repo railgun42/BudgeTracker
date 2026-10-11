@@ -9,10 +9,11 @@ import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { TagsModule } from './tags/tags.module';
 import { TransactionsModule } from './transactions/transactions.module';
+import { TransfersModule } from './transfers/transfers.module';
 import { UsersController } from './users/users.controller';
 
 @Module({
-  imports: [PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule],
+  imports: [PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule],
   controllers: [HealthController, UsersController],
   // CSRF global : toute nouvelle route non sûre est protégée par défaut.
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }],

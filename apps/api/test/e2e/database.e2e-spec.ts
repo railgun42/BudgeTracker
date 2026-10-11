@@ -129,7 +129,7 @@ describe('Schéma v1 (intégration Postgres)', () => {
     const rent = await prisma.category.findUniqueOrThrow({ where: { nameKey: 'housing.rent' }, include: { parent: true } });
     expect(rent.parent?.nameKey).toBe('housing');
     expect(rent.parent?.parentId).toBeNull();
-    for (const key of ['interest', 'cash', 'opening_balance']) {
+    for (const key of ['interest', 'cash', 'opening_balance', 'transfer']) {
       await expect(prisma.category.findUnique({ where: { nameKey: key } })).resolves.not.toBeNull();
     }
   });

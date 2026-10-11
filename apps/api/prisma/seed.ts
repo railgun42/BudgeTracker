@@ -2,12 +2,13 @@ import { PrismaClient } from '../src/generated/prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 // Catégories système globales (userId NULL) : nameKey = clé de traduction côté front.
-// Les trois premières sont utilisées par le code (intérêts, virement vers portefeuille,
-// solde de départ) ; les autres reprennent le jeu de base de l'ancien front.
+// Les quatre premières sont utilisées par le code (intérêts, virement vers portefeuille,
+// solde de départ, jambes de virement) ; les autres reprennent le jeu de base de l'ancien front.
 export const SYSTEM_CATEGORIES: Record<string, string[]> = {
   interest: [],
   cash: [],
   opening_balance: [],
+  transfer: [],
   entertainment: ['multimedia', 'outings'],
   sport: ['subscription', 'equipment'],
   groceries: ['food', 'hygiene'],
