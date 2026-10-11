@@ -68,6 +68,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Le test méta ([isolation-meta.e2e-spec.ts](apps/api/test/e2e/isolation-meta.e2e-spec.ts)) énumère les routes Nest (`DiscoveryService`) et échoue si une route n'est pas enregistrée, si une entrée est orpheline, ou si la présence de `JwtAuthGuard` contredit le registre.
 - **Toute nouvelle route** s'ajoute au registre dans la même étape : B crée la ressource, A la lit/modifie/supprime ⇒ 404, la ressource reste intacte pour B.
 
+## Comptes (E8)
+
+- Routes (toutes authentifiées, préfixe `/api/v1`) : `GET/POST /accounts`, `GET/PATCH/DELETE /accounts/:id`, `POST /accounts/:id/restore`.
+- Trois `trackingType` : `NORMAL`, `WITH_INTEREST`, `NOT_TRACKED` (portefeuille). **Pas de champ solde** : un `balance` en entrée est refusé (400), le solde sera calculé en E11.
+- Création avec `openingBalance` facultatif `{ amountCents, date }` (entier ≠ 0, date `YYYY-MM-DD`) : crée, dans la même transaction SQL, une transaction « Solde de départ » (CREDIT si > 0, DEBIT si < 0, catégorie système `opening_balance`). Refusé (422) sur `NOT_TRACKED`.
+- Verrou optimiste : `PATCH` exige la `version` lue ; version périmée ⇒ **409**, ressource d'un autre utilisateur ou absente ⇒ **404**.
+- Suppression logique (`deletedAt`) : le compte disparaît des listes ; `POST /accounts/:id/restore` l'annule (purge définitive à 30 jours en E13). `DELETE` et `restore` incrémentent la version.
+- Code : [apps/api/src/accounts/](apps/api/src/accounts/) ; contrats d'entrée `CreateAccountInput` / `UpdateAccountInput` dans `packages/shared`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -82,6 +91,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E5 — Auth e-mail/mot de passe | ✅ |
 | E6 — Reset de mot de passe + Google OAuth | ✅ |
 | E7 — Harnais d'isolation (`createTwoUsers`, registre, test méta des routes) | ✅ |
-| E8 → E32 | ⏳ comptes, catégories, transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E8 — Comptes (CRUD, 3 `trackingType`, solde de départ, suppression logique + restauration, 409) | ✅ |
+| E9 → E32 | ⏳ catégories et tags, transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe et la connexion Google, sur un schéma de base complet, et un harnais garantit que toute future route aura son test d'isolation entre utilisateurs. Il n'y a pas encore de ressource métier (comptes, transactions). Le front (`apps/web`) est l'ancien code, remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google et les comptes (premier objet métier), sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Pas encore de catégories modifiables, de transactions ni de solde calculé. Le front (`apps/web`) est l'ancien code, remplacé en E14.

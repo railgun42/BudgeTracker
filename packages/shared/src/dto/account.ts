@@ -9,6 +9,21 @@ export interface AccountDto {
   version: number;
 }
 
+// POST /accounts. Solde de départ : montant signé (≠ 0), interdit pour NOT_TRACKED ;
+// crée une transaction « Solde de départ » (CREDIT si > 0, DEBIT si < 0).
+export interface CreateAccountInput {
+  name: string;
+  trackingType: TrackingType;
+  openingBalance?: { amountCents: number; date: LocalDate };
+}
+
+// PATCH /accounts/:id. `version` périmée ⇒ 409.
+export interface UpdateAccountInput {
+  version: number;
+  name?: string;
+  trackingType?: TrackingType;
+}
+
 export interface InterestRateDto {
   id: string;
   accountId: string;
