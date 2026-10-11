@@ -36,9 +36,20 @@ docker compose exec db pg_isready
 ## Commandes
 
 - `npm run build` — build de tous les workspaces (`npm run build -w @budgetracker/shared` / `-w web` pour un seul)
-- `npm test` — tests (node:test sur `test/*.test.mjs`, nécessite `shared` buildé)
+- `npm test` — tests du monorepo (node:test sur `test/*.test.mjs`, nécessite `shared` buildé)
+- `npm test -w api` — tests de l'API (Jest : unitaires `src/**/*.spec.ts` + e2e `test/e2e/*.e2e-spec.ts`)
+- `npm run build -w api` puis `npm run start -w api` — démarre l'API (lit `.env` à la racine) ; `GET http://localhost:3000/api/health`
 - `docker compose up -d` — Postgres, MinIO et Mailpit en local (ports liés à 127.0.0.1 uniquement)
 
 ## État actuel
 
-Projet au tout début de son implémentation. Seule l'étape **E0 — Squelette monorepo et environnement** (voir [PLAN.md](PLAN.md)) est faite : workspaces npm, package `shared` vide, environnement Docker de dev. Aucune API, aucun schéma de données, aucun écran n'existe encore — tout est à construire étape par étape selon le PLAN.
+Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
+
+| Étape | Statut |
+|---|---|
+| E0 — Squelette monorepo et environnement | ✅ fait (commité) |
+| E1 — Squelette API | ✅ fait : config d'env validée au démarrage, logger JSON avec masquage des emails/montants, helmet, `ValidationPipe` global, filtre d'erreurs, `GET /api/health`, Jest (15 tests verts) |
+| E2 — CI minimale | ⏳ à faire (inclura les tests de l'API dans la CI) |
+| E3 → E32 | ⏳ à faire : Prisma, `shared`, auth, comptes, transactions, virements, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+
+Concrètement : l'API démarre et répond sur `/api/health`, mais elle n'a pas encore de base de données, d'authentification ni de ressource métier. Le front (`apps/web`) est l'ancien code, qui sera remplacé en E14.

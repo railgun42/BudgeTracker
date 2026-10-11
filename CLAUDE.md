@@ -20,6 +20,7 @@ ne pas passer à la suivante tant que sa « Vérif » n'est pas verte.
 - Build : `npm run build` (tous) ou `npm run build -w @budgetracker/shared` / `-w web`
 - Tests : `npm test` (racine, node:test sur `test/*.test.mjs` ; nécessite `shared` buildé)
 - Env dev : `cp .env.example .env` puis `docker compose up -d` (`COMPOSE_FILE` pointe sur docker-compose.dev.yml) ; `docker compose exec db pg_isready`
+- API : `npm test -w api` (Jest : `src/**/*.spec.ts` + `test/e2e/*.e2e-spec.ts`) ; `npm run build -w api` puis `npm run start -w api` (lit `.env` racine) → `GET localhost:3000/api/health`
 
 ## Environnement
 - Windows, PowerShell / Git Bash. Docker Desktop requis (Postgres, MinIO, Mailpit).
