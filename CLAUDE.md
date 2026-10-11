@@ -16,6 +16,10 @@ ne pas passer à la suivante tant que sa « Vérif » n'est pas verte.
 
 ## Commandes
 (à remplir au fil des étapes : lint, test, build, démarrage dev, migrations)
+- Installation : `npm ci` (racine uniquement ; un seul lockfile, workspaces `apps/*`, `packages/*`)
+- Build : `npm run build` (tous) ou `npm run build -w @budgetracker/shared` / `-w web`
+- Tests : `npm test` (racine, node:test sur `test/*.test.mjs` ; nécessite `shared` buildé)
+- Env dev : `cp .env.example .env` puis `docker compose up -d` (`COMPOSE_FILE` pointe sur docker-compose.dev.yml) ; `docker compose exec db pg_isready`
 
 ## Environnement
 - Windows, PowerShell / Git Bash. Docker Desktop requis (Postgres, MinIO, Mailpit).

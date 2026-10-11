@@ -1,0 +1,13 @@
+{
+  "name": "budgetracker",
+  "private": true,
+  "packageManager": "npm@11.18.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "node --test test/*.test.mjs"
+  }
+}
