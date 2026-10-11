@@ -28,18 +28,31 @@ Monorepo npm workspaces : `apps/web`, `apps/api`, `packages/shared` (types/enums
 
 ```bash
 npm ci
-cp .env.example .env
-docker compose up -d
-docker compose exec db pg_isready
+cp .env.example .env        # puis remplacer JWT_SECRET (32 caractères min.)
+docker compose up -d        # Postgres, MinIO, Mailpit
+npm run build -w @budgetracker/shared
+npm run db:migrate -w api   # migrations Prisma (npm run db:reset -w api = reset + seed)
+npm run build -w api && npm run start -w api
 ```
+
+Santé : `GET http://localhost:3000/api/health`. Les e-mails de dev (vérification) arrivent dans Mailpit : http://localhost:8025.
 
 ## Commandes
 
-- `npm run build` — build de tous les workspaces (`npm run build -w @budgetracker/shared` / `-w web` pour un seul)
+- `npm run lint` — ESLint (racine ; `apps/web` exclu jusqu'à E14)
+- `npm run build` — build de tous les workspaces (`-w @budgetracker/shared` / `-w api` / `-w web` pour un seul)
 - `npm test` — tests du monorepo (node:test sur `test/*.test.mjs`, nécessite `shared` buildé)
-- `npm test -w api` — tests de l'API (Jest : unitaires `src/**/*.spec.ts` + e2e `test/e2e/*.e2e-spec.ts`)
-- `npm run build -w api` puis `npm run start -w api` — démarre l'API (lit `.env` à la racine) ; `GET http://localhost:3000/api/health`
-- `docker compose up -d` — Postgres, MinIO et Mailpit en local (ports liés à 127.0.0.1 uniquement)
+- `npm test -w @budgetracker/shared` — tests de `shared` (Vitest)
+- `npm test -w api` — tests de l'API (Jest : unitaires `src/**/*.spec.ts` + e2e `test/e2e/*.e2e-spec.ts`, contre le vrai Postgres)
+- `npm run db:migrate -w api` / `npm run db:reset -w api` — migrations / reset + seed de la base de dev
+
+## Authentification (E5)
+
+- Inscription par e-mail + mot de passe (Argon2id), **vérification d'e-mail obligatoire** avant connexion.
+- Session : cookies `httpOnly` / `Secure` / `SameSite=Strict` (jamais de jeton dans le corps des réponses ni en `localStorage`), refresh token rotatif avec détection de réutilisation (fenêtre de grâce de 10 s pour les onglets concurrents).
+- CSRF en double-submit : toute requête non-GET doit envoyer l'en-tête `X-CSRF-Token` égal au cookie `csrf_token` (posé au premier appel).
+- Rate limiting : 5 essais/min par IP sur `signup` et `login`, verrouillage progressif par compte.
+- Routes : `POST /api/v1/auth/{signup,verify-email,login,refresh,logout}`, `GET /api/v1/me`.
 
 ## État actuel
 
@@ -47,9 +60,12 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 
 | Étape | Statut |
 |---|---|
-| E0 — Squelette monorepo et environnement | ✅ fait (commité) |
-| E1 — Squelette API | ✅ fait : config d'env validée au démarrage, logger JSON avec masquage des emails/montants, helmet, `ValidationPipe` global, filtre d'erreurs, `GET /api/health`, Jest (15 tests verts) |
-| E2 — CI minimale | ⏳ à faire (inclura les tests de l'API dans la CI) |
-| E3 → E32 | ⏳ à faire : Prisma, `shared`, auth, comptes, transactions, virements, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E0 — Monorepo et environnement | ✅ |
+| E1 — Squelette API (config validée, logs masqués, helmet, validation, `/health`) | ✅ |
+| E2 — CI minimale (lint, build, tests, service Postgres) | ✅ |
+| E3 — Prisma, schéma v1, migration init, seed | ✅ |
+| E4 — `shared` : enums, DTO, helpers `money` et `LocalDate` | ✅ |
+| E5 — Auth e-mail/mot de passe | ✅ |
+| E6 → E32 | ⏳ reset de mot de passe + Google, harnais d'isolation, comptes, catégories, transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API démarre et répond sur `/api/health`, mais elle n'a pas encore de base de données, d'authentification ni de ressource métier. Le front (`apps/web`) est l'ancien code, qui sera remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion et la session, sur un schéma de base complet. Il n'y a pas encore de ressource métier (comptes, transactions). Le front (`apps/web`) est l'ancien code, remplacé en E14.

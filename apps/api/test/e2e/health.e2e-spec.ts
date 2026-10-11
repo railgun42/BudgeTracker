@@ -27,6 +27,8 @@ class ProbeController {
 
 describe('Squelette API (e2e)', () => {
   let app: INestApplication;
+  // Double-submit CSRF exigé sur toute méthode non sûre (E5).
+  const post = (url: string) => request(app.getHttpServer()).post(url).set('Cookie', 'csrf_token=t').set('X-CSRF-Token', 't');
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule], controllers: [ProbeController] }).compile();
@@ -45,13 +47,13 @@ describe('Squelette API (e2e)', () => {
   });
 
   it('ValidationPipe : champ non déclaré → 400', async () => {
-    const res = await request(app.getHttpServer()).post('/api/test/echo').send({ name: 'a', balance: 10 }).expect(400);
+    const res = await post('/api/test/echo').send({ name: 'a', balance: 10 }).expect(400);
     expect(JSON.stringify(res.body)).toContain('balance should not exist');
   });
 
   it('ValidationPipe : type invalide → 400, valide → 201', async () => {
-    await request(app.getHttpServer()).post('/api/test/echo').send({ name: 42 }).expect(400);
-    await request(app.getHttpServer()).post('/api/test/echo').send({ name: 'a' }).expect(201, { name: 'a' });
+    await post('/api/test/echo').send({ name: 42 }).expect(400);
+    await post('/api/test/echo').send({ name: 'a' }).expect(201, { name: 'a' });
   });
 
   it("filtre d'erreurs : erreur inattendue → 500 générique sans fuite", async () => {
@@ -72,7 +74,7 @@ describe('Démarrage (e2e)', () => {
 
   it('démarre et répond sur /api/health avec une config valide', async () => {
     const stdout = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
-    const app = await bootstrap({ DATABASE_URL: 'postgresql://x', PORT: '0' });
+    const app = await bootstrap({ DATABASE_URL: 'postgresql://x', JWT_SECRET: 'x'.repeat(32), PORT: '0' });
     stdout.mockRestore();
     try {
       await request(app.getHttpServer()).get('/api/health').expect(200);
