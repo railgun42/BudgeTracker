@@ -26,6 +26,8 @@ ne pas passer à la suivante tant que sa « Vérif » n'est pas verte.
 - BDD (Prisma 7, `apps/api/prisma.config.ts`, lit `.env` racine) : `npm run db:migrate -w api` (deploy) ; `npm run db:reset -w api` (reset + seed, base de dev) ; nouvelle migration : `npx prisma migrate dev --create-only --name x` dans `apps/api`, puis SQL brut si besoin (CHECK, index sur expression, DEFERRABLE). Client généré dans `apps/api/src/generated` (ignoré par git, regénéré par build/pretest)
 - API : `npm test -w api` (Jest : `src/**/*.spec.ts` + `test/e2e/*.e2e-spec.ts`) ; `npm run build -w api` puis `npm run start -w api` (lit `.env` racine) → `GET localhost:3000/api/health`
 
+- Auth : `JWT_SECRET` (≥ 32 car.) obligatoire au démarrage ; session en cookies httpOnly, toute requête non GET exige l'en-tête `X-CSRF-Token` = cookie `csrf_token`. Mails de dev : Mailpit http://localhost:8025
+
 ## Environnement
 - Windows, PowerShell / Git Bash. Docker Desktop requis (Postgres, MinIO, Mailpit).
 - Front : conventions dans apps/web/.claude/CLAUDE.md.
