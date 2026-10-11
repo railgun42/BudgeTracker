@@ -1,14 +1,17 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { createHash } from 'node:crypto';
 import { AppModule } from '../../src/app.module';
+import { appUrl, sha256 } from '../../src/auth/auth.service';
 import { MailService } from '../../src/mail/mail.service';
 import { configureApp } from '../../src/main';
 import { testPrisma, uniqueEmail } from '../helpers/db';
 
-// E5 — auth e-mail/mot de passe, contre la vraie base. Le mail est capturé en mémoire.
+// E5/E6 — auth e-mail/mot de passe, reset, Google, contre la vraie base. Le mail est capturé en mémoire.
 const CSRF = 'csrf-test-token';
 const PASSWORD = 'correct horse battery';
+const NEW_PASSWORD = 'new horse battery staple';
 
 type Jar = Record<string, string>;
 interface CallOptions {
@@ -27,7 +30,7 @@ const setCookies = (res: request.Response): string[] => ([] as string[]).concat(
 const jarOf = (res: request.Response): Jar =>
   Object.fromEntries(setCookies(res).map((c) => c.split(';')[0].split('=') as [string, string]).filter(([, v]) => v));
 
-describe('Auth e-mail/mot de passe (e2e)', () => {
+describe('Auth (e2e)', () => {
   let app: INestApplication;
   const prisma = testPrisma();
   const mails: { to: string; text: string }[] = [];
@@ -58,7 +61,12 @@ describe('Auth e-mail/mot de passe (e2e)', () => {
   const login = (email: string, ip = newIp(), password = PASSWORD) =>
     call('post', '/auth/login', { ip, body: { email, password } });
 
+  // Dernier lien reçu par cette adresse.
+  const lastToken = (email: string) => /token=([\w-]+)/.exec(mails.filter((m) => m.to === email).at(-1)!.text)![1];
+
   beforeAll(async () => {
+    process.env.GOOGLE_CLIENT_ID = 'test-client';
+    process.env.GOOGLE_CLIENT_SECRET = 'test-secret';
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(MailService)
       .useValue({ send: async (to: string, _subject: string, text: string) => void mails.push({ to, text }) })
@@ -190,5 +198,175 @@ describe('Auth e-mail/mot de passe (e2e)', () => {
     const cookie = setCookies(res).find((c) => c.startsWith('csrf_token='))!;
     expect(cookie).not.toMatch(/HttpOnly/);
     expect(cookie).toMatch(/SameSite=Strict/);
+  });
+
+  describe('E6 — reset de mot de passe', () => {
+    const forgot = async (email: string) => {
+      await call('post', '/auth/forgot', { ip: newIp(), body: { email } }).expect(202);
+      return lastToken(email);
+    };
+    const reset = (token: string, password = NEW_PASSWORD) => call('post', '/auth/reset', { ip: newIp(), body: { token, password } });
+
+    it('forgot → reset : nouveau mot de passe actif, ancien refusé, tous les refresh tokens révoqués', async () => {
+      const email = await verifiedUser();
+      const [a, b] = [jarOf(await login(email).expect(200)), jarOf(await login(email).expect(200))];
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      expect(await prisma.refreshToken.count({ where: { userId: user.id, revokedAt: null } })).toBe(2);
+
+      const older = await forgot(email);
+      const token = await forgot(email);
+      expect(mails.at(-1)!.text).toContain(`${appUrl()}/reset-password?token=${token}`);
+      await reset(token).expect(204);
+
+      expect(await prisma.refreshToken.count({ where: { userId: user.id, revokedAt: null } })).toBe(0);
+      for (const jar of [a, b]) await call('post', '/auth/refresh', { ip: newIp(), cookies: { refresh_token: jar.refresh_token } }).expect(401);
+      await login(email).expect(401);
+      await login(email, newIp(), NEW_PASSWORD).expect(200);
+      // Un lien plus ancien, encore valide en durée, est invalidé par le reset.
+      await reset(older).expect(400);
+    });
+
+    it('token réutilisé → 400', async () => {
+      const token = await forgot(await verifiedUser());
+      await reset(token).expect(204);
+      await reset(token, 'third horse battery').expect(400);
+    });
+
+    it('token expiré → 400, mot de passe inchangé', async () => {
+      const email = await verifiedUser();
+      const token = await forgot(email);
+      await prisma.emailToken.update({ where: { tokenHash: sha256(token) }, data: { expiresAt: new Date(Date.now() - 1000) } });
+      await reset(token).expect(400);
+      await login(email).expect(200);
+    });
+
+    it('jeton inconnu ou de vérification d’e-mail → 400 ; mot de passe trop court → 400', async () => {
+      await reset('inconnu').expect(400);
+      const { token } = await signup();
+      await reset(token).expect(400);
+      await reset(await forgot(await verifiedUser()), 'court').expect(400);
+    });
+
+    it('e-mail inconnu → 202 sans mail ; au-delà de 3 demandes par heure et par compte, plus de mail', async () => {
+      const before = mails.length;
+      await call('post', '/auth/forgot', { ip: newIp(), body: { email: uniqueEmail() } }).expect(202);
+      expect(mails.length).toBe(before);
+
+      const email = await verifiedUser();
+      for (let i = 0; i < 4; i++) await call('post', '/auth/forgot', { ip: newIp(), body: { email } }).expect(202);
+      expect(mails.filter((m) => m.to === email && m.text.includes('reset-password'))).toHaveLength(3);
+    });
+
+    it('le reset vaut vérification de l’adresse d’un compte jamais vérifié', async () => {
+      const { email } = await signup();
+      await login(email).expect(403);
+      await reset(await forgot(email)).expect(204);
+      await login(email, newIp(), NEW_PASSWORD).expect(200);
+    });
+  });
+
+  describe('E6 — Google OAuth', () => {
+    const idToken = (claims: object) => `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.sig`;
+    const googleClaims = (email: string, emailVerified = true) => ({
+      iss: 'https://accounts.google.com',
+      aud: 'test-client',
+      exp: Math.floor(Date.now() / 1000) + 300,
+      sub: `g-${email}`,
+      email,
+      email_verified: emailVerified,
+      name: 'Ann Google',
+    });
+
+    // Parcours navigateur : /auth/google → (Google) → /auth/google/callback, échange de code simulé.
+    const googleLogin = async (claims: object, tamper?: { state?: string; noCookie?: boolean }) => {
+      const start = await call('get', '/auth/google', { ip: newIp(), csrf: false }).expect(302);
+      const authorize = new URL(start.headers.location);
+      const oauthState = jarOf(start).oauth_state;
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ id_token: idToken(claims) })));
+      try {
+        const state = tamper?.state ?? authorize.searchParams.get('state');
+        const cookies: Jar = tamper?.noCookie ? {} : { oauth_state: oauthState };
+        const res = await call('get', `/auth/google/callback?code=abc&state=${state}`, { ip: newIp(), cookies, csrf: false }).expect(302);
+        return { start, authorize, oauthState, res, fetchCalls: [...fetchSpy.mock.calls] };
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    };
+
+    it('nouvel utilisateur : redirection avec state + PKCE, compte vérifié créé, session ouverte', async () => {
+      const email = uniqueEmail();
+      emails.push(email);
+      const { start, authorize, oauthState, res, fetchCalls } = await googleLogin(googleClaims(email));
+
+      expect(authorize.origin + authorize.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+      expect(authorize.searchParams.get('client_id')).toBe('test-client');
+      expect(authorize.searchParams.get('redirect_uri')).toBe(`${appUrl()}/api/v1/auth/google/callback`);
+      expect(authorize.searchParams.get('code_challenge_method')).toBe('S256');
+      const stateCookie = setCookies(start).find((c) => c.startsWith('oauth_state='))!;
+      expect(stateCookie).toMatch(/HttpOnly/);
+      expect(stateCookie).toMatch(/Secure/);
+      expect(stateCookie).toMatch(/SameSite=Lax/);
+
+      // Le vérificateur PKCE envoyé à Google correspond au challenge de la redirection.
+      const body = new URLSearchParams(String(fetchCalls[0][1]!.body));
+      expect(body.get('code')).toBe('abc');
+      expect(oauthState.endsWith(`.${body.get('code_verifier')}`)).toBe(true);
+      expect(createHash('sha256').update(body.get('code_verifier')!).digest('base64url')).toBe(authorize.searchParams.get('code_challenge'));
+
+      expect(res.headers.location).toBe(`${appUrl()}/`);
+      const jar = jarOf(res);
+      expect(jar.refresh_token).toBeDefined();
+      const me = await call('get', '/me', { ip: newIp(), cookies: { access_token: jar.access_token } }).expect(200);
+      expect(me.body).toMatchObject({ email, name: 'Ann Google' });
+      const user = await prisma.user.findUniqueOrThrow({ where: { email }, include: { credential: true, oauthIdentities: true } });
+      expect(user.emailVerifiedAt).not.toBeNull();
+      expect(user.credential).toBeNull();
+      expect(user.oauthIdentities).toEqual([expect.objectContaining({ provider: 'google', providerId: `g-${email}` })]);
+
+      // Deuxième connexion : même compte, pas de doublon.
+      await googleLogin(googleClaims(email));
+      expect(await prisma.oAuthIdentity.count({ where: { userId: user.id } })).toBe(1);
+    });
+
+    it('compte local vérifié + e-mail Google vérifié ⇒ liaison ; le mot de passe reste valable', async () => {
+      const email = await verifiedUser();
+      const { res } = await googleLogin(googleClaims(email));
+      const me = await call('get', '/me', { ip: newIp(), cookies: { access_token: jarOf(res).access_token } }).expect(200);
+      const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+      expect(me.body.id).toBe(user.id);
+      expect(await prisma.oAuthIdentity.count({ where: { userId: user.id } })).toBe(1);
+      await login(email).expect(200);
+    });
+
+    it('e-mail Google non vérifié, ou compte local non vérifié ⇒ refus de liaison, pas de session', async () => {
+      const verifiedEmail = await verifiedUser();
+      const { email: unverifiedEmail } = await signup();
+      for (const claims of [googleClaims(verifiedEmail, false), googleClaims(unverifiedEmail)]) {
+        const { res } = await googleLogin(claims);
+        expect(res.headers.location).toBe(`${appUrl()}/login?error=google_link_refused`);
+        expect(jarOf(res).access_token).toBeUndefined();
+      }
+      expect(await prisma.oAuthIdentity.count({ where: { user: { email: { in: [verifiedEmail, unverifiedEmail] } } } })).toBe(0);
+    });
+
+    it('state différent ou cookie absent ⇒ erreur, Google jamais appelé', async () => {
+      const email = await verifiedUser();
+      for (const tamper of [{ state: 'forged' }, { noCookie: true }]) {
+        const { res, fetchCalls } = await googleLogin(googleClaims(email), tamper);
+        expect(res.headers.location).toBe(`${appUrl()}/login?error=google`);
+        expect(fetchCalls).toHaveLength(0);
+        expect(jarOf(res).access_token).toBeUndefined();
+      }
+    });
+
+    it('non configuré ⇒ 404', async () => {
+      const id = process.env.GOOGLE_CLIENT_ID;
+      delete process.env.GOOGLE_CLIENT_ID;
+      try {
+        await call('get', '/auth/google', { ip: newIp(), csrf: false }).expect(404);
+      } finally {
+        process.env.GOOGLE_CLIENT_ID = id;
+      }
+    });
   });
 });

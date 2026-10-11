@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { User } from '../generated/prisma/client';
+import { EmailTokenType, Prisma, User } from '../generated/prisma/client';
 import { REFRESH_TTL_MS } from '../common/cookies';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,9 +16,22 @@ const MAX_FAILURES = 5;
 const LOCK_BASE_MS = 60_000;
 const LOCK_MAX_MS = 3600_000;
 
-const randomToken = () => randomBytes(32).toString('base64url');
+export const randomToken = () => randomBytes(32).toString('base64url');
 // Jetons à forte entropie : un SHA-256 suffit, seul le hash est stocké.
-const sha256 = (token: string) => createHash('sha256').update(token).digest('hex');
+export const sha256 = (token: string) => createHash('sha256').update(token).digest('hex');
+// URL du front, pour les liens envoyés par e-mail et les redirections OAuth.
+export const appUrl = () => process.env.APP_URL || 'http://localhost:4200';
+
+// Usage unique : la consommation est conditionnelle, donc atomique. Renvoie l'id de l'utilisateur.
+export async function consumeEmailToken(tx: Prisma.TransactionClient, token: string, type: EmailTokenType): Promise<string> {
+  const now = new Date();
+  const row = await tx.emailToken.findUnique({ where: { tokenHash: sha256(token) } });
+  const { count } = row
+    ? await tx.emailToken.updateMany({ where: { id: row.id, type, usedAt: null, expiresAt: { gt: now } }, data: { usedAt: now } })
+    : { count: 0 };
+  if (!row || !count) throw new BadRequestException('Lien invalide ou expiré');
+  return row.userId;
+}
 
 export interface Session {
   access: string;
@@ -53,23 +66,14 @@ export class AuthService {
     await this.prisma.emailToken.create({
       data: { userId: user.id, type: 'VERIFY', tokenHash: sha256(token), expiresAt: new Date(Date.now() + VERIFY_TTL_MS) },
     });
-    const link = `${process.env.APP_URL || 'http://localhost:4200'}/verify-email?token=${token}`;
+    const link = `${appUrl()}/verify-email?token=${token}`;
     await this.mail.send(email, 'Confirmez votre adresse e-mail', `Bienvenue sur BudgeTracker.\n\nConfirmez votre adresse : ${link}\n\nCe lien expire dans 24 h.`);
   }
 
   async verifyEmail(token: string): Promise<void> {
-    const now = new Date();
     await this.prisma.$transaction(async (tx) => {
-      const row = await tx.emailToken.findUnique({ where: { tokenHash: sha256(token) } });
-      // Usage unique : la consommation est conditionnelle, donc atomique.
-      const { count } = row
-        ? await tx.emailToken.updateMany({
-            where: { id: row.id, type: 'VERIFY', usedAt: null, expiresAt: { gt: now } },
-            data: { usedAt: now },
-          })
-        : { count: 0 };
-      if (!row || !count) throw new BadRequestException('Lien invalide ou expiré');
-      await tx.user.update({ where: { id: row.userId }, data: { emailVerifiedAt: now } });
+      const userId = await consumeEmailToken(tx, token, 'VERIFY');
+      await tx.user.update({ where: { id: userId }, data: { emailVerifiedAt: new Date() } });
     });
   }
 
@@ -88,8 +92,13 @@ export class AuthService {
     this.failures.delete(email);
     // Vérifié après le mot de passe : ne révèle rien sans connaître celui-ci.
     if (!user.emailVerifiedAt) throw new ForbiddenException('Adresse e-mail non vérifiée');
-    const updated = await this.prisma.user.update({ where: { id: user.id }, data: { lastConnection: new Date() } });
-    return { user: updated, session: await this.createSession(user.id, randomUUID()) };
+    return this.openSession(user.id);
+  }
+
+  // Nouvelle session (nouvelle famille de refresh tokens) : login par mot de passe ou par Google.
+  async openSession(userId: string): Promise<{ user: User; session: Required<Session> }> {
+    const user = await this.prisma.user.update({ where: { id: userId }, data: { lastConnection: new Date() } });
+    return { user, session: await this.createSession(userId, randomUUID()) };
   }
 
   // Rotation : chaque refresh token ne sert qu'une fois. Rejouer un ancien jeton révoque toute la famille.

@@ -27,6 +27,7 @@ ne pas passer à la suivante tant que sa « Vérif » n'est pas verte.
 - API : `npm test -w api` (Jest : `src/**/*.spec.ts` + `test/e2e/*.e2e-spec.ts`) ; `npm run build -w api` puis `npm run start -w api` (lit `.env` racine) → `GET localhost:3000/api/health`
 
 - Auth : `JWT_SECRET` (≥ 32 car.) obligatoire au démarrage ; session en cookies httpOnly, toute requête non GET exige l'en-tête `X-CSRF-Token` = cookie `csrf_token`. Mails de dev : Mailpit http://localhost:8025
+- Google OAuth (facultatif en dev) : `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`, redirection `${APP_URL}/api/v1/auth/google/callback` ; absents ⇒ `/auth/google` 404
 
 ## Environnement
 - Windows, PowerShell / Git Bash. Docker Desktop requis (Postgres, MinIO, Mailpit).

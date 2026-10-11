@@ -4,13 +4,17 @@ import { UserDto } from '@budgetracker/shared';
 import { Request, Response } from 'express';
 import { ACCESS_COOKIE, accessCookie, REFRESH_COOKIE, refreshCookie } from '../common/cookies';
 import { toUserDto } from '../users/users.controller';
-import { LoginDto, SignupDto, VerifyEmailDto } from './auth.dto';
+import { ForgotPasswordDto, LoginDto, ResetPasswordDto, SignupDto, VerifyEmailDto } from './auth.dto';
 import { AuthService, Session } from './auth.service';
+import { PasswordResetService } from './password-reset.service';
 
 // Les jetons ne transitent que par cookies httpOnly, jamais dans le corps des réponses.
 @Controller('v1/auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
   @Post('signup')
   @HttpCode(202)
@@ -45,6 +49,20 @@ export class AuthController {
     }
   }
 
+  @Post('forgot')
+  @HttpCode(202)
+  @UseGuards(ThrottlerGuard)
+  forgot(@Body() { email }: ForgotPasswordDto): Promise<void> {
+    return this.passwordReset.forgot(email);
+  }
+
+  @Post('reset')
+  @HttpCode(204)
+  @UseGuards(ThrottlerGuard)
+  reset(@Body() { token, password }: ResetPasswordDto): Promise<void> {
+    return this.passwordReset.reset(token, password);
+  }
+
   @Post('logout')
   @HttpCode(204)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
@@ -53,7 +71,7 @@ export class AuthController {
   }
 }
 
-function setSession(res: Response, { access, refresh }: Session): void {
+export function setSession(res: Response, { access, refresh }: Session): void {
   res.cookie(ACCESS_COOKIE, access, accessCookie);
   if (refresh) res.cookie(REFRESH_COOKIE, refresh, refreshCookie);
 }
