@@ -54,6 +54,12 @@ Santé : `GET http://localhost:3000/api/health`. Les e-mails de dev (vérificati
 - Rate limiting : 5 essais/min par IP sur `signup` et `login`, verrouillage progressif par compte.
 - Routes : `POST /api/v1/auth/{signup,verify-email,login,refresh,logout}`, `GET /api/v1/me`.
 
+## Reset de mot de passe et Google (E6)
+
+- `POST /api/v1/auth/forgot` (202 toujours, pas d'énumération de comptes ; lien valable 30 min, 3 e-mails/heure/compte) puis `POST /api/v1/auth/reset` : lien à usage unique, révoque tous les refresh tokens.
+- Google OAuth (code + `state` + PKCE) : `GET /api/v1/auth/google` puis `/google/callback`, qui redirige vers le front. Liaison à un compte existant **uniquement** si l'e-mail Google est vérifié et le compte local vérifié.
+- Configuration facultative : `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` (URI de redirection : `${APP_URL}/api/v1/auth/google/callback`) ; absents, `/auth/google` répond 404.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -66,6 +72,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E3 — Prisma, schéma v1, migration init, seed | ✅ |
 | E4 — `shared` : enums, DTO, helpers `money` et `LocalDate` | ✅ |
 | E5 — Auth e-mail/mot de passe | ✅ |
-| E6 → E32 | ⏳ reset de mot de passe + Google, harnais d'isolation, comptes, catégories, transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E6 — Reset de mot de passe + Google OAuth | ✅ |
+| E7 → E32 | ⏳ harnais d'isolation, comptes, catégories, transactions, solde, virements, purge, front, récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion et la session, sur un schéma de base complet. Il n'y a pas encore de ressource métier (comptes, transactions). Le front (`apps/web`) est l'ancien code, remplacé en E14.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe et la connexion Google, sur un schéma de base complet. Il n'y a pas encore de ressource métier (comptes, transactions). Le front (`apps/web`) est l'ancien code, remplacé en E14.

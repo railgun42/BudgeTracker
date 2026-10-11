@@ -37,3 +37,21 @@ export class VerifyEmailDto {
   @Length(1, 128)
   token!: string;
 }
+
+export class ForgotPasswordDto {
+  @Transform(normalizeEmail)
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+}
+
+export class ResetPasswordDto {
+  @IsString()
+  @Length(1, 128)
+  token!: string;
+
+  // Mêmes règles qu'à l'inscription.
+  @IsString()
+  @Length(10, 128)
+  password!: string;
+}

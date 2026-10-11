@@ -5,6 +5,9 @@ import { ACCESS_TTL_MS } from '../common/cookies';
 import { MailService } from '../mail/mail.service';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { GoogleController } from './google.controller';
+import { GoogleService } from './google.service';
+import { PasswordResetService } from './password-reset.service';
 
 @Module({
   imports: [
@@ -20,7 +23,7 @@ import { AuthService } from './auth.service';
     // Par IP (req.ip, cf. trust proxy) sur les routes marquées ThrottlerGuard : 5 essais / minute.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 5 }]),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, MailService],
+  controllers: [AuthController, GoogleController],
+  providers: [AuthService, MailService, PasswordResetService, GoogleService],
 })
 export class AuthModule {}
