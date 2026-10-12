@@ -134,6 +134,12 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - `purge(now)` reçoit l'horloge en paramètre (tests : 29 j conservé, 31 j purgé). Les objets S3 seront supprimés en E23.
 - `@nestjs/schedule` est en v6 (CommonJS) : la v12 est ESM-only et incompatible avec l'API.
 
+## Moteur de dates de récurrence (E19)
+
+-  ([occurrences.ts](apps/api/src/recurrences/engine/occurrences.ts)) : fonction pure (aucun import Nest/Prisma), dates  bornes incluses,  inclusive, unités DAY/WEEK/MONTH/YEAR avec  ≥ 1 entier (sinon ).
+- La k-ième occurrence se calcule depuis  (jamais depuis la précédente) : 31/01 → 28/02 → 31/03, 29/02 annuel → 28/02 les années non bissextiles. Le jour d'ancrage est celui de  ( n'est pas lu par le moteur).
+- Le résultat ne dépend pas du découpage de la fenêtre (testé). Branchement en base et génération : E20.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -159,6 +165,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E16 — Authentification front (connexion, inscription, vérification, reset, Google, `authGuard`) | ✅ |
 | E17 — Comptes et saisie de transaction front (liste/CRUD de comptes, dépense en 3 champs, virement) | ✅ |
 | E18 — Historique front (pagination par curseur, filtres, annulation, 409) | ✅ |
-| E19 → E32 | ⏳ récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E19 — Moteur de dates de récurrence (pur) | ✅ |
+| E20 → E32 | ⏳ récurrences (API), intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.
