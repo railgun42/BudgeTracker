@@ -9,6 +9,16 @@ export interface AttachmentDto {
   sizeBytes: number;
 }
 
+// POST /transactions/:id/attachment (multipart, champ `file`). Type détecté par signature côté serveur :
+// hors liste ⇒ 415 ; > 5 Mo ⇒ 413 ; quota dépassé ⇒ 422 ; pièce déjà présente ⇒ 409.
+export const ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
+export const ATTACHMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const;
+
+/** GET /transactions/:id/attachment : URL signée de courte durée. */
+export interface AttachmentUrlDto {
+  url: string;
+}
+
 export interface TransactionDto {
   id: string;
   accountId: string;

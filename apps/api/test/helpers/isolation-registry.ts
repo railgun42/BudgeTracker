@@ -114,6 +114,22 @@ const interestAccountOfB = async ({ b }: TwoUsers) => {
   };
 };
 
+// Transaction de B avec une pièce jointe ; intacte = transaction (pièce comprise) et URL toujours lisibles par B.
+const PDF = Buffer.from('%PDF-1.4 %%EOF', 'latin1');
+const attachmentOfB = async (users: TwoUsers) => {
+  const { b } = users;
+  const { id } = await transactionOfB(users);
+  await b.call('post', `/api/v1/transactions/${id}/attachment`).attach('file', PDF, 'b.pdf').expect(201);
+  const { body } = await b.call('get', `/api/v1/transactions/${id}`).expect(200);
+  return {
+    id,
+    intact: async () => {
+      expect((await b.call('get', `/api/v1/transactions/${id}`).expect(200)).body).toEqual(body);
+      await b.call('get', `/api/v1/transactions/${id}/attachment`).expect(200);
+    },
+  };
+};
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -270,6 +286,22 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await users.b.call('delete', `/api/v1/transactions/${id}`).expect(204);
     await users.a.call('post', `/api/v1/transactions/${id}/restore`).expect(404);
     await users.b.call('get', `/api/v1/transactions/${id}`).expect(404); // toujours supprimée pour B
+  },
+
+  'POST /api/v1/transactions/:id/attachment': async (users) => {
+    const { id, intact } = await transactionOfB(users);
+    await users.a.call('post', `/api/v1/transactions/${id}/attachment`).attach('file', PDF, 'a.pdf').expect(404);
+    await intact(); // toujours sans pièce
+  },
+  'GET /api/v1/transactions/:id/attachment': async (users) => {
+    const { id, intact } = await attachmentOfB(users);
+    await users.a.call('get', `/api/v1/transactions/${id}/attachment`).expect(404);
+    await intact();
+  },
+  'DELETE /api/v1/transactions/:id/attachment': async (users) => {
+    const { id, intact } = await attachmentOfB(users);
+    await users.a.call('delete', `/api/v1/transactions/${id}/attachment`).expect(404);
+    await intact();
   },
 
   'POST /api/v1/transfers': async (users) => {

@@ -161,6 +161,16 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Front : la page Comptes affiche le taux courant ou « Taux d'intérêt manquant », et un formulaire de saisie du taux (%).
 - Tests : `npm test -w api` (`test/e2e/interest.e2e-spec.ts`), `npm test -w web` (`accounts-page.spec.ts`).
 
+## Pièces jointes (E23)
+
+- `POST /api/v1/transactions/:id/attachment` (multipart, champ `file`) : une pièce par transaction (2ᵉ ⇒ 409). Type détecté par la signature du fichier ([file-signature.ts](apps/api/src/attachments/file-signature.ts)), extension et Content-Type ignorés : JPEG/PNG/WebP/PDF, sinon 415. Plus de 5 Mo ⇒ 413 (multer coupe le flux).
+- Quota par utilisateur `User.storageQuotaBytes` (200 Mo par défaut) = `SUM(sizeBytes)` ; dépassement ⇒ 422. Vérifié sous verrou de la ligne `User` (`FOR UPDATE`) : des uploads parallèles ne le dépassent pas.
+- Clé S3 générée serveur `attachments/<userId>/<uuid>` ; le nom d'origine sert à l'affichage seulement. `GET …/attachment` ⇒ `{ url }` signée 5 min (Content-Type imposé), `DELETE …/attachment` ⇒ 204. Bucket privé.
+- Purge (E13) : les objets des pièces dont la ligne a été purgée sont supprimés de S3.
+- S3 : `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (`S3_REGION` facultatif), obligatoires en production. En dev, à défaut, MinIO de `docker-compose.dev.yml` (identifiants `MINIO_ROOT_*`) ; bucket créé au démarrage s'il manque. La CI lance un conteneur MinIO.
+- Front : sur chaque ligne de l'historique, joindre / ouvrir / retirer le justificatif ([attachment-control.ts](apps/web/src/app/features/transactions/attachment-control.ts)).
+- Tests : `npm test -w api` (`test/e2e/attachments.e2e-spec.ts`, contre MinIO), `npm test -w web` (`attachment-control.spec.ts`).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -190,6 +200,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E20 — Récurrences : API et génération serveur, UI minimale | ✅ |
 | E21 — Moteur d'intérêts (pur, quinzaines, taux historisé) | ✅ |
 | E22 — Intérêts : taux, crédit annuel idempotent (job), signalement du taux manquant | ✅ |
-| E23 → E32 | ⏳ pièces jointes, stats, simulations, RGPD, déploiement |
+| E23 — Pièces jointes (signature, 5 Mo, quota, S3 signé, purge) | ✅ |
+| E24 → E32 | ⏳ stats, simulations, RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

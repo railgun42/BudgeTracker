@@ -4,6 +4,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { RouterLink } from '@angular/router';
 import {
   AccountDto,
+  AttachmentDto,
   CategoryDto,
   centsToEuros,
   eurosToCents,
@@ -20,11 +21,12 @@ import { amountValidator, EurPipe } from '../../core/money';
 import { categoryLabel } from '../../shared-ui/labels';
 import { UndoBanner } from '../../shared-ui/undo-banner';
 import { errorMessage } from '../auth/auth-form';
+import { AttachmentControl } from '../transactions/attachment-control';
 
 // Historique paginé par curseur (50 par page côté API, « Charger plus »), filtres date/catégorie/tag/compte (SPEC §7).
 @Component({
   selector: 'app-history-page',
-  imports: [ReactiveFormsModule, RouterLink, EurPipe, UndoBanner],
+  imports: [ReactiveFormsModule, RouterLink, EurPipe, UndoBanner, AttachmentControl],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1>Historique des transactions</h1>
@@ -140,6 +142,7 @@ import { errorMessage } from '../auth/auth-form';
                 Supprimer<span class="visually-hidden"> {{ label(t) }}</span>
               </button>
             </div>
+            <app-attachment-control [transaction]="t" (changed)="setAttachment(t, $event)" />
           }
         </li>
       } @empty {
@@ -318,6 +321,10 @@ export class HistoryPage {
       },
       error: (e) => this.fail(e),
     });
+  }
+
+  protected setAttachment(t: TransactionDto, attachment: AttachmentDto | null): void {
+    this.items.update((list) => list.map((x) => (x.id === t.id ? { ...x, attachment } : x)));
   }
 
   protected remove(t: TransactionDto): void {

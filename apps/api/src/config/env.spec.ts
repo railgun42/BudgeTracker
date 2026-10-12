@@ -15,9 +15,11 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...valid, JWT_SECRET: 'court' })).toThrow(/JWT_SECRET/);
   });
 
-  it('exige SMTP_URL en production', () => {
-    expect(() => loadEnv({ ...valid, NODE_ENV: 'production' })).toThrow(/SMTP_URL/);
-    expect(() => loadEnv({ ...valid, NODE_ENV: 'production', SMTP_URL: 'smtp://mail' })).not.toThrow();
+  it('exige SMTP et S3 en production', () => {
+    const prod = { ...valid, NODE_ENV: 'production', SMTP_URL: 'smtp://mail', S3_ENDPOINT: 'https://s3.gra.io.cloud.ovh.net', S3_BUCKET: 'b', S3_ACCESS_KEY_ID: 'k', S3_SECRET_ACCESS_KEY: 's' };
+    expect(() => loadEnv(prod)).not.toThrow();
+    for (const name of ['SMTP_URL', 'S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'])
+      expect(() => loadEnv({ ...prod, [name]: undefined })).toThrow(new RegExp(name));
   });
 
   it('applique le port par défaut', () => {
