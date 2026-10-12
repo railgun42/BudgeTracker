@@ -136,8 +136,8 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 
 ## Moteur de dates de récurrence (E19)
 
--  ([occurrences.ts](apps/api/src/recurrences/engine/occurrences.ts)) : fonction pure (aucun import Nest/Prisma), dates  bornes incluses,  inclusive, unités DAY/WEEK/MONTH/YEAR avec  ≥ 1 entier (sinon ).
-- La k-ième occurrence se calcule depuis  (jamais depuis la précédente) : 31/01 → 28/02 → 31/03, 29/02 annuel → 28/02 les années non bissextiles. Le jour d'ancrage est celui de  ( n'est pas lu par le moteur).
+- `occurrencesBetween(rule, from, to)` ([occurrences.ts](apps/api/src/recurrences/engine/occurrences.ts)) : fonction pure (aucun import Nest/Prisma), dates `'YYYY-MM-DD'` bornes incluses, `endDate` inclusive, unités DAY/WEEK/MONTH/YEAR avec `interval` entier ≥ 1 (sinon `RangeError`).
+- La k-ième occurrence se calcule depuis `startDate` (jamais depuis la précédente) : 31/01 → 28/02 → 31/03, 29/02 annuel → 28/02 les années non bissextiles. Le jour d'ancrage est celui de `startDate` (`Recurrence.anchorDay` n'est pas lu par le moteur).
 - Le résultat ne dépend pas du découpage de la fenêtre (testé). Branchement en base et génération : E20.
 
 ## État actuel
