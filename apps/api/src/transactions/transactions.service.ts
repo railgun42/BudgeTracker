@@ -10,7 +10,7 @@ export type TransactionRow = Prisma.TransactionGetPayload<{ include: typeof incl
 
 // 'YYYY-MM-DD' ⇄ minuit UTC : jour inchangé en @db.Date quel que soit le fuseau du serveur.
 export const toDate = (d: LocalDate) => new Date(d);
-const toLocalDate = (d: Date): LocalDate => d.toISOString().slice(0, 10);
+export const toLocalDate = (d: Date): LocalDate => d.toISOString().slice(0, 10);
 
 export const toTransactionDto = (t: TransactionRow): TransactionDto => ({
   id: t.id,
@@ -36,7 +36,7 @@ const live = (userId: string) => ({ userId, deletedAt: null, account: { deletedA
 export class TransactionsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async checkAccount(userId: string, id: string, type: TransactionType): Promise<void> {
+  async checkAccount(userId: string, id: string, type: TransactionType): Promise<void> {
     const account = await this.prisma.account.findFirst({ where: { id, userId, deletedAt: null } });
     if (!account) throw new NotFoundException('Compte introuvable');
     // NOT_TRACKED : portefeuille sans entrées (SPEC §3.2).
@@ -44,11 +44,11 @@ export class TransactionsService {
       throw new UnprocessableEntityException('Un compte NOT_TRACKED n’accepte pas de CREDIT');
   }
 
-  private async checkCategory(userId: string, id: string): Promise<void> {
+  async checkCategory(userId: string, id: string): Promise<void> {
     if (!(await this.prisma.category.findFirst({ where: { id, OR: [{ userId: null }, { userId }] } }))) throw new NotFoundException('Catégorie introuvable');
   }
 
-  private async checkTags(userId: string, ids: string[]): Promise<void> {
+  async checkTags(userId: string, ids: string[]): Promise<void> {
     if ((await this.prisma.tag.count({ where: { id: { in: ids }, userId } })) !== ids.length) throw new NotFoundException('Tag introuvable');
   }
 

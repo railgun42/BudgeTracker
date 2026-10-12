@@ -19,6 +19,7 @@ export class App {
     { path: '/', label: 'Tableau de bord', exact: true },
     { path: '/accounts', label: 'Comptes', exact: false },
     { path: '/history', label: 'Historique', exact: false },
+    { path: '/recurrences', label: 'Récurrences', exact: false },
     { path: '/stats', label: 'Statistiques', exact: false },
     { path: '/simulations', label: 'Simulations', exact: false },
   ];

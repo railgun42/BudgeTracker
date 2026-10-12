@@ -1,8 +1,9 @@
-import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException, HttpStatus, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { EmailTokenType, Prisma, User } from '../generated/prisma/client';
 import { REFRESH_TTL_MS } from '../common/cookies';
+import { RecurrencesService, todayUtc } from '../recurrences/recurrences.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto, SignupDto } from './auth.dto';
@@ -41,6 +42,7 @@ export interface Session {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   // ponytail: compteur en mémoire (un seul processus API), à déplacer en BDD/Redis si plusieurs instances.
   // Taille bornée en pratique par le throttler par IP.
   private readonly failures = new Map<string, { count: number; lockedUntil: number }>();
@@ -50,6 +52,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly mail: MailService,
+    private readonly recurrences: RecurrencesService,
   ) {}
 
   // Réponse identique que l'e-mail existe ou non (pas d'énumération de comptes).
@@ -98,6 +101,8 @@ export class AuthService {
   // Nouvelle session (nouvelle famille de refresh tokens) : login par mot de passe ou par Google.
   async openSession(userId: string): Promise<{ user: User; session: Required<Session> }> {
     const user = await this.prisma.user.update({ where: { id: userId }, data: { lastConnection: new Date() } });
+    // Rattrapage des récurrences (SPEC §3.6) ; un échec ne bloque pas la connexion, le job quotidien reprendra.
+    await this.recurrences.generateForUser(userId, todayUtc()).catch((e: Error) => this.logger.error(`Rattrapage des récurrences : ${e.message}`));
     return { user, session: await this.createSession(userId, randomUUID()) };
   }
 

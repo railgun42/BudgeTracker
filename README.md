@@ -138,7 +138,14 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 
 - `occurrencesBetween(rule, from, to)` ([occurrences.ts](apps/api/src/recurrences/engine/occurrences.ts)) : fonction pure (aucun import Nest/Prisma), dates `'YYYY-MM-DD'` bornes incluses, `endDate` inclusive, unités DAY/WEEK/MONTH/YEAR avec `interval` entier ≥ 1 (sinon `RangeError`).
 - La k-ième occurrence se calcule depuis `startDate` (jamais depuis la précédente) : 31/01 → 28/02 → 31/03, 29/02 annuel → 28/02 les années non bissextiles. Le jour d'ancrage est celui de `startDate` (`Recurrence.anchorDay` n'est pas lu par le moteur).
-- Le résultat ne dépend pas du découpage de la fenêtre (testé). Branchement en base et génération : E20.
+- Le résultat ne dépend pas du découpage de la fenêtre (testé). 
+## Récurrences : API et génération serveur (E20)
+
+- Endpoints `/api/v1/recurrences` (GET, POST, GET/PATCH/DELETE `:id`, POST `:id/restore`), isolés par `userId`, verrou de `version` (409). `PATCH` ne change que `endDate` et le modèle (`template`) ; pour `interval`/`unit`/`startDate`, supprimer et recréer.
+- Génération ([recurrences.service.ts](apps/api/src/recurrences/recurrences.service.ts)) : sous verrou consultatif par récurrence, `INSERT … ON CONFLICT DO NOTHING` sur `(recurrenceId, occurrenceDate)`, avancement de `lastGeneration`. Seules les dates > `lastGeneration` sont créées : une occurrence supprimée n'est jamais recréée, même après la purge des 30 jours. Les occurrences ne sont matérialisées que jusqu'à aujourd'hui (jour UTC du serveur).
+- Déclencheurs : à la création, job quotidien à 1 h (`jobs/recurrence.job.ts`) et rattrapage à chaque ouverture de session (`AuthService.openSession`, un échec ne bloque pas la connexion).
+- « Futur seulement » : `PATCH` génère d'abord les occurrences dues avec l'ancien modèle, puis applique le nouveau ; aucune transaction existante n'est réécrite. Une occurrence est une transaction ordinaire (édition/suppression isolées via `/transactions/:id`).
+- Front : `/recurrences` (`features/recurrences/`) : liste, création, suppression avec « Annuler ». Pas encore d'édition côté UI.
 
 ## État actuel
 
@@ -166,6 +173,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E17 — Comptes et saisie de transaction front (liste/CRUD de comptes, dépense en 3 champs, virement) | ✅ |
 | E18 — Historique front (pagination par curseur, filtres, annulation, 409) | ✅ |
 | E19 — Moteur de dates de récurrence (pur) | ✅ |
-| E20 → E32 | ⏳ récurrences (API), intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E20 — Récurrences : API et génération serveur, UI minimale | ✅ |
+| E21 → E32 | ⏳ intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

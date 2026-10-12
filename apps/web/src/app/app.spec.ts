@@ -38,6 +38,7 @@ describe('Shell', () => {
       ['Tableau de bord', '/'],
       ['Comptes', '/accounts'],
       ['Historique', '/history'],
+      ['Récurrences', '/recurrences'],
       ['Statistiques', '/stats'],
       ['Simulations', '/simulations'],
     ]);

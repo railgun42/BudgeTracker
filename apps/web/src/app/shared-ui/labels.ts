@@ -1,10 +1,18 @@
-import { CategoryDto, TrackingType } from '@budgetracker/shared';
+import { CategoryDto, IntervalUnit, TrackingType } from '@budgetracker/shared';
 
 // Libellés UI des enums du domaine ; le Record impose un libellé pour chaque valeur.
 export const TRACKING_TYPE_LABELS: Record<TrackingType, string> = {
   [TrackingType.NORMAL]: 'Normal',
   [TrackingType.NOT_TRACKED]: 'Non suivi (portefeuille)',
   [TrackingType.WITH_INTEREST]: 'Avec intérêts',
+};
+
+// « tous les N … »
+export const UNIT_LABELS: Record<IntervalUnit, string> = {
+  [IntervalUnit.DAY]: 'jour(s)',
+  [IntervalUnit.WEEK]: 'semaine(s)',
+  [IntervalUnit.MONTH]: 'mois',
+  [IntervalUnit.YEAR]: 'an(s)',
 };
 
 // Catégories système (nameKey seedé par apps/api/prisma/seed.ts) ; les perso portent leur propre `name`.

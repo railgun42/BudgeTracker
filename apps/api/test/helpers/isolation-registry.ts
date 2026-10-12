@@ -86,6 +86,23 @@ const accountOfA = async ({ a }: TwoUsers) =>
 const systemCategory = async ({ a }: TwoUsers) =>
   ((await a.call('get', '/api/v1/categories').expect(200)).body as { id: string; system: boolean }[]).find((c) => c.system)!.id;
 
+// Récurrence de B (rien de dû : démarre en 2030) ; intacte = relue telle quelle par B.
+const recurrenceOfB = async (users: TwoUsers) => {
+  const account = await accountOfB(users);
+  const tag = await tagOfB(users);
+  const categoryId = await systemCategory(users);
+  const { body } = await users.b
+    .call('post', '/api/v1/recurrences')
+    .send({ accountId: account.id, interval: 1, unit: 'MONTH', startDate: '2030-01-31', template: { categoryId, amountCents: 900, tagIds: [tag.id] } })
+    .expect(201);
+  return {
+    id: body.id as string,
+    accountId: account.id,
+    tagId: tag.id,
+    intact: async () => expect((await users.b.call('get', `/api/v1/recurrences/${body.id}`).expect(200)).body).toEqual(body),
+  };
+};
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -252,5 +269,53 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     const { id, intact } = await transferOfB(users);
     await users.a.call('patch', `/api/v1/transfers/${id}`).send({ version: 1, amountCents: 1 }).expect(404);
     await intact();
+  },
+  'GET /api/v1/recurrences': async (users) => {
+    const { id } = await recurrenceOfB(users);
+    const { body } = await users.a.call('get', '/api/v1/recurrences').expect(200);
+    expect(body.map((r: { id: string }) => r.id)).not.toContain(id);
+  },
+  'POST /api/v1/recurrences': async (users) => {
+    const { accountId, tagId, intact } = await recurrenceOfB(users);
+    const { id: categoryOfBId } = await categoryOfB(users);
+    const ownAccount = await accountOfA(users);
+    const categoryId = await systemCategory(users);
+    const send = (body: object, template: object = {}) =>
+      users.a.call('post', '/api/v1/recurrences').send({ accountId: ownAccount, interval: 1, unit: 'MONTH', startDate: '2030-01-31', ...body, template: { categoryId, amountCents: 100, ...template } });
+    await send({ accountId }).expect(404); // compte de B
+    await send({}, { categoryId: categoryOfBId }).expect(404); // catégorie perso de B
+    await send({}, { tagIds: [tagId] }).expect(404); // tag de B
+    const { body } = await send({}).expect(201);
+    await users.b.call('get', `/api/v1/recurrences/${body.id}`).expect(404);
+    await intact();
+  },
+  'GET /api/v1/recurrences/:id': async (users) => {
+    const { id, intact } = await recurrenceOfB(users);
+    await users.a.call('get', `/api/v1/recurrences/${id}`).expect(404);
+    await intact();
+  },
+  'PATCH /api/v1/recurrences/:id': async (users) => {
+    const { id, tagId, intact } = await recurrenceOfB(users);
+    await users.a.call('patch', `/api/v1/recurrences/${id}`).send({ version: 1, template: { amountCents: 1 } }).expect(404);
+    // Sa propre récurrence, pointée vers un tag de B ⇒ 404.
+    const [ownAccount, categoryId] = [await accountOfA(users), await systemCategory(users)];
+    const { body: own } = await users.a
+      .call('post', '/api/v1/recurrences')
+      .send({ accountId: ownAccount, interval: 1, unit: 'MONTH', startDate: '2030-01-31', template: { categoryId, amountCents: 100 } })
+      .expect(201);
+    await users.a.call('patch', `/api/v1/recurrences/${own.id}`).send({ version: 1, template: { tagIds: [tagId] } }).expect(404);
+    expect((await users.a.call('get', `/api/v1/recurrences/${own.id}`).expect(200)).body).toEqual(own);
+    await intact();
+  },
+  'DELETE /api/v1/recurrences/:id': async (users) => {
+    const { id, intact } = await recurrenceOfB(users);
+    await users.a.call('delete', `/api/v1/recurrences/${id}`).expect(404);
+    await intact();
+  },
+  'POST /api/v1/recurrences/:id/restore': async (users) => {
+    const { id } = await recurrenceOfB(users);
+    await users.b.call('delete', `/api/v1/recurrences/${id}`).expect(204);
+    await users.a.call('post', `/api/v1/recurrences/${id}/restore`).expect(404);
+    await users.b.call('get', `/api/v1/recurrences/${id}`).expect(404); // toujours supprimée pour B
   },
 };
