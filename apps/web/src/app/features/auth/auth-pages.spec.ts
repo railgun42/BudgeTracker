@@ -63,6 +63,7 @@ describe('Connexion', () => {
 
     expect(TestBed.inject(Session).user()).toEqual(USER);
     expect(TestBed.inject(Router).url).toBe('/history');
+    http.match(() => true); // chargements de la page d'arrivée, hors sujet ici
   });
 
   it.each([

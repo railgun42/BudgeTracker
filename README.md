@@ -35,7 +35,7 @@ npm run db:migrate -w api   # migrations Prisma (npm run db:reset -w api = reset
 npm run build -w api && npm run start -w api
 ```
 
-Front (E14-E17) : shell mobile-first avec routes lazy ; l'historique (E18) reste un placeholder. Client API dans `apps/web/src/app/core/` : `ApiClient` (chemins relatifs à `/api/v1`), intercepteur de session (cookies, 401 ⇒ un seul refresh puis rejeu, 409 ⇒ événement `conflicts`), en-tête CSRF, pipe `eur` et `amountValidator` (centimes via `@budgetracker/shared`). `npm start -w web` proxifie `/api` vers `localhost:3000` (`apps/web/proxy.conf.json`).
+Front (E14-E18) : shell mobile-first avec routes lazy. Client API dans `apps/web/src/app/core/` : `ApiClient` (chemins relatifs à `/api/v1`), intercepteur de session (cookies, 401 ⇒ un seul refresh puis rejeu, 409 ⇒ événement `conflicts`), en-tête CSRF, pipe `eur` et `amountValidator` (centimes via `@budgetracker/shared`). `npm start -w web` proxifie `/api` vers `localhost:3000` (`apps/web/proxy.conf.json`).
 
 Authentification front (E16) : écrans connexion, inscription, vérification d'e-mail (`/verify-email?token=`), mot de passe oublié et reset (`/reset-password?token=`), bouton Google (`apps/web/src/app/features/auth/`). `Session` (`core/auth/session.ts`) garde l'utilisateur dans un signal — jamais de token côté JS, cookies httpOnly uniquement — et `GET /me` est appelé au démarrage (restauration de session + pose du cookie CSRF). `authGuard` protège les écrans métier et redirige vers `/login?returnUrl=…`.
 
@@ -43,6 +43,8 @@ Comptes et transactions front (E17, `apps/web/src/app/features/{accounts,transac
 - `/accounts` (`AccountsPage`) : liste des comptes avec solde actuel et, s'il diffère, solde prévisionnel (`GET /accounts/:id/balance`) ; rien pour un compte `NOT_TRACKED`. Même formulaire pour créer et modifier (solde de départ signé à la création, `name`/`trackingType` modifiables avec verrou de `version`). Suppression logique avec bannière « Annuler » (restore), message et bouton « Recharger » sur un 409.
 - `/transactions/new` (`TransactionFormPage`) : saisie d'une dépense en **3 champs** (montant, catégorie, compte), date = aujourd'hui, le reste (sens, date, libellé, notes) replié dans un `<details>`. `12,34` est converti en `1234` via `eurosToCents` avant l'envoi ; compte présélectionné s'il n'y en a qu'un.
 - `/transfers/new` (`TransferFormPage`) : virement entre comptes ; un compte `NOT_TRACKED` ne peut pas être la source (refus côté UI en plus du 422 serveur) et un avertissement s'affiche pour une cible `NOT_TRACKED` (double comptage assumé, SPEC §3.4).
+Historique front (E18, `apps/web/src/app/features/history/`) : `/history` (`HistoryPage`) liste les transactions paginées par curseur (« Charger plus », 50 par page) avec filtres date/compte/catégorie/tag (conservés d'une page à l'autre). Suppression avec bannière « Annuler » (`shared-ui/undo-banner.ts`, restore) ; modification sur place (montant, libellé, date) avec verrou de `version` et message + « Recharger » sur un 409. Les jambes de virement ne se modifient pas ici (supprimer retire les deux).
+
 - `core/today.ts` (jour local `YYYY-MM-DD`) et libellés des catégories système dans `shared-ui/labels.ts` (`categoryLabel`).
 
 Santé : `GET http://localhost:3000/api/health`. Les e-mails de dev (vérification) arrivent dans Mailpit : http://localhost:8025.
@@ -156,6 +158,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E15 — Client API (`ApiClient`, intercepteurs session/CSRF, proxy dev, utilitaires €) | ✅ |
 | E16 — Authentification front (connexion, inscription, vérification, reset, Google, `authGuard`) | ✅ |
 | E17 — Comptes et saisie de transaction front (liste/CRUD de comptes, dépense en 3 champs, virement) | ✅ |
-| E18 → E32 | ⏳ historique front (pagination, filtres, annulation, 409), récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E18 — Historique front (pagination par curseur, filtres, annulation, 409) | ✅ |
+| E19 → E32 | ⏳ récurrences, intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
 
-Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; l'historique arrive en E18.
+Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

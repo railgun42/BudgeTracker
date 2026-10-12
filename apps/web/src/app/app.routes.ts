@@ -25,7 +25,12 @@ export const routes: Routes = [
     ...authed,
     loadComponent: () => import('./features/transactions/transfer-form-page').then((m) => m.TransferFormPage),
   },
-  { path: 'history', title: 'Historique des transactions', ...authed, loadComponent: placeholder },
+  {
+    path: 'history',
+    title: 'Historique des transactions',
+    ...authed,
+    loadComponent: () => import('./features/history/history-page').then((m) => m.HistoryPage),
+  },
   { path: 'stats', title: 'Statistiques', ...authed, loadComponent: placeholder },
   { path: 'simulations', title: 'Simulations', ...authed, loadComponent: placeholder },
   {
