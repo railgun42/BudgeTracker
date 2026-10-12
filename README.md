@@ -147,6 +147,12 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - « Futur seulement » : `PATCH` génère d'abord les occurrences dues avec l'ancien modèle, puis applique le nouveau ; aucune transaction existante n'est réécrite. Une occurrence est une transaction ordinaire (édition/suppression isolées via `/transactions/:id`).
 - Front : `/recurrences` (`features/recurrences/`) : liste, création, suppression avec « Annuler ». Pas encore d'édition côté UI.
 
+## Moteur d'intérêts (E21)
+
+- `yearlyInterest(dailyBalances, rates, year)` ([interest.ts](apps/api/src/interest/engine/interest.ts)) : fonction pure, modèle Livret A simplifié (PLAN, hypothèse 3). Quinzaines 1–15 et 16–fin de mois, base = solde de fin de journée minimum de la quinzaine (négatif ⇒ 0), intérêt = base × taux / 24 arrondi au centime par quinzaine (½ vers le haut, calcul en `BigInt`), sans capitalisation intra-année.
+- `dailyBalances` : points `{ date, balanceCents }` reportés jusqu'au point suivant (0 avant le premier). `rates` : `{ effectiveDate, rateBp }` (points de base) ; le taux d'une quinzaine est le dernier dont la date d'effet est ≤ son premier jour, une quinzaine sans taux ne rapporte rien.
+- Aucun taux applicable dans l'année ⇒ `{ calculable: false }` (rien à générer en E22).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -174,6 +180,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E18 — Historique front (pagination par curseur, filtres, annulation, 409) | ✅ |
 | E19 — Moteur de dates de récurrence (pur) | ✅ |
 | E20 — Récurrences : API et génération serveur, UI minimale | ✅ |
-| E21 → E32 | ⏳ intérêts, pièces jointes, stats, simulations, RGPD, déploiement |
+| E21 — Moteur d'intérêts (pur, quinzaines, taux historisé) | ✅ |
+| E22 → E32 | ⏳ intérêts (job, UI), pièces jointes, stats, simulations, RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.
