@@ -179,6 +179,13 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Front : page `/stats` (période, compte ; tableaux avec barres CSS) qui rappelle le double comptage des espèces.
 - Tests : `npm test -w api` (`test/e2e/stats.e2e-spec.ts` + registre d'isolation), `npm test -w web` (`stats-page.spec.ts`).
 
+## Calculateurs crédit et placement (E25)
+
+- `GET /api/v1/simulations/loan?principalCents&annualRateBp&months` : mensualité constante (taux / 12) arrondie au centime ; tableau d'amortissement déroulé en centimes, la dernière mensualité absorbe les arrondis, donc coût total = total payé − capital exactement ([loan.ts](apps/api/src/simulations/engine/loan.ts)).
+- `GET /api/v1/simulations/investment?initialCents&monthlyContributionCents&annualRateBp&months&inflationBp` : intérêts composés mensuels, versements en fin de mois, valeur réelle déflatée de l'inflation ([investment.ts](apps/api/src/simulations/engine/investment.ts)).
+- Fonctions pures, aucun accès BDD ; session requise. Bornes (`SIMULATION_LIMITS` dans `shared` : 1 Md €, 20 %, 600 mois) validées par l'API ⇒ résultats entiers sûrs. Hors bornes ⇒ 400.
+- Tests : `npm test -w api` (`src/simulations/engine/*.spec.ts`, `test/e2e/simulations.e2e-spec.ts`, registre d'isolation).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -210,6 +217,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E22 — Intérêts : taux, crédit annuel idempotent (job), signalement du taux manquant | ✅ |
 | E23 — Pièces jointes (signature, 5 Mo, quota, S3 signé, purge) | ✅ |
 | E24 — Statistiques (catégorie, tag, mensuel ; SQL agrégé ; page front) | ✅ |
-| E25 → E32 | ⏳ simulations, RGPD, déploiement |
+| E25 — Calculateurs crédit et placement (purs, endpoints sans BDD) | ✅ |
+| E26 → E32 | ⏳ projection, objectifs, scénarios, RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

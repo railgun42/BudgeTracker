@@ -141,6 +141,12 @@ const statsOfB =
     expect((await users.b.call('get', `${path}?accountId=${accountId}`).expect(200)).body).toHaveLength(1);
   };
 
+// Calculateurs : aucune donnée utilisateur ; A et B obtiennent le même résultat pour les mêmes paramètres.
+const sameForBoth =
+  (path: string): IsolationCheck =>
+  async ({ a, b }) =>
+    expect((await a.call('get', path).expect(200)).body).toEqual((await b.call('get', path).expect(200)).body);
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -387,4 +393,7 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/stats/by-category': statsOfB('/api/v1/stats/by-category'),
   'GET /api/v1/stats/by-tag': statsOfB('/api/v1/stats/by-tag'),
   'GET /api/v1/stats/monthly': statsOfB('/api/v1/stats/monthly'),
+
+  'GET /api/v1/simulations/loan': sameForBoth('/api/v1/simulations/loan?principalCents=1000000&annualRateBp=500&months=60'),
+  'GET /api/v1/simulations/investment': sameForBoth('/api/v1/simulations/investment?initialCents=1000000&annualRateBp=500&months=120'),
 };
