@@ -1,9 +1,18 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { AccountBalanceDto, AccountDto, CreateAccountInput, eurosToCents, TrackingType } from '@budgetracker/shared';
+import {
+  AccountBalanceDto,
+  AccountDto,
+  centsToEuros,
+  CreateAccountInput,
+  CreateInterestRateInput,
+  eurosToCents,
+  InterestRatesDto,
+  TrackingType,
+} from '@budgetracker/shared';
 import { ApiClient } from '../../core/api-client';
 import { EurPipe } from '../../core/money';
 import { today } from '../../core/today';
@@ -15,6 +24,13 @@ function openingAmountValidator(control: AbstractControl<string>): ValidationErr
   if (!control.value) return null;
   const cents = eurosToCents(control.value);
   return cents !== null && cents !== 0 ? null : { amount: true };
+}
+
+// Taux annuel saisi en % avec 2 décimales max : même format que les euros, donc eurosToCents donne des points de base (« 3,25 » → 325).
+function rateValidator(control: AbstractControl<string>): ValidationErrors | null {
+  if (!control.value) return null; // laissé à Validators.required
+  const bp = eurosToCents(control.value);
+  return bp !== null && bp >= 0 && bp <= 10_000 ? null : { rate: true };
 }
 
 @Component({
@@ -53,6 +69,13 @@ function openingAmountValidator(control: AbstractControl<string>): ValidationErr
               @if (b.forecastCents !== b.currentCents) {
                 <p class="muted">Prévisionnel : {{ b.forecastCents | eur }}</p>
               }
+            }
+          }
+          @if (account.trackingType === WITH_INTEREST && rates()[account.id]; as r) {
+            @if (r.missingRate) {
+              <p class="alert alert-error">Taux d'intérêt manquant : aucun intérêt ne sera crédité au 31/12.</p>
+            } @else if (r.rates.at(-1); as rate) {
+              <p class="muted">Taux : {{ percent(rate.rateBp) }} à partir du {{ rate.effectiveDate }}</p>
             }
           }
           <div class="actions">
@@ -126,6 +149,39 @@ function openingAmountValidator(control: AbstractControl<string>): ValidationErr
         }
       </div>
     </form>
+
+    @if (interestAccounts().length) {
+      <h2>Taux d'intérêt</h2>
+      <form class="form" [formGroup]="rateForm" (ngSubmit)="submitRate()" novalidate>
+        <div class="field">
+          <label for="rate-account">Compte</label>
+          <select id="rate-account" formControlName="accountId">
+            @for (account of interestAccounts(); track account.id) {
+              <option [value]="account.id">{{ account.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="rate-value">Taux annuel (%)</label>
+          <input
+            id="rate-value"
+            formControlName="rate"
+            inputmode="decimal"
+            autocomplete="off"
+            [attr.aria-invalid]="rateInvalid()"
+            aria-describedby="rate-value-hint"
+          />
+          <p id="rate-value-hint" [class]="rateInvalid() ? 'field-error' : 'field-hint'">Entre 0 et 100, ex. 3 ou 2,4.</p>
+        </div>
+        <div class="field">
+          <label for="rate-date">Date d'effet</label>
+          <input id="rate-date" type="date" formControlName="effectiveDate" />
+        </div>
+        <div class="actions">
+          <button class="button" type="submit" [disabled]="pending()">Enregistrer le taux</button>
+        </div>
+      </form>
+    }
   `,
   styles: `
     .cards {
@@ -168,11 +224,14 @@ export class AccountsPage {
   private readonly nameInput = viewChild.required<ElementRef<HTMLInputElement>>('nameInput');
 
   protected readonly NOT_TRACKED = TrackingType.NOT_TRACKED;
+  protected readonly WITH_INTEREST = TrackingType.WITH_INTEREST;
   protected readonly labels = TRACKING_TYPE_LABELS;
   protected readonly types = Object.values(TrackingType);
 
   protected readonly accounts = signal<AccountDto[]>([]);
   protected readonly balances = signal<Record<string, AccountBalanceDto>>({});
+  protected readonly rates = signal<Record<string, InterestRatesDto>>({});
+  protected readonly interestAccounts = computed(() => this.accounts().filter((a) => a.trackingType === TrackingType.WITH_INTEREST));
   protected readonly editing = signal<AccountDto | null>(null);
   protected readonly undoable = signal<AccountDto | null>(null);
   protected readonly pending = signal(false);
@@ -184,6 +243,11 @@ export class AccountsPage {
     trackingType: [TrackingType.NORMAL],
     openingAmount: ['', openingAmountValidator],
     openingDate: [today(), Validators.required],
+  });
+  protected readonly rateForm = inject(NonNullableFormBuilder).group({
+    accountId: ['', Validators.required],
+    rate: ['', [Validators.required, rateValidator]],
+    effectiveDate: [today(), Validators.required],
   });
   protected readonly trackingType = toSignal(this.form.controls.trackingType.valueChanges, {
     initialValue: TrackingType.NORMAL,
@@ -200,6 +264,16 @@ export class AccountsPage {
       next: (accounts) => {
         this.accounts.set(accounts);
         this.balances.set({});
+        this.rates.set({});
+        const interest = this.interestAccounts();
+        if (!interest.some((a) => a.id === this.rateForm.controls.accountId.value)) {
+          this.rateForm.controls.accountId.setValue(interest[0]?.id ?? '');
+        }
+        for (const a of interest) {
+          this.api
+            .get<InterestRatesDto>(`/accounts/${a.id}/interest-rates`)
+            .subscribe((r) => this.rates.update((all) => ({ ...all, [a.id]: r })));
+        }
         // ponytail: un GET de solde par compte suivi ; endpoint groupé si les utilisateurs ont des dizaines de comptes.
         for (const a of accounts.filter((a) => a.trackingType !== TrackingType.NOT_TRACKED)) {
           this.api
@@ -208,6 +282,38 @@ export class AccountsPage {
         }
       },
       error: (e) => this.fail(e),
+    });
+  }
+
+  protected percent(rateBp: number): string {
+    return `${centsToEuros(rateBp)} %`;
+  }
+
+  protected rateInvalid(): boolean {
+    const c = this.rateForm.controls.rate;
+    return c.invalid && c.touched;
+  }
+
+  // Même date d'effet ⇒ l'API remplace le taux.
+  protected submitRate(): void {
+    if (this.rateForm.invalid) {
+      this.rateForm.markAllAsTouched();
+      return;
+    }
+    const { accountId, rate, effectiveDate } = this.rateForm.getRawValue();
+    const body: CreateInterestRateInput = { rateBp: eurosToCents(rate)!, effectiveDate };
+    this.pending.set(true);
+    this.error.set(null);
+    this.api.post(`/accounts/${accountId}/interest-rates`, body).subscribe({
+      next: () => {
+        this.pending.set(false);
+        this.rateForm.controls.rate.reset();
+        this.reload();
+      },
+      error: (e) => {
+        this.pending.set(false);
+        this.fail(e);
+      },
     });
   }
 

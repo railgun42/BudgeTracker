@@ -2,7 +2,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { AccountDto, TrackingType } from '@budgetracker/shared';
+import { AccountDto, InterestRatesDto, TrackingType } from '@budgetracker/shared';
 import { routes } from '../../app.routes';
 import { Session } from '../../core/auth/session';
 import { provideApiHttp } from '../../core/http';
@@ -11,6 +11,8 @@ import { today } from '../../core/today';
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
 const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, version: 1 };
 const WALLET: AccountDto = { id: 'a2', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, version: 3 };
+const LIVRET: AccountDto = { id: 'a3', name: 'Livret A', trackingType: TrackingType.WITH_INTEREST, version: 1 };
+const NO_RATE: InterestRatesDto = { rates: [], missingRate: true };
 const status = (code: number) => ({ status: code, statusText: String(code) });
 const balanceUrl = (id: string) => `/api/v1/accounts/${id}/balance?today=${today()}`;
 
@@ -37,10 +39,13 @@ async function open(accounts: AccountDto[], currentCents = 10000): Promise<void>
   await respond(accounts, currentCents);
 }
 
-async function respond(accounts: AccountDto[], currentCents = 10000): Promise<void> {
+async function respond(accounts: AccountDto[], currentCents = 10000, rates = NO_RATE): Promise<void> {
   http.expectOne('/api/v1/accounts').flush(accounts);
   for (const a of accounts.filter((a) => a.trackingType !== TrackingType.NOT_TRACKED)) {
     http.expectOne(balanceUrl(a.id)).flush({ currentCents, forecastCents: currentCents });
+  }
+  for (const a of accounts.filter((a) => a.trackingType === TrackingType.WITH_INTEREST)) {
+    http.expectOne(`/api/v1/accounts/${a.id}/interest-rates`).flush(rates);
   }
   await stable();
 }
@@ -186,9 +191,64 @@ describe('Comptes : suppression et annulation', () => {
   });
 });
 
+describe('Comptes : taux d’intérêt', () => {
+  it('aucun compte à intérêts ⇒ ni requête de taux ni formulaire de taux', async () => {
+    await open([COURANT]);
+    expect(el.querySelector('#rate-value')).toBeNull();
+  });
+
+  it('compte WITH_INTEREST sans taux ⇒ « taux manquant » signalé', async () => {
+    await open([LIVRET]);
+    expect(text('li.card')).toContain("Taux d'intérêt manquant : aucun intérêt ne sera crédité au 31/12.");
+    expect(text('li.card')).not.toContain('Taux :');
+  });
+
+  it('taux renseigné ⇒ dernier taux affiché, pas d’alerte', async () => {
+    harness = await RouterTestingHarness.create('/accounts');
+    el = harness.routeNativeElement!;
+    const rates: InterestRatesDto = {
+      missingRate: false,
+      rates: [
+        { id: 'r1', accountId: 'a3', rateBp: 300, effectiveDate: '2025-01-01' },
+        { id: 'r2', accountId: 'a3', rateBp: 325, effectiveDate: '2026-02-01' },
+      ],
+    };
+    await respond([LIVRET], 10000, rates);
+    expect(text('li.card')).toContain('Taux : 3,25 % à partir du 2026-02-01');
+    expect(text('li.card')).not.toContain('manquant');
+  });
+
+  it('saisie « 2,5 » ⇒ POST rateBp 250 à la date du jour sur le compte choisi, puis rechargement', async () => {
+    await open([COURANT, LIVRET]);
+    expect(el.querySelector<HTMLSelectElement>('#rate-account')!.value).toBe('a3');
+    type('rate-value', '2,5');
+    button('Enregistrer le taux').click();
+
+    const req = http.expectOne('/api/v1/accounts/a3/interest-rates');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ rateBp: 250, effectiveDate: today() });
+    req.flush({ id: 'r1', accountId: 'a3', rateBp: 250, effectiveDate: today() });
+    await respond([COURANT, LIVRET], 10000, { missingRate: false, rates: [{ id: 'r1', accountId: 'a3', rateBp: 250, effectiveDate: today() }] });
+    expect(text('li.card:nth-child(2)')).toContain('Taux : 2,50 %');
+    expect(el.querySelector<HTMLInputElement>('#rate-value')!.value).toBe('');
+  });
+
+  it('taux invalide (vide, > 100, 3 décimales) ⇒ aucune requête, erreur reliée au champ', async () => {
+    await open([LIVRET]);
+    for (const value of ['', '101', '2,555', 'abc']) {
+      type('rate-value', value);
+      button('Enregistrer le taux').click();
+      await stable();
+      http.expectNone('/api/v1/accounts/a3/interest-rates');
+      expect(el.querySelector('#rate-value')!.getAttribute('aria-invalid')).toBe('true');
+      expect(el.querySelector('#rate-value-hint')!.className).toBe('field-error');
+    }
+  });
+});
+
 describe('Comptes : accessibilité', () => {
   it('chaque champ a un libellé, boutons explicites, aucun tabindex positif', async () => {
-    await open([COURANT]);
+    await open([COURANT, LIVRET]);
     for (const control of el.querySelectorAll('input, select')) {
       expect(el.querySelector(`label[for="${control.id}"]`), control.id).not.toBeNull();
     }

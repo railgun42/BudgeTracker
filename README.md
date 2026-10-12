@@ -153,6 +153,14 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - `dailyBalances` : points `{ date, balanceCents }` reportés jusqu'au point suivant (0 avant le premier). `rates` : `{ effectiveDate, rateBp }` (points de base) ; le taux d'une quinzaine est le dernier dont la date d'effet est ≤ son premier jour, une quinzaine sans taux ne rapporte rien.
 - Aucun taux applicable dans l'année ⇒ `{ calculable: false }` (rien à générer en E22).
 
+## Intérêts : job et UI (E22)
+
+- `GET /api/v1/accounts/:id/interest-rates` ⇒ `{ rates, missingRate }` ; `missingRate` = compte `WITH_INTEREST` sans taux en vigueur au 16/12 de l'année en cours (aucun intérêt ne serait crédité). `POST` `{ rateBp, effectiveDate }` crée ou remplace le taux à cette date ; compte non `WITH_INTEREST` ⇒ 422.
+- Job quotidien (2 h UTC) : pour chaque compte `WITH_INTEREST`, chaque année close depuis la première transaction et pas encore créditée reçoit une transaction CREDIT « Intérêts » datée du 31/12. Idempotent : verrou consultatif par compte + `InterestCredit` unique `(accountId, year)`.
+- Un crédit supprimé n'est jamais recréé, même après la purge : `InterestCredit.transactionId` passe à `NULL` (migration `interest_credit_survives_purge`).
+- Front : la page Comptes affiche le taux courant ou « Taux d'intérêt manquant », et un formulaire de saisie du taux (%).
+- Tests : `npm test -w api` (`test/e2e/interest.e2e-spec.ts`), `npm test -w web` (`accounts-page.spec.ts`).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -181,6 +189,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E19 — Moteur de dates de récurrence (pur) | ✅ |
 | E20 — Récurrences : API et génération serveur, UI minimale | ✅ |
 | E21 — Moteur d'intérêts (pur, quinzaines, taux historisé) | ✅ |
-| E22 → E32 | ⏳ intérêts (job, UI), pièces jointes, stats, simulations, RGPD, déploiement |
+| E22 — Intérêts : taux, crédit annuel idempotent (job), signalement du taux manquant | ✅ |
+| E23 → E32 | ⏳ pièces jointes, stats, simulations, RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

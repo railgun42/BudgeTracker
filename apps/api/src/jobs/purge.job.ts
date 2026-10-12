@@ -6,7 +6,7 @@ export const PURGE_AFTER_DAYS = 30;
 
 // Suppression définitive des suppressions logiques de plus de 30 jours (SPEC §3.1), tous utilisateurs :
 // seule requête sans filtre userId, aucun endpoint. Les cascades BDD emportent tags, pièces jointes
-// (lignes) et crédits d'intérêts ; les objets S3 seront supprimés en E23.
+// (lignes) ; un crédit d'intérêts reste (transactionId ⇒ NULL, jamais recréé). Objets S3 supprimés en E23.
 @Injectable()
 export class PurgeJob {
   private readonly logger = new Logger(PurgeJob.name);

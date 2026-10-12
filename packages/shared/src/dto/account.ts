@@ -32,6 +32,20 @@ export interface InterestRateDto {
   effectiveDate: LocalDate;
 }
 
+// GET /accounts/:id/interest-rates : historique trié par date d'effet. `missingRate` : compte WITH_INTEREST
+// sans taux en vigueur cette année ⇒ aucun intérêt ne sera crédité au 31/12 (SPEC §3.5).
+export interface InterestRatesDto {
+  rates: InterestRateDto[];
+  missingRate: boolean;
+}
+
+// POST /accounts/:id/interest-rates : crée ou remplace le taux à cette date d'effet. Compte non WITH_INTEREST ⇒ 422.
+export interface CreateInterestRateInput {
+  /** Entier, 0 à 10 000 (100 %). */
+  rateBp: number;
+  effectiveDate: LocalDate;
+}
+
 // GET /accounts/:id/balance[?today=YYYY-MM-DD] (jour du client ; défaut : jour UTC du serveur).
 // Actuel = transactions datées ≤ today ; prévisionnel = toutes. `null` pour un compte NOT_TRACKED.
 export interface AccountBalanceDto {

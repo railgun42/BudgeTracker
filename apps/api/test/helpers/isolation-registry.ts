@@ -103,6 +103,17 @@ const recurrenceOfB = async (users: TwoUsers) => {
   };
 };
 
+// Compte à intérêts de B avec un taux ; intact = taux relus tels quels par B.
+const interestAccountOfB = async ({ b }: TwoUsers) => {
+  const { body: account } = await b.call('post', '/api/v1/accounts').send({ name: 'Livret de B', trackingType: 'WITH_INTEREST' }).expect(201);
+  await b.call('post', `/api/v1/accounts/${account.id}/interest-rates`).send({ rateBp: 300, effectiveDate: '2026-01-01' }).expect(201);
+  const { body: rates } = await b.call('get', `/api/v1/accounts/${account.id}/interest-rates`).expect(200);
+  return {
+    id: account.id as string,
+    intact: async () => expect((await b.call('get', `/api/v1/accounts/${account.id}/interest-rates`).expect(200)).body).toEqual(rates),
+  };
+};
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -145,6 +156,17 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     const { accountId } = await transactionOfB(users);
     await users.a.call('get', `/api/v1/accounts/${accountId}/balance`).expect(404);
     expect((await users.b.call('get', `/api/v1/accounts/${accountId}/balance`).expect(200)).body).toEqual({ currentCents: -1234, forecastCents: -1234 });
+  },
+
+  'GET /api/v1/accounts/:id/interest-rates': async (users) => {
+    const { id, intact } = await interestAccountOfB(users);
+    await users.a.call('get', `/api/v1/accounts/${id}/interest-rates`).expect(404);
+    await intact();
+  },
+  'POST /api/v1/accounts/:id/interest-rates': async (users) => {
+    const { id, intact } = await interestAccountOfB(users);
+    await users.a.call('post', `/api/v1/accounts/${id}/interest-rates`).send({ rateBp: 9_999, effectiveDate: '2026-01-01' }).expect(404);
+    await intact();
   },
 
   'GET /api/v1/categories': async (users) => {
