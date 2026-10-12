@@ -130,6 +130,17 @@ const attachmentOfB = async (users: TwoUsers) => {
   };
 };
 
+// Stats : une transaction de B ne change rien aux agrégats de A ; le compte de B en filtre ⇒ 404.
+const statsOfB =
+  (path: string): IsolationCheck =>
+  async (users) => {
+    const before = (await users.a.call('get', path).expect(200)).body;
+    const { accountId } = await transactionOfB(users); // avec un tag : visible aussi dans by-tag
+    expect((await users.a.call('get', path).expect(200)).body).toEqual(before);
+    await users.a.call('get', `${path}?accountId=${accountId}`).expect(404);
+    expect((await users.b.call('get', `${path}?accountId=${accountId}`).expect(200)).body).toHaveLength(1);
+  };
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -372,4 +383,8 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await users.a.call('post', `/api/v1/recurrences/${id}/restore`).expect(404);
     await users.b.call('get', `/api/v1/recurrences/${id}`).expect(404); // toujours supprimée pour B
   },
+
+  'GET /api/v1/stats/by-category': statsOfB('/api/v1/stats/by-category'),
+  'GET /api/v1/stats/by-tag': statsOfB('/api/v1/stats/by-tag'),
+  'GET /api/v1/stats/monthly': statsOfB('/api/v1/stats/monthly'),
 };

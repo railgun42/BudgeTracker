@@ -37,7 +37,12 @@ export const routes: Routes = [
     ...authed,
     loadComponent: () => import('./features/recurrences/recurrences-page').then((m) => m.RecurrencesPage),
   },
-  { path: 'stats', title: 'Statistiques', ...authed, loadComponent: placeholder },
+  {
+    path: 'stats',
+    title: 'Statistiques',
+    ...authed,
+    loadComponent: () => import('./features/stats/stats-page').then((m) => m.StatsPage),
+  },
   { path: 'simulations', title: 'Simulations', ...authed, loadComponent: placeholder },
   {
     path: 'login',

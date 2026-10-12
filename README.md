@@ -171,6 +171,14 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Front : sur chaque ligne de l'historique, joindre / ouvrir / retirer le justificatif ([attachment-control.ts](apps/web/src/app/features/transactions/attachment-control.ts)).
 - Tests : `npm test -w api` (`test/e2e/attachments.e2e-spec.ts`, contre MinIO), `npm test -w web` (`attachment-control.spec.ts`).
 
+## Statistiques (E24)
+
+- `GET /api/v1/stats/{by-category,by-tag,monthly}` (filtres facultatifs `from`, `to` inclusifs, `accountId`) : un agrégat SQL paramétré par route ([stats.service.ts](apps/api/src/stats/stats.service.ts)), montants en centimes.
+- Exclus : transactions et comptes supprimés, jambes de virement (`transferId`), « Solde de départ ». Le retrait vers un portefeuille (catégorie « Espèces ») est une dépense ; un compte `NOT_TRACKED` ne compte que des dépenses. Compte d'un autre utilisateur ou supprimé ⇒ 404.
+- Par tag : une transaction à plusieurs tags compte pour chacun. Mensuel : les mois sans transaction sont absents.
+- Front : page `/stats` (période, compte ; tableaux avec barres CSS) qui rappelle le double comptage des espèces.
+- Tests : `npm test -w api` (`test/e2e/stats.e2e-spec.ts` + registre d'isolation), `npm test -w web` (`stats-page.spec.ts`).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -201,6 +209,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E21 — Moteur d'intérêts (pur, quinzaines, taux historisé) | ✅ |
 | E22 — Intérêts : taux, crédit annuel idempotent (job), signalement du taux manquant | ✅ |
 | E23 — Pièces jointes (signature, 5 Mo, quota, S3 signé, purge) | ✅ |
-| E24 → E32 | ⏳ stats, simulations, RGPD, déploiement |
+| E24 — Statistiques (catégorie, tag, mensuel ; SQL agrégé ; page front) | ✅ |
+| E25 → E32 | ⏳ simulations, RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.
