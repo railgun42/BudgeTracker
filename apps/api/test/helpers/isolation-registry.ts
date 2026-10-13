@@ -396,4 +396,17 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
 
   'GET /api/v1/simulations/loan': sameForBoth('/api/v1/simulations/loan?principalCents=1000000&annualRateBp=500&months=60'),
   'GET /api/v1/simulations/investment': sameForBoth('/api/v1/simulations/investment?initialCents=1000000&annualRateBp=500&months=120'),
+  // Projection et objectif sur le compte de B (une dépense de 12,34 €) : 404 pour A.
+  'GET /api/v1/simulations/projection': async (users) => {
+    const { accountId } = await transactionOfB(users);
+    const path = `/api/v1/simulations/projection?accountId=${accountId}&months=1&today=2026-03-31`;
+    await users.a.call('get', path).expect(404);
+    expect((await users.b.call('get', path).expect(200)).body.points[0]).toEqual({ date: '2026-03-31', balanceCents: -1234 });
+  },
+  'GET /api/v1/simulations/savings-goal': async (users) => {
+    const { accountId } = await transactionOfB(users);
+    const path = `/api/v1/simulations/savings-goal?targetCents=100000&months=10&accountId=${accountId}&today=2026-03-31`;
+    await users.a.call('get', path).expect(404);
+    expect((await users.b.call('get', path).expect(200)).body.savedCents).toBe(-1234);
+  },
 };

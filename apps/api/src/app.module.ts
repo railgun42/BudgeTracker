@@ -15,6 +15,7 @@ import { RecurrenceJob } from './jobs/recurrence.job';
 import { PrismaModule } from './prisma/prisma.module';
 import { RecurrencesModule } from './recurrences/recurrences.module';
 import { SimulationsController } from './simulations/simulations.controller';
+import { SimulationsService } from './simulations/simulations.service';
 import { StatsModule } from './stats/stats.module';
 import { StorageModule } from './storage/storage.module';
 import { TagsModule } from './tags/tags.module';
@@ -26,6 +27,6 @@ import { UsersController } from './users/users.controller';
   imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule, RecurrencesModule, InterestModule, StorageModule, AttachmentsModule, StatsModule],
   controllers: [HealthController, UsersController, SimulationsController],
   // CSRF global : toute nouvelle route non sûre est protégée par défaut.
-  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, PurgeJob, RecurrenceJob, InterestJob],
+  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, PurgeJob, RecurrenceJob, InterestJob, SimulationsService],
 })
 export class AppModule {}

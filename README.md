@@ -186,6 +186,13 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Fonctions pures, aucun accès BDD ; session requise. Bornes (`SIMULATION_LIMITS` dans `shared` : 1 Md €, 20 %, 600 mois) validées par l'API ⇒ résultats entiers sûrs. Hors bornes ⇒ 400.
 - Tests : `npm test -w api` (`src/simulations/engine/*.spec.ts`, `test/e2e/simulations.e2e-spec.ts`, registre d'isolation).
 
+## Projection du solde et objectifs d'épargne (E26)
+
+- `GET /api/v1/simulations/projection?accountId&months&windowMonths&today` : un point par mois depuis le solde actuel, + occurrences futures des récurrences (moteur E19), + transactions futures saisies à la main, − rythme moyen des dépenses non récurrentes sur `windowMonths` mois (3 par défaut), hors virements internes et solde de départ ; le retrait d'espèces compte ([projection.ts](apps/api/src/simulations/engine/projection.ts)).
+- `GET /api/v1/simulations/savings-goal?targetCents&months&accountId&today` : effort mensuel (arrondi au centime supérieur) et progression en points de base ; avec `accountId`, l'épargne actuelle = solde actuel du compte ([savings-goal.ts](apps/api/src/simulations/engine/savings-goal.ts)).
+- Moteurs purs ; `simulations.service.ts` lit les données (agrégat SQL pour le rythme) sans rien écrire. Compte d'un autre ⇒ 404, `NOT_TRACKED` ⇒ 422.
+- Tests : `npm test -w api` (`src/simulations/engine/*.spec.ts`, `test/e2e/projection.e2e-spec.ts`, registre d'isolation).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -218,6 +225,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E23 — Pièces jointes (signature, 5 Mo, quota, S3 signé, purge) | ✅ |
 | E24 — Statistiques (catégorie, tag, mensuel ; SQL agrégé ; page front) | ✅ |
 | E25 — Calculateurs crédit et placement (purs, endpoints sans BDD) | ✅ |
-| E26 → E32 | ⏳ projection, objectifs, scénarios, RGPD, déploiement |
+| E26 — Projection du solde et objectifs d'épargne (purs) | ✅ |
+| E27 → E32 | ⏳ scénarios, RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

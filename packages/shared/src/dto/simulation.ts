@@ -1,3 +1,5 @@
+import type { LocalDate } from '../local-date';
+
 // Calculateurs (SPEC §6.4) : purs, aucun accès aux transactions. Taux en points de base (500 = 5 %).
 // Bornes communes (validées par l'API) : elles gardent tous les résultats sous 2^53 centimes.
 export const SIMULATION_LIMITS = { maxAmountCents: 100_000_000_000, maxMonthlyCents: 1_000_000_000, maxRateBp: 2_000, maxMonths: 600 } as const;
@@ -45,4 +47,49 @@ export interface InvestmentResultDto {
   interestCents: number;
   /** Valeur finale en euros d'aujourd'hui (déflatée de l'inflation). */
   realFinalCents: number;
+}
+
+// GET /simulations/projection (SPEC §6.1). Solde actuel + récurrences futures + transactions futures déjà saisies
+// − rythme moyen des dépenses non récurrentes (hors virements) sur les `windowMonths` derniers mois.
+export interface ProjectionQuery {
+  accountId: string;
+  /** Horizon, 1 à 600 mois. */
+  months: number;
+  /** Fenêtre du rythme moyen, 1 à 600 mois ; absente ⇒ 3 (SPEC §12). */
+  windowMonths?: number;
+  /** Jour du client ; absent ⇒ jour du serveur (UTC). */
+  today?: LocalDate;
+}
+
+export interface ProjectionPointDto {
+  /** today, puis today + k mois (jour ramené à la fin des mois courts). */
+  date: LocalDate;
+  balanceCents: number;
+}
+
+export interface ProjectionDto {
+  /** Dépenses non récurrentes de la fenêtre / windowMonths, arrondi au centime. */
+  averageMonthlySpendCents: number;
+  /** months + 1 points, le premier étant le solde actuel. */
+  points: ProjectionPointDto[];
+}
+
+// GET /simulations/savings-goal (SPEC §6.3). « X € dans N mois » ; avec accountId, l'épargne actuelle = son solde actuel.
+export interface SavingsGoalQuery {
+  /** Objectif, entier de 1 à 10¹¹. */
+  targetCents: number;
+  /** Échéance, 1 à 600 mois. */
+  months: number;
+  accountId?: string;
+  today?: LocalDate;
+}
+
+export interface SavingsGoalDto {
+  savedCents: number;
+  /** max(0, objectif − épargne actuelle). */
+  remainingCents: number;
+  /** Effort mensuel arrondi au centime supérieur : months × monthlyCents ≥ remainingCents. */
+  monthlyCents: number;
+  /** Progression en points de base, 0 à 10 000 (10 000 = objectif atteint). */
+  progressBp: number;
 }
