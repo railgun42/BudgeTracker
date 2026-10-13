@@ -193,6 +193,13 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Moteurs purs ; `simulations.service.ts` lit les données (agrégat SQL pour le rythme) sans rien écrire. Compte d'un autre ⇒ 404, `NOT_TRACKED` ⇒ 422.
 - Tests : `npm test -w api` (`src/simulations/engine/*.spec.ts`, `test/e2e/projection.e2e-spec.ts`, registre d'isolation).
 
+## Scénarios « et si » (E27)
+
+- `GET|POST /api/v1/scenarios`, `GET|PATCH|DELETE /api/v1/scenarios/:id` : `params = { changes: [...] }`, union discriminée par `kind` (`CATEGORY` : ±X €/mois sur une catégorie et ses sous-catégories, baisse plafonnée à la dépense réelle de la fenêtre ; `SUBSCRIPTION` : abonnement mensuel ; `LOAN` : achat à crédit via le calculateur E25). `version` périmée ⇒ 409, catégorie d'un autre ⇒ 404.
+- `GET /api/v1/scenarios/compare?accountId&ids=id1,id2&months&windowMonths&today` : projection de base + une série par scénario (1 à 5), calculées sur une copie virtuelle de l'entrée de projection ([scenario.ts](apps/api/src/simulations/engine/scenario.ts)) ; aucune écriture en base.
+- Front : page `/simulations` : liste, création et modification (version ⇒ 409 « rechargez »), comparaison côte à côte en courbes SVG (survol ou flèches du clavier ⇒ valeurs du mois) et en tableau.
+- Tests : `src/simulations/engine/scenario.spec.ts`, `test/e2e/scenarios.e2e-spec.ts` (dont comptage des lignes de toutes les tables avant/après), registre d'isolation, `features/simulations/simulations-page.spec.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -226,6 +233,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E24 — Statistiques (catégorie, tag, mensuel ; SQL agrégé ; page front) | ✅ |
 | E25 — Calculateurs crédit et placement (purs, endpoints sans BDD) | ✅ |
 | E26 — Projection du solde et objectifs d'épargne (purs) | ✅ |
-| E27 → E32 | ⏳ scénarios, RGPD, déploiement |
+| E27 — Scénarios « et si » et comparaison | ✅ |
+| E28 → E32 | ⏳ RGPD, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

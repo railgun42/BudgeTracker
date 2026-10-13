@@ -4,7 +4,7 @@ import { balanceSql } from '../balance/balance.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { todayUtc } from '../recurrences/recurrences.service';
 import { toDate, toLocalDate } from '../transactions/transactions.service';
-import { projection } from './engine/projection';
+import { projection, type ProjectionInput } from './engine/projection';
 import { savingsGoal } from './engine/savings-goal';
 
 const signed = (type: string, amountCents: bigint) => (type === TransactionType.CREDIT ? 1 : -1) * Number(amountCents);
@@ -23,7 +23,12 @@ export class SimulationsService {
     return Number(current);
   }
 
-  async projection(userId: string, { accountId, months, windowMonths = 3, today = todayUtc() }: ProjectionQuery): Promise<ProjectionDto> {
+  async projection(userId: string, query: ProjectionQuery): Promise<ProjectionDto> {
+    return projection(await this.projectionInput(userId, query));
+  }
+
+  // Entrée du moteur de projection ; réutilisée par les scénarios (copie virtuelle).
+  async projectionInput(userId: string, { accountId, months, windowMonths = 3, today = todayUtc() }: ProjectionQuery): Promise<ProjectionInput> {
     const balanceCents = await this.currentBalance(userId, accountId, today);
     const own = { userId, accountId, deletedAt: null, recurrenceId: null };
     const [spend, planned, recurrences] = await Promise.all([
@@ -45,7 +50,7 @@ export class SimulationsService {
       }),
       this.prisma.recurrence.findMany({ where: { userId, accountId, deletedAt: null }, include: { template: true } }),
     ]);
-    return projection({
+    return {
       today,
       months,
       balanceCents,
@@ -56,7 +61,7 @@ export class SimulationsService {
         rule: { startDate: toLocalDate(r.startDate), endDate: r.endDate && toLocalDate(r.endDate), interval: r.interval, unit: r.unit as IntervalUnit },
         amountCents: signed(r.template!.type, r.template!.amountCents),
       })),
-    });
+    };
   }
 
   async savingsGoal(userId: string, { targetCents, months, accountId, today = todayUtc() }: SavingsGoalQuery): Promise<SavingsGoalDto> {

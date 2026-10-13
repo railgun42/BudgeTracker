@@ -147,6 +147,15 @@ const sameForBoth =
   async ({ a, b }) =>
     expect((await a.call('get', path).expect(200)).body).toEqual((await b.call('get', path).expect(200)).body);
 
+// Scénario de B ; intact = relu tel quel par B.
+const scenarioOfB = async ({ b }: TwoUsers) => {
+  const { body } = await b.call('post', '/api/v1/scenarios').send({ name: 'Scénario de B', params: { changes: [{ kind: 'SUBSCRIPTION', monthlyCents: 999 }] } }).expect(201);
+  return {
+    id: body.id as string,
+    intact: async () => expect((await b.call('get', `/api/v1/scenarios/${body.id}`).expect(200)).body).toEqual(body),
+  };
+};
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -408,5 +417,55 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     const path = `/api/v1/simulations/savings-goal?targetCents=100000&months=10&accountId=${accountId}&today=2026-03-31`;
     await users.a.call('get', path).expect(404);
     expect((await users.b.call('get', path).expect(200)).body.savedCents).toBe(-1234);
+  },
+  'GET /api/v1/scenarios': async (users) => {
+    const { id } = await scenarioOfB(users);
+    const { body } = await users.a.call('get', '/api/v1/scenarios').expect(200);
+    expect(body.map((s: { id: string }) => s.id)).not.toContain(id);
+  },
+  'POST /api/v1/scenarios': async (users) => {
+    const { id: categoryId, intact } = await categoryOfB(users);
+    const send = (categoryId: string) =>
+      users.a.call('post', '/api/v1/scenarios').send({ name: 'A', params: { changes: [{ kind: 'CATEGORY', categoryId, monthlyDeltaCents: -100 }] } });
+    await send(categoryId).expect(404); // catégorie perso de B
+    const { body } = await send(await systemCategory(users)).expect(201);
+    await users.b.call('get', `/api/v1/scenarios/${body.id}`).expect(404);
+    await intact();
+  },
+  'GET /api/v1/scenarios/:id': async (users) => {
+    const { id, intact } = await scenarioOfB(users);
+    await users.a.call('get', `/api/v1/scenarios/${id}`).expect(404);
+    await intact();
+  },
+  'PATCH /api/v1/scenarios/:id': async (users) => {
+    const { id, intact } = await scenarioOfB(users);
+    await users.a.call('patch', `/api/v1/scenarios/${id}`).send({ version: 1, name: 'Piraté' }).expect(404);
+    // Son propre scénario, pointé vers une catégorie de B ⇒ 404.
+    const { id: categoryId } = await categoryOfB(users);
+    const { body: own } = await users.a.call('post', '/api/v1/scenarios').send({ name: 'A', params: { changes: [{ kind: 'SUBSCRIPTION', monthlyCents: 1 }] } }).expect(201);
+    await users.a
+      .call('patch', `/api/v1/scenarios/${own.id}`)
+      .send({ version: 1, params: { changes: [{ kind: 'CATEGORY', categoryId, monthlyDeltaCents: -100 }] } })
+      .expect(404);
+    expect((await users.a.call('get', `/api/v1/scenarios/${own.id}`).expect(200)).body).toEqual(own);
+    await intact();
+  },
+  'DELETE /api/v1/scenarios/:id': async (users) => {
+    const { id, intact } = await scenarioOfB(users);
+    await users.a.call('delete', `/api/v1/scenarios/${id}`).expect(404);
+    await intact();
+  },
+  // Scénario de B sur le compte de A, ou scénario de A sur le compte de B ⇒ 404.
+  'GET /api/v1/scenarios/compare': async (users) => {
+    const { id, intact } = await scenarioOfB(users);
+    const { accountId: accountOfBId } = await transactionOfB(users);
+    const ownAccount = await accountOfA(users);
+    const { body: own } = await users.a.call('post', '/api/v1/scenarios').send({ name: 'A', params: { changes: [{ kind: 'SUBSCRIPTION', monthlyCents: 1 }] } }).expect(201);
+    const path = (accountId: string, ids: string) => `/api/v1/scenarios/compare?accountId=${accountId}&ids=${ids}&months=1`;
+    await users.a.call('get', path(ownAccount, id)).expect(404);
+    await users.a.call('get', path(ownAccount, `${own.id},${id}`)).expect(404);
+    await users.a.call('get', path(accountOfBId, own.id)).expect(404);
+    await users.a.call('get', path(ownAccount, own.id)).expect(200);
+    await intact();
   },
 };
