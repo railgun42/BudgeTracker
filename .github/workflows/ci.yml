@@ -45,4 +45,4 @@ jobs:
           && timeout 30 sh -c 'until curl -sf http://localhost:9000/minio/health/live; do sleep 1; done'
       - run: npm test -w api
       - run: npm test -w web
-      # Images Docker en E30.
+      # Images Docker en E44.

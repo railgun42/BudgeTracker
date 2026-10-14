@@ -216,7 +216,7 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 
 ## État actuel
 
-Avancement selon [PLAN.md](PLAN.md) (E0 à E32, plus E29b/E29c) :
+Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 
 | Étape | Statut |
 |---|---|
@@ -252,6 +252,7 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E32, plus E29b/E29c) :
 | E29 — Pages légales (mentions, confidentialité, CGU, pied de page, case CGU à l'inscription) | ✅ (contenu éditeur à compléter) |
 | E29b — Consentement CGU côté serveur (inscription e-mail) | ✅ |
 | E29c — Consentement CGU côté serveur (Google) | ✅ |
-| E30 → E32 | ⏳ Déploiement, sauvegardes, supervision |
+| E30 → E43 | ⏳ Évolutions après essai local (solde de départ, catégories, simulation), administration et communication, tableau de bord, style |
+| E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

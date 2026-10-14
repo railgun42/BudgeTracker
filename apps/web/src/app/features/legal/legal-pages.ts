@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
 // Identité de l'éditeur : contenu à fournir et valider par l'éditeur avant l'ouverture publique
-// (PLAN E29, R14 ; check-list E32). Une seule source pour les trois pages.
+// (PLAN E29, R14 ; check-list E46). Une seule source pour les trois pages.
 export const EDITOR = {
   name: '[À compléter : nom ou raison sociale]',
   status: '[À compléter : personne physique, ou forme sociale, capital, RCS/SIREN]',

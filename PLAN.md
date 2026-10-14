@@ -1,6 +1,7 @@
 # PLAN — BudgeTracker v1
 
 > Dérivé de `SPEC.md` (v1 validée) et d'un état des lieux du dépôt (front existant ignoré, reconstruit de zéro). Aucun code n'est écrit à ce stade.
+> Mise à jour après essai local : étapes E30 à E43 insérées avant le déploiement (ancien E30 à E32, devenu E44 à E46) ; la SPEC a été révisée en conséquence (§13 ajouté). **Les numéros suivent l'ordre d'exécution.**
 > Convention : « Vérif » = commande ou test qui doit passer avant de passer à l'étape suivante. Une étape = un commit (ou une courte série).
 
 ## 0. Contexte
@@ -104,6 +105,34 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ## 4. Étapes ordonnées
 
+### Suivi : ce qu'il reste à faire, dans l'ordre
+
+E0 à E29c sont terminées. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+
+| Étape | Sujet | Dépend de |
+|---|---|---|
+| E30 | Transactions antérieures au solde de départ | — |
+| E31 | Catégorie puis sous-catégorie, facultatives | — |
+| E32 | Page 404 : libellé du bouton de retour | — |
+| E33 | Simulation de trésorerie : moteur et API | — |
+| E34 | Plafond minimum et enveloppe dépensable | E33 |
+| E35 | Simulation : interface | E34 |
+| E36 | Catégories personnalisables par l'utilisateur | E31 |
+| E37 | Rôle administrateur et statistiques | — |
+| E38 | Administration : catégories globales | E37 |
+| E39 | Retours utilisateurs et boîte de réception admin | E37 |
+| E40 | Notifications (cloche) et annonces | E37 |
+| E41 | Suggestion de catégorie et réponse à l'auteur | E36, E38, E40 |
+| E42 | Tableau de bord (**bloquée** : à décrire par le propriétaire) | E30, E31, E34 |
+| E43 | Refonte du style | toutes les fonctionnalités (E30 à E41, et E42 si décrite) |
+| E44 | Conteneurs et déploiement (début du passage au serveur OVH) | E43 |
+| E45 | Sauvegardes | E44 |
+| E46 | Supervision et check-list de lancement | E45 |
+
+Prompt type pour chaque session (une étape = une session neuve = un commit) :
+> Lis SPEC.md, PLAN.md et les règles. Implémente uniquement l'étape E__ . Ne touche pas aux autres étapes. Écris les tests correspondants, lance-les ainsi que le build, et corrige jusqu'à ce que tout passe. Montre-moi la sortie des tests comme preuve.
+
+
 ### Phase 0 — Fondations
 
 **E0 — Squelette monorepo et environnement**
@@ -117,7 +146,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 - Vérif : `npm test -w api` ; `curl localhost:3000/api/health` → 200 ; test qui vérifie qu'un log contenant un email est masqué ; démarrage refusé si une variable d'env obligatoire manque.
 
 **E2 — CI minimale (avancée)**
-- Objectif : lint + tests + build à chaque push, avec service Postgres. Le build d'images Docker est ajouté à E30.
+- Objectif : lint + tests + build à chaque push, avec service Postgres. Le build d'images Docker est ajouté à E44.
 - Fichiers : `.github/workflows/ci.yml`, ESLint racine (dont la règle de pureté des `engine/`).
 - Vérif : workflow vert sur une PR ; une violation volontaire de `no-restricted-imports` dans un `engine/` le fait échouer.
 
@@ -279,22 +308,106 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Objectif : plus de création de compte Google sans consentement. Défaut retenu : **option B**, cookie court posé par le front quand la case est cochée, exigé par le callback Google pour tout *nouveau* compte (la connexion d'un compte existant n'est pas concernée) et enregistré dans `termsAcceptedAt`. Repli plus lourd : option C (compte « en attente » + page de consentement).
 - Fichiers : `apps/api/src/auth/google.controller.ts` (et la création de compte associée), `common/cookies.ts`, `apps/web/src/app/features/auth/signup-page.ts`, tests.
 - Vérif : e2e/unitaires avec profil Google simulé — nouveau compte sans cookie de consentement ⇒ refus (redirection `/login?error=…`, aucun compte créé) ; avec cookie ⇒ compte créé et `termsAcceptedAt` renseigné ; compte existant ⇒ connexion sans cookie ; cookie `httpOnly`/`Secure`/`SameSite=Lax`, durée ≤ 10 min.
-- Prérequis : E29b (colonne `termsAcceptedAt`). Les deux étapes sont à terminer avant l'ouverture publique (cochées dans la check-list E32).
+- Prérequis : E29b (colonne `termsAcceptedAt`). Les deux étapes sont à terminer avant l'ouverture publique (cochées dans la check-list E46).
 
-**E30 — Conteneurs et déploiement**
+### Phase 8 — Évolutions demandées après essai local (SPEC §3.2, §3.3, §6)
+
+> Issues d'un essai manuel de l'application. Une étape = une session = un commit. Ordre : E30 → E31 → E32 (indépendantes entre elles), puis E33 → E34 → E35 (chacune dépend de la précédente). La SPEC est déjà révisée ; une étape qui s'en écarte corrige la SPEC dans le même commit.
+
+**E30 — Transactions antérieures au solde de départ**
+- Objectif : l'utilisateur saisit son solde actuel à la création du compte, puis recopie l'historique de sa banque pour avoir des statistiques. Ces transactions, **antérieures à la date de la transaction « Solde de départ »**, sont déjà comprises dans le solde saisi : elles comptent dans l'historique et les stats, **pas dans le solde** (actuel ni prévisionnel). À la **même date** que le solde de départ, l'API exige un choix explicite (compter ou non) ; le front pose la question à la saisie. Prévoir le comportement si la date du solde de départ est modifiée ou si cette transaction est supprimée/restaurée.
+- Fichiers : `src/balance/*`, `src/transactions/*` (drapeau explicite pour le jour même, migration versionnée si colonne), `src/accounts/*`, `features/transactions/*`, SPEC §3.3, tests.
+- Vérif : e2e — transaction à J-1 du solde de départ : solde inchangé, présente dans l'historique et dans les stats ; à J+1 : solde modifié ; au jour J sans choix ⇒ 400, avec choix ⇒ comptée ou non selon la valeur ; `EXPLAIN` du SUM utilise toujours l'index `(accountId, date)`. Décision à confirmer en début d'étape : virement antérieur au solde de départ (par défaut : même règle, jambe par jambe).
+
+**E31 — Catégories : catégorie puis sous-catégorie, facultatives**
+- Objectif : le modèle a déjà 2 niveaux ; on change l'usage. Formulaires avec **deux listes liées** (catégorie, puis sous-catégorie filtrée), **toutes deux facultatives** ⇒ `categoryId` nullable sur `Transaction` et `TransactionTemplate` (migration versionnée). Seed revu : catégories générales avec sous-catégories précises (ex. Sport → abonnement, licence, séance ; Courses → alimentaire, vêtements ; Divertissement → jeux vidéo, multimédia/cinéma/streaming…). Les catégories système techniques (Intérêts, Espèces, Solde de départ, Virement) ne sont pas proposées à la saisie. L'historique permet de filtrer les transactions sans catégorie (simple valeur de filtre, pas de fonctionnalité dédiée). Stats : « Sans catégorie » regroupé en une ligne.
+- Fichiers : `prisma/{schema.prisma,migrations/*,seed.ts}`, `src/{transactions,recurrences,categories,stats,gdpr,scenarios}/*`, `features/{transactions,history,recurrences,stats}/*`, tests.
+- Vérif : e2e — création sans catégorie 201 ; sous-catégorie qui n'appartient pas à la catégorie choisie ⇒ 422 ; filtre « sans catégorie » ; stats avec ligne « Sans catégorie » aux totaux exacts ; migration appliquée sur une base contenant des données ; test front : la liste des sous-catégories dépend de la catégorie choisie, les deux champs restent facultatifs. Les anciennes catégories système déjà utilisées sont migrées sans perte (réaffectation vers le nouveau jeu).
+
+**E32 — Page 404 et bouton de retour**
+- Objectif : le libellé du bouton dépend de la session (« Retour au tableau de bord » si connecté ; sinon libellé et cible cohérents avec la redirection réelle, ex. « Se connecter »).
+- Fichiers : page 404 de `apps/web/src/app`, test composant.
+- Vérif : test — session ouverte ⇒ libellé « tableau de bord » ; non connecté ⇒ libellé qui annonce la page réellement atteinte.
+
+**E33 — Simulation de trésorerie : moteur et API**
+- Objectif : « combien me restera-t-il au jour X ». Entrées : compte(s), date de début (aujourd'hui par défaut, modifiable), date de fin, **liste des récurrences existantes cochables/décochables**, récurrences supplémentaires **propres à la simulation**, **dépenses/revenus ponctuels anticipés** propres à la simulation. Sortie : solde projeté et **détail des dépenses sur la période** (par récurrence, ponctuelles). Fonctions pures dans `simulations/engine/` ; rien n'est écrit dans les vraies données. Réutilise le moteur de projection (E26) et le moteur de récurrence (E19). **À trancher en début d'étape** : la simulation remplace-t-elle les scénarios « et si » (E27) ou coexiste-t-elle ? Par défaut elle s'appuie sur la même base et E27 n'est supprimé qu'une fois l'UI migrée.
+- Fichiers : `src/simulations/engine/cashflow.ts`, `simulations.service.ts`/controller (+ registre d'isolation), specs.
+- Vérif : tests purs — solde au jour X avec/sans une récurrence décochée ; ponctuelle anticipée comptée uniquement dans la simulation ; date de début dans le futur ; fin < début ⇒ 400 ; nombre de lignes des tables inchangé après exécution ; isolation entre utilisateurs.
+
+**E34 — Plafond minimum et enveloppe dépensable**
+- Objectif : à partir de la simulation, l'utilisateur fixe un **solde plancher** (ex. 200 €). L'API calcule le montant dépensable par mois ou par semaine sans passer sous ce plancher : `(solde projeté en fin de période − plancher) / nombre de périodes`. **Suivi dans le temps** : les dépenses ponctuelles réellement saisies pendant la période sont déduites de l'enveloppe en cours (« il me reste 50 € ce mois-ci ») ; à la fin d'une période, le reliquat est **réparti sur les périodes restantes** (100 €/mois, 50 € dépensés le 1ᵉʳ mois ⇒ 125 €/mois pour les 2 suivants, par recalcul à chaque période). Une simulation doit donc pouvoir être **sauvegardée** (paramètres JSON validés par DTO, version, isolation) puis relue avec les dépenses réelles.
+- Fichiers : `src/simulations/engine/allowance.ts`, persistance (`src/scenarios/*` ou nouveau module), specs, e2e.
+- Vérif : tests purs — exemple ci-dessus (500 € dans 3 mois, plancher 200 € ⇒ 100 €/mois ; 50 € dépensés ⇒ 50 € restants, puis 125 €/mois) ; plancher supérieur au solde projeté ⇒ enveloppe 0 et alerte ; mois vs semaine ; période en cours partielle ; e2e — simulation sauvegardée relue avec les vraies dépenses ; simulation de B inaccessible à A.
+
+**E35 — Simulation : interface**
+- Objectif : écran de simulation (dates, récurrences à décocher, ajout de récurrences/ponctuelles virtuelles, plafond, résultats : solde au jour X, courbe, détail des dépenses, enveloppe restante), sauvegarde/réouverture et suivi mensuel.
+- Fichiers : `apps/web/src/app/features/simulations/*`, tests de composants.
+- Vérif : tests de composants (décocher une récurrence recalcule ; `12,34` envoie `1234` ; formulaires accessibles) ; `ng test` et `ng build` verts.
+
+### Phase 9 — Administration et communication (SPEC §13)
+
+> Une étape = une session = un commit. Ordre : E36 → E37 → E38 → E39 → E40 → E41. E36 suppose E31 (catégories facultatives à deux niveaux) ; E38, E39 et E40 supposent le rôle admin d'E37 ; E41 suppose E36, E38 et E40. Principes communs : toute route `/admin/*` est ajoutée au registre d'isolation avec une règle « 401 anonyme, 403 non-admin » (le test méta E7 est étendu en conséquence) ; l'administrateur ne voit jamais de transaction d'un utilisateur ; le texte saisi par les utilisateurs est affiché en texte brut ; chaque nouvelle table portant des données personnelles est ajoutée à l'export et à la suppression de compte (E28) et à la politique de confidentialité (`docs/privacy/*`, pages légales).
+
+**E36 — Catégories personnalisables par l'utilisateur**
+- Objectif : page « Mes catégories » : liste des catégories globales et personnelles, création de catégories et de sous-catégories (y compris sous une catégorie globale), renommage et masquage **pour soi seul** des catégories globales, suppression des siennes avec réaffectation. Table `UserCategoryPreference(userId, categoryId, hidden, customName?)` (migration versionnée) ; les listes de saisie (E31) excluent les catégories masquées ; l'historique et les stats continuent d'afficher le nom d'une catégorie masquée.
+- Fichiers : `prisma/*`, `src/categories/*`, `src/gdpr/*` (export/suppression), `features/categories/*` (page + route), liste de saisie, tests.
+- Vérif : e2e — A masque une catégorie : toujours visible pour B, toujours sur les transactions existantes de A ; A renomme une catégorie globale : B voit le nom d'origine ; sous-catégorie perso sous une catégorie globale ; 3ᵉ niveau refusé ; catégorie de B inutilisable par A ; l'export contient les préférences ; tests de composants (masquage, création).
+
+**E37 — Rôle administrateur et page d'administration (statistiques)**
+- Objectif : `User.role` (`USER`/`ADMIN`, migration), script d'exploitation `npm run admin:grant -w api -- <email>` (pas d'élévation via HTTP), garde `AdminGuard` (401/403), journal `AdminAuditLog` ; endpoints `GET /admin/stats` (agrégats de SPEC §13.2 : utilisateurs, volumes, stockage, taille de la base via `pg_database_size`, latence de la base, uptime/mémoire du processus, erreurs depuis le démarrage, dernière exécution des tâches planifiées) ; page `/admin` visible seulement pour un admin (lien dans la navigation conditionné à `role`). Pas d'accès aux transactions des utilisateurs.
+- Fichiers : `prisma/*`, `src/admin/*`, `src/common/admin.guard.ts`, `scripts/grant-admin.ts`, `test/helpers/isolation-registry.ts`, `features/admin/*`, tests.
+- Vérif : e2e — `/admin/stats` : 401 sans session, 403 pour un utilisateur, 200 pour un admin ; aucun champ de la réponse ne contient d'e-mail ni de montant ; `PATCH /me` ne peut pas changer `role` (champ refusé) ; le script refuse un e-mail inconnu ou non vérifié ; actions journalisées sans donnée financière ; test méta étendu (route `/admin/*` sans règle admin ⇒ échec) ; test front : lien admin absent pour un utilisateur ordinaire. **À trancher** : compteurs d'erreurs en mémoire (défaut) ou table.
+
+**E38 — Administration : catégories globales**
+- Objectif : l'admin crée, renomme et archive des catégories et sous-catégories globales sans redéploiement (ex. « Aide sociale ») ; elles apparaissent chez tous les utilisateurs (servies par l'API, plus de liste en dur côté front). Libellés des catégories du seed (clés de traduction) conservés ; les créées par l'admin portent un nom libre. Archivage au lieu de suppression si utilisée ; colonne `archivedAt` (migration).
+- Fichiers : `src/admin/categories.*`, `src/categories/*`, `features/admin/categories/*`, tests.
+- Vérif : e2e — création par l'admin : visible pour A et B dans leurs listes ; archivage : disparaît des listes de saisie mais reste sur les transactions existantes ; utilisateur non admin ⇒ 403 ; deux niveaux max ; doublon de nom refusé ; actions dans le journal.
+
+**E39 — Retours utilisateurs (formulaire libre) et boîte de réception admin**
+- Objectif : page « Donner mon avis » (type avis/idée/problème, texte borné) ; limites par utilisateur : 5 retours par 24 h et 20 non traités au plus ; table `Feedback(userId, type, message, status, createdAt, treatedAt)` ; boîte de réception dans l'admin **triable/filtrable par type et par statut** (liste, détail, passage à « traité ») ; contenu en texte brut ; tâche planifiée de purge : suppression 30 jours après `treatedAt`, ou 90 jours après `createdAt` si jamais traité (constantes), avec avertissement dans l'admin pour les retours proches de l'échéance.
+- Fichiers : `prisma/*`, `src/feedback/*`, `src/admin/feedback.*`, `features/feedback/*`, `features/admin/feedback/*`, `src/gdpr/*`, pages légales, tests.
+- Vérif : e2e — un utilisateur ne voit que ses propres retours ; la 6ᵉ soumission en 24 h ⇒ 429 et la 21ᵉ non traitée ⇒ refus ; message trop long ou vide ⇒ 400 ; filtre admin par type et par statut ; purge avec horloge injectée (traité il y a 29 j conservé, 31 j supprimé ; non traité 89 j conservé, 91 j supprimé) ; admin liste et traite ; non admin ⇒ 403 sur l'inbox ; message contenant du HTML affiché comme texte ; inclus dans l'export et supprimé avec le compte.
+
+**E40 — Notifications (cloche) et annonces**
+- Objectif : tables `Announcement` (diffusion à tous, un seul enregistrement) et `Notification` (ciblée, `readAt`), avec l'état « lu » des annonces par utilisateur ; API `GET /notifications` (annonces postérieures à l'inscription + notifications personnelles, non lues d'abord), compteur, marquage lu ; cloche avec pastille dans la barre de navigation ; côté admin, envoi d'une annonce à tous et d'une notification à un utilisateur précis. Une annonce ne remplace pas l'e-mail RGPD (rappelé dans l'écran d'envoi) ; pour une modification des CGU, l'écran propose un préavis de 30 jours par défaut et aucune ré-acceptation explicite n'est imposée (SPEC §13.6).
+- Fichiers : `prisma/*`, `src/notifications/*`, `src/admin/notifications.*`, `features/notifications/*` (cloche), `features/admin/notifications/*`, `src/gdpr/*`, tests.
+- Vérif : e2e — annonce créée par l'admin : visible pour tous, lue indépendamment par chaque utilisateur ; notification ciblée visible uniquement du destinataire (404 pour les autres) ; compteur exact avant/après lecture ; un utilisateur ne peut pas créer d'annonce (403) ; un nouvel inscrit ne reçoit pas les annonces antérieures à son inscription ; test de composant : pastille avec le bon nombre, texte brut.
+
+**E41 — Suggestion de catégorie et réponse à l'auteur**
+- Objectif : dans le formulaire de création d'une catégorie perso (E36), case facultative « proposer cette catégorie à tous » ⇒ `CategorySuggestion(userId, name, parentId?, status)` visible dans l'admin ; l'admin accepte (crée la catégorie globale via E38), refuse ou traite, et peut répondre à l'auteur par une notification personnelle (E40), avec un message prérempli modifiable (« J'ai vu ta suggestion de la catégorie X, je l'ai ajoutée, merci ! »).
+- Fichiers : `src/categories/*`, `src/admin/suggestions.*`, `features/categories/*`, `features/admin/suggestions/*`, `src/gdpr/*`, tests.
+- Vérif : e2e — case cochée ⇒ suggestion créée, case décochée ⇒ aucune ; l'admin accepte : la catégorie globale existe chez tous et l'auteur reçoit une notification ; refus ⇒ aucune catégorie globale ; suggestion déjà traitée non rejouable ; un utilisateur ne voit que ses propres suggestions ; export et suppression de compte couvrent la table.
+
+### Phase 10 — Finalisation fonctionnelle
+
+> E42 est bloquée tant que le tableau de bord n'est pas décrit : la sauter si besoin, elle ne bloque pas la suite. E43 se fait en dernier, une fois toutes les fonctionnalités présentes.
+
+**E42 — Tableau de bord**
+- **Bloquée : attentes à décrire par l'utilisateur.** Ne pas démarrer avant la rédaction du besoin (contenu, indicateurs, comptes concernés) ; l'ajouter alors à SPEC §7 et détailler l'étape. Dépend d'E30, E31 et E34 pour ses chiffres.
+
+**E43 — Refonte du style (dernière étape fonctionnelle)**
+- Objectif : à faire **une fois toutes les fonctionnalités présentes** : couleurs, polices, dispositions, images, actions (modales pour certains formulaires, menus déroulants…). Une charte (tokens couleurs, typographie, composants) est fixée d'abord, puis appliquée écran par écran ; accessibilité AA conservée (`apps/web/.claude/CLAUDE.md`).
+- Fichiers : `apps/web/src/styles.scss`, `shared-ui/*`, templates des `features/*`.
+- Vérif : `ng test` et `ng build` verts, parcours manuel complet mobile et bureau, contrastes vérifiés ; aucune logique métier modifiée (diff limité aux templates/styles).
+
+### Phase 11 — Déploiement, sauvegardes, supervision (SPEC §11.7)
+
+> Le passage du local au serveur OVH commence ici. Ordre : E44 → E45 → E46.
+
+**E44 — Conteneurs et déploiement**
 - Objectif : Dockerfiles (api, web), `docker-compose.yml` de prod, Caddy (TLS Let's Encrypt, HSTS, CSP), BDD non publiée, secrets par variables d'environnement, migrations au déploiement ; ajout du build d'images à la CI.
 - Fichiers : `apps/*/Dockerfile`, `docker-compose.yml`, `deploy/Caddyfile`, `ci.yml`.
 - Vérif : `docker compose up -d --build` en local ⇒ `curl -I https://localhost/` renvoie les en-têtes CSP/HSTS ; `docker compose ps` montre que le port 5432 n'est pas publié ; `git ls-files | xargs grep -l "PASSWORD="` ne remonte aucun secret réel.
 
-**E31 — Sauvegardes**
+**E45 — Sauvegardes**
 - Objectif : `pg_dump` quotidien chiffré (age/gpg) vers OVH Object Storage, rétention 30 jours (règle de cycle de vie), script de restauration, **restauration testée**.
 - Fichiers : `deploy/backup/{backup.sh,restore.sh}`, `docs/runbook-backup.md`, cron/job.
 - Vérif : restaurer le dernier dump dans une base vierge et comparer les comptages par table avec la source ; sans la clé, le dump est illisible ; l'objet de plus de 30 jours est supprimé.
 
-**E32 — Supervision et check-list de lancement**
+**E46 — Supervision et check-list de lancement**
 - Objectif : sonde de disponibilité externe, alerte disque/erreurs, test automatisé de non-fuite dans les logs, `npm audit`, revue OWASP ciblée (auth, upload, isolation).
 - Fichiers : `docs/launch-checklist.md`, config de sonde.
-- Vérif : check-list entièrement cochée (E31 restauration testée, E29 pages en ligne, E29b/E29c consentement CGU serveur,  aucune vulnérabilité haute non traitée, test de log vert).
+- Prérequis : toutes les étapes E30 à E43 terminées (E42 seulement si le tableau de bord a été décrit). Vérif : check-list entièrement cochée (E45 restauration testée, E29 pages en ligne, E29b/E29c consentement CGU serveur,  aucune vulnérabilité haute non traitée, test de log vert).
 
 ## 5. Hypothèses (à contredire si fausses)
 
@@ -328,12 +441,13 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 | R11 | Upload : fichier malveillant, zip-bomb d'image, quota contourné par requêtes parallèles | Abus, coût | Signature + taille avant envoi S3, quota vérifié en transaction, URL signée courte |
 | R12 | L'administrateur peut lire les données (volume chiffré seulement) | Confiance, RGPD | Dit explicitement dans la politique de confidentialité (E29) |
 | R13 | Pas de staging : une migration destructive casse la prod | Perte de données | Migrations additives d'abord, test sur copie locale de la prod, sauvegarde avant déploiement |
-| R14 | Contenu légal non rédigé par un juriste | Non-conformité | Gabarits + relecture ; bloquant avant ouverture publique (E32) |
+| R14 | Contenu légal non rédigé par un juriste | Non-conformité | Gabarits + relecture ; bloquant avant ouverture publique (E46) |
 | R15 | Volume du chantier (32 étapes) pour un seul développeur | Dérive de périmètre | Chaque phase livre une version utilisable ; phases 6 et 7 peuvent glisser sans bloquer les phases 1–5 |
+| R16 | Compte administrateur compromis ou route `/admin` mal protégée | Accès aux agrégats et à l'envoi de messages à tous | Rôle attribué hors HTTP, garde testé (401/403) sur chaque route admin, journal des actions, e-mail vérifié exigé, aucune donnée financière exposée |
 
 ## 7. Écarts volontaires avec la SPEC §11
 
-- **CI avancée en E2** (la SPEC la met en fin de parcours) : chaque étape suivante est vérifiée automatiquement ; seul le build d'images Docker reste en E30.
+- **CI avancée en E2** (la SPEC la met en fin de parcours) : chaque étape suivante est vérifiée automatiquement ; seul le build d'images Docker reste en E44.
 - **Audit du front (SPEC §11.2) remplacé par une reconstruction** (E14) : décision de l'utilisateur, l'existant est trop superficiel pour être réutilisé.
 - **Étape E7 (harnais d'isolation) insérée avant les ressources** pour que la règle « test d'isolation sur chaque endpoint » soit appliquée dès la première route plutôt que rattrapée.
 
@@ -342,4 +456,4 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 1. `npm ci && npm run lint && npm test && npm run build` à la racine : tout vert.
 2. `docker compose -f docker-compose.dev.yml up -d` puis `npm run start -w api` et `npm start -w web` : parcours complet inscription → vérification → compte → dépense en 3 champs → virement → récurrence → stats → scénario → export → suppression de compte.
 3. Test de la SPEC §10 « deux générations simultanées sans doublon » vert.
-4. Restauration de sauvegarde réussie sur base vierge (E31).
+4. Restauration de sauvegarde réussie sur base vierge (E45).
