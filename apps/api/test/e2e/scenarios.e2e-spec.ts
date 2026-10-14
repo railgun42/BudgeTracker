@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { seed } from '../../prisma/seed';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/main';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -47,6 +48,7 @@ describe('Scénarios (e2e)', () => {
     app = configureApp(moduleRef.createNestApplication({ logger: false }));
     await app.init();
     prisma = app.get(PrismaService);
+    await seed(prisma); // catégorie système « groceries » (base vierge en CI)
     users = await createTwoUsers(app);
     a = users.a;
 

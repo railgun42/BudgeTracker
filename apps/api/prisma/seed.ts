@@ -15,17 +15,27 @@ export const SYSTEM_CATEGORIES: Record<string, string[]> = {
   housing: ['rent', 'utilities'],
 };
 
-// Idempotent : upsert par nameKey, relançable à volonté.
+// L'upsert Prisma n'est pas atomique (SELECT puis INSERT) : deux seeds simultanés (suites Jest en parallèle
+// sur une base vierge) peuvent se heurter sur nameKey. Le perdant relance : la ligne existe alors.
+const retryOnConflict = <T>(op: () => Promise<T>): Promise<T> =>
+  op().catch((e: { code?: string }) => {
+    if (e.code === 'P2002') return op();
+    throw e;
+  });
+
+// Idempotent : upsert par nameKey, relançable à volonté, y compris en parallèle.
 export async function seed(prisma: PrismaClient): Promise<void> {
   for (const [root, children] of Object.entries(SYSTEM_CATEGORIES)) {
-    const parent = await prisma.category.upsert({ where: { nameKey: root }, update: {}, create: { nameKey: root } });
+    const parent = await retryOnConflict(() => prisma.category.upsert({ where: { nameKey: root }, update: {}, create: { nameKey: root } }));
     for (const child of children) {
       const nameKey = `${root}.${child}`;
-      await prisma.category.upsert({
-        where: { nameKey },
-        update: { parentId: parent.id },
-        create: { nameKey, parentId: parent.id },
-      });
+      await retryOnConflict(() =>
+        prisma.category.upsert({
+          where: { nameKey },
+          update: { parentId: parent.id },
+          create: { nameKey, parentId: parent.id },
+        }),
+      );
     }
   }
 }

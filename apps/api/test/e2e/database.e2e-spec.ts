@@ -1,4 +1,5 @@
 import { seed, SYSTEM_CATEGORIES } from '../../prisma/seed';
+import { PrismaClient } from '../../src/generated/prisma/client';
 import { testPrisma, uniqueEmail } from '../helpers/db';
 
 // E3 — contraintes du schéma v1, vérifiées contre Postgres (pas de mock).
@@ -115,6 +116,27 @@ describe('Schéma v1 (intégration Postgres)', () => {
       prisma.account.count({ where }),
     ]);
     expect(counts).toEqual([0, 0, 0, 0]);
+  });
+
+  it('seed concurrent : un upsert qui perd la course (P2002) est relancé, toute autre erreur remonte', async () => {
+    // Client simulé : on ne supprime pas de catégories système sous les suites qui tournent en parallèle.
+    const calls: string[] = [];
+    let lost = false;
+    const upsert = jest.fn(async ({ where }: { where: { nameKey: string } }) => {
+      calls.push(where.nameKey);
+      if (where.nameKey === 'interest' && !lost) {
+        lost = true;
+        throw Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      }
+      return { id: where.nameKey };
+    });
+    await seed({ category: { upsert } } as unknown as PrismaClient);
+    expect(calls.filter((k) => k === 'interest')).toHaveLength(2);
+    expect(new Set(calls).size).toBe(Object.values(SYSTEM_CATEGORIES).reduce((n, children) => n + 1 + children.length, 0));
+
+    const boom = jest.fn().mockRejectedValue(Object.assign(new Error('down'), { code: 'P1001' }));
+    await expect(seed({ category: { upsert: boom } } as unknown as PrismaClient)).rejects.toThrow('down');
+    expect(boom).toHaveBeenCalledTimes(1);
   });
 
   it('seed idempotent : catégories système sur 2 niveaux, inchangées après une 2ᵉ exécution', async () => {

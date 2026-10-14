@@ -1,7 +1,9 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { seed } from '../../prisma/seed';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/main';
+import { PrismaService } from '../../src/prisma/prisma.service';
 import { createTwoUsers, TestUser, TwoUsers } from '../helpers/two-users';
 
 // E26 — projection du solde et objectif d'épargne sur un jeu de données connu, au 31/03/2026 (paramètre `today`).
@@ -17,6 +19,7 @@ describe('Projection et objectif d’épargne (e2e)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = configureApp(moduleRef.createNestApplication({ logger: false }));
     await app.init();
+    await seed(app.get(PrismaService)); // catégories système (base vierge en CI)
     users = await createTwoUsers(app);
     a = users.a;
 
