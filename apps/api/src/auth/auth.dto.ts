@@ -1,5 +1,5 @@
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsEmail, IsString, Length, MaxLength } from 'class-validator';
+import { Equals, IsEmail, IsString, Length, MaxLength } from 'class-validator';
 
 // Même normalisation que le CHECK User_email_lowercase.
 const normalizeEmail = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
@@ -19,6 +19,10 @@ export class SignupDto {
   @IsString()
   @Length(10, 128)
   password!: string;
+
+  // Consentement aux CGU : exactement `true` (ni absent, ni false, ni "true").
+  @Equals(true, { message: 'acceptTerms doit valoir true' })
+  acceptTerms!: true;
 }
 
 export class LoginDto {

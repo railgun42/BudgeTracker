@@ -117,7 +117,7 @@ describe('Inscription', () => {
     await submit(el);
 
     const req = http.expectOne('/api/v1/auth/signup');
-    expect(req.request.body).toEqual({ email: 'bob@example.com', name: 'Bob', password: 'motdepasse-solide' });
+    expect(req.request.body).toEqual({ email: 'bob@example.com', name: 'Bob', password: 'motdepasse-solide', acceptTerms: true });
     req.flush(null, status(202));
     await harness.fixture.whenStable();
 

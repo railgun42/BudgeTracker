@@ -47,7 +47,10 @@ model User {
   lastConnection    DateTime? @db.Timestamptz(3)
   // 200 Mo par défaut ; valeur par utilisateur pour une future offre à quota élevé.
   storageQuotaBytes BigInt    @default(209715200)
-  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  // Preuve du consentement aux CGU (date + version acceptée). Nul : comptes antérieurs à E29b.
+  termsAcceptedAt   DateTime? @db.Timestamptz(3)
+  termsVersion      String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
 
   credential      Credential?

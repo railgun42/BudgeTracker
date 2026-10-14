@@ -63,6 +63,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
     // Sans endpoint de création directe : identité Google et crédit d'intérêts.
     await prisma.oAuthIdentity.create({ data: { userId: user.id, provider: 'google', providerId: randomUUID() } });
     await prisma.interestCredit.create({ data: { accountId: savings.id, year: 2025 } });
+    await prisma.user.update({ where: { id: user.id }, data: { termsAcceptedAt: new Date('2026-10-14T08:00:00Z'), termsVersion: '2026-10-14' } });
     const s3Key = (await prisma.attachment.findUniqueOrThrow({ where: { transactionId: tx.id } })).s3Key;
     return { accountId: account.id as string, savingsId: savings.id as string, txId: tx.id as string, recurrenceId: recurrence.id as string, tagId: tag.id as string, s3Key };
   }
@@ -85,7 +86,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(Object.keys(data).sort()).toEqual(Object.keys(Prisma.ModelName).filter((m) => !NOT_EXPORTED.includes(m)).sort());
       for (const [table, rows] of Object.entries(data)) expect([table, rows.length]).not.toEqual([table, 0]);
       for (const rows of Object.values(data)) for (const row of rows) if ('userId' in row) expect(row.userId).toBe(users.a.id);
-      expect(data.User).toEqual([expect.objectContaining({ id: users.a.id, name: 'A' })]);
+      expect(data.User).toEqual([expect.objectContaining({ id: users.a.id, name: 'A', termsAcceptedAt: '2026-10-14T08:00:00.000Z', termsVersion: '2026-10-14' })]);
 
       // Sérialisation : centimes en number, jour en 'YYYY-MM-DD', horodatage ISO.
       expect(data.Transaction.find((t) => t.id === a.txId)).toMatchObject({ amountCents: 1234, date: '2026-03-01', deletedAt: null, createdAt: expect.stringMatching(/Z$/) });
@@ -105,6 +106,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(res.headers['content-type']).toMatch(/^text\/csv/);
       expect(res.text.startsWith('\uFEFFUser\r\n')).toBe(true); // BOM : Excel lit l'UTF-8
       const lines = res.text.slice(1).split('\r\n');
+      expect(lines[1].split(';')).toEqual(expect.arrayContaining(['termsAcceptedAt', 'termsVersion']));
       const header = lines[lines.indexOf('Transaction') + 1].split(';');
       expect(header).toEqual(expect.arrayContaining(['id', 'accountId', 'amountCents', 'date', 'name']));
       const row = lines.find((l) => l.startsWith(a.txId))!;

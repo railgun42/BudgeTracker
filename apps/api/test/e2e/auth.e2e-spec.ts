@@ -3,7 +3,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { createHash } from 'node:crypto';
 import { AppModule } from '../../src/app.module';
-import { appUrl, sha256 } from '../../src/auth/auth.service';
+import { appUrl, sha256, TERMS_VERSION } from '../../src/auth/auth.service';
 import { MailService } from '../../src/mail/mail.service';
 import { configureApp } from '../../src/main';
 import { testPrisma, uniqueEmail } from '../helpers/db';
@@ -47,7 +47,7 @@ describe('Auth (e2e)', () => {
   const signup = async (ip = newIp()) => {
     const email = uniqueEmail();
     emails.push(email);
-    await call('post', '/auth/signup', { ip, body: { email, name: 'Alice', password: PASSWORD } }).expect(202);
+    await call('post', '/auth/signup', { ip, body: { email, name: 'Alice', password: PASSWORD, acceptTerms: true } }).expect(202);
     const token = /token=([\w-]+)/.exec(mails.find((m) => m.to === email)!.text)![1];
     return { email, token };
   };
@@ -123,15 +123,31 @@ describe('Auth (e2e)', () => {
     const email = await verifiedUser();
     await login(email.toUpperCase()).expect(200);
     const before = mails.length;
-    await call('post', '/auth/signup', { ip: newIp(), body: { email, name: 'Bob', password: PASSWORD } }).expect(202);
+    await call('post', '/auth/signup', { ip: newIp(), body: { email, name: 'Bob', password: PASSWORD, acceptTerms: true } }).expect(202);
     expect(mails.length).toBe(before);
     expect(await prisma.user.count({ where: { email } })).toBe(1);
   });
 
   it('validation : mot de passe trop court, champ inconnu → 400', async () => {
-    const body = { email: uniqueEmail(), name: 'A', password: 'court' };
+    const body = { email: uniqueEmail(), name: 'A', password: 'court', acceptTerms: true };
     await call('post', '/auth/signup', { ip: newIp(), body }).expect(400);
     await call('post', '/auth/signup', { ip: newIp(), body: { ...body, password: PASSWORD, isAdmin: true } }).expect(400);
+  });
+
+  it('CGU : sans acceptTerms, false ou "true" → 400 sans compte ; true → termsAcceptedAt et version enregistrés', async () => {
+    const email = uniqueEmail();
+    emails.push(email);
+    const body = { email, name: 'Alice', password: PASSWORD };
+    for (const terms of [{}, { acceptTerms: false }, { acceptTerms: 'true' }]) {
+      await call('post', '/auth/signup', { ip: newIp(), body: { ...body, ...terms } }).expect(400);
+    }
+    expect(await prisma.user.count({ where: { email } })).toBe(0);
+
+    const before = Date.now();
+    await call('post', '/auth/signup', { ip: newIp(), body: { ...body, acceptTerms: true } }).expect(202);
+    const user = await prisma.user.findUniqueOrThrow({ where: { email } });
+    expect(user.termsVersion).toBe(TERMS_VERSION);
+    expect(user.termsAcceptedAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
   });
 
   it('6ᵉ essai rapide depuis la même IP → 429', async () => {

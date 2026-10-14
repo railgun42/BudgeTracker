@@ -10,6 +10,8 @@ import { LoginDto, SignupDto } from './auth.dto';
 import { hashPassword, verifyPassword } from './password';
 
 const VERIFY_TTL_MS = 24 * 3600_000;
+// Version des CGU acceptée à l'inscription : à changer à chaque révision des CGU (apps/web/.../legal).
+export const TERMS_VERSION = '2026-10-14';
 // Deux onglets qui rafraîchissent en même temps ne doivent pas être pris pour un vol (PLAN R8).
 export const REFRESH_GRACE_MS = 10_000;
 // Verrouillage progressif par compte : 1 min après 5 échecs, doublé à chaque échec suivant, 1 h max.
@@ -59,7 +61,7 @@ export class AuthService {
   async signup({ email, name, password }: SignupDto): Promise<void> {
     const passwordHash = await hashPassword(password);
     const user = await this.prisma.user
-      .create({ data: { email, name, credential: { create: { passwordHash } } } })
+      .create({ data: { email, name, termsAcceptedAt: new Date(), termsVersion: TERMS_VERSION, credential: { create: { passwordHash } } } })
       .catch((e: { code?: string }) => {
         if (e.code === 'P2002') return null;
         throw e;

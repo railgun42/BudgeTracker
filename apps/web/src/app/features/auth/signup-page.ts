@@ -105,7 +105,7 @@ export class SignupPage {
     email: ['', emailValidators],
     name: ['', [Validators.required, Validators.maxLength(100), Validators.pattern(/\S/)]],
     password: ['', passwordValidators],
-    // Consentement CGU : exigé ici, non transmis (l'API refuse les champs inconnus).
+    // Consentement CGU : exigé ici et revérifié par l'API (preuve horodatée côté serveur).
     acceptTerms: [false, Validators.requiredTrue],
   });
   protected readonly pending = signal(false);
@@ -131,8 +131,7 @@ export class SignupPage {
     }
     this.pending.set(true);
     this.error.set(null);
-    const { email, name, password } = this.form.getRawValue();
-    this.api.post<void>('/auth/signup', { email, name, password }).subscribe({
+    this.api.post<void>('/auth/signup', this.form.getRawValue()).subscribe({
       next: () => this.sent.set(true),
       error: (e) => {
         this.pending.set(false);
