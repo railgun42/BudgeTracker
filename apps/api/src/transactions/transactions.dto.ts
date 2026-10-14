@@ -1,6 +1,6 @@
 import { CreateTransactionInput, LocalDate, TransactionListQuery, TransactionType, UpdateTransactionInput } from '@budgetracker/shared';
 import { Transform, TransformFnParams, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { IsLocalDate } from '../common/is-local-date';
 
 const trim = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim() : value);
@@ -44,6 +44,9 @@ export class CreateTransactionDto implements CreateTransactionInput {
   @ArrayUnique()
   @IsUUID('all', { each: true })
   tagIds?: string[];
+  @IsOptional()
+  @IsBoolean()
+  countInBalance?: boolean;
 }
 
 export class UpdateTransactionDto implements UpdateTransactionInput {
@@ -90,6 +93,9 @@ export class UpdateTransactionDto implements UpdateTransactionInput {
   @ArrayUnique()
   @IsUUID('all', { each: true })
   tagIds?: string[];
+  @Present()
+  @IsBoolean()
+  countInBalance?: boolean;
 }
 
 export class TransactionListQueryDto implements TransactionListQuery {

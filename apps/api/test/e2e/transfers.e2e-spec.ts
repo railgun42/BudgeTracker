@@ -42,7 +42,7 @@ describe('Virements (e2e)', () => {
   it('créer ⇒ 2 lignes jumelées (DEBIT source, CREDIT cible) ; soldes −x / +x', async () => {
     const { from, to } = await pair();
     const { body } = await transfer({ fromAccountId: from, toAccountId: to, name: ' Épargne ', details: 'juin' }).expect(201);
-    const leg = { name: 'Épargne', details: 'juin', date: '2026-06-01', amountCents: 2_500, categoryId: transferCategory, transferId: body.id, tagIds: [], recurrenceId: null, attachment: null, version: 1 };
+    const leg = { name: 'Épargne', details: 'juin', date: '2026-06-01', amountCents: 2_500, categoryId: transferCategory, transferId: body.id, tagIds: [], recurrenceId: null, countInBalance: null, attachment: null, version: 1 };
     expect(body).toEqual({
       id: expect.any(String),
       version: 1,

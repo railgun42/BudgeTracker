@@ -1,7 +1,7 @@
-import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { LocalDate, TrackingType, TransactionDto, TransactionPage, TransactionType } from '@budgetracker/shared';
 import { decodeCursor, encodeCursor } from '../common/cursor';
-import { Prisma } from '../generated/prisma/client';
+import { Prisma, PrismaClient } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto, TransactionListQueryDto, UpdateTransactionDto } from './transactions.dto';
 
@@ -24,12 +24,25 @@ export const toTransactionDto = (t: TransactionRow): TransactionDto => ({
   tagIds: t.tags.map((tag) => tag.tagId).sort(),
   transferId: t.transferId,
   recurrenceId: t.recurrenceId,
+  countInBalance: t.countInBalance,
   attachment: t.attachment && { id: t.attachment.id, originalName: t.attachment.originalName, mime: t.attachment.mime, sizeBytes: t.attachment.sizeBytes },
   version: t.version,
 });
 
 // Visible : à l'utilisateur, non supprimée, sur un compte non supprimé (PLAN §5 hyp. 11).
 const live = (userId: string) => ({ userId, deletedAt: null, account: { deletedAt: null } }) satisfies Prisma.TransactionWhereInput;
+
+// Le jour du solde de départ, compter ou non la transaction est un choix explicite (SPEC §3.3) ;
+// avant, elle est hors solde, après, dedans (balance.service). `except` : le solde de départ lui-même.
+export async function checkBalanceChoice(prisma: Pick<PrismaClient, 'transaction'>, userId: string, accountId: string, date: LocalDate, choice: boolean | null | undefined, except?: string) {
+  if (choice != null) return;
+  const opening = await prisma.transaction.findFirst({
+    where: { userId, accountId, deletedAt: null, category: { nameKey: 'opening_balance' }, id: except && { not: except } },
+    orderBy: { date: 'desc' },
+    select: { date: true },
+  });
+  if (opening && toLocalDate(opening.date) === date) throw new BadRequestException('countInBalance requis le jour du solde de départ');
+}
 
 // Compte, catégorie ou tag d'un autre utilisateur ⇒ 404, comme une ressource absente.
 @Injectable()
@@ -82,10 +95,11 @@ export class TransactionsService {
   }
 
   async create(userId: string, dto: CreateTransactionDto): Promise<TransactionRow> {
-    const { accountId, categoryId, amountCents, date, type = TransactionType.DEBIT, name = '', details, tagIds = [] } = dto;
+    const { accountId, categoryId, amountCents, date, type = TransactionType.DEBIT, name = '', details, tagIds = [], countInBalance } = dto;
     await this.checkAccount(userId, accountId, type);
     await this.checkCategory(userId, categoryId);
     await this.checkTags(userId, tagIds);
+    await checkBalanceChoice(this.prisma, userId, accountId, date, countInBalance);
     return this.prisma.transaction.create({
       data: {
         userId,
@@ -94,6 +108,7 @@ export class TransactionsService {
         name,
         details,
         type,
+        countInBalance,
         date: toDate(date),
         amountCents: BigInt(amountCents),
         tags: { create: tagIds.map((tagId) => ({ tagId })) },
@@ -109,6 +124,10 @@ export class TransactionsService {
     await this.checkAccount(userId, accountId ?? current.accountId, rest.type ?? (current.type as TransactionType));
     if (categoryId) await this.checkCategory(userId, categoryId);
     if (tagIds) await this.checkTags(userId, tagIds);
+    // Seul un déplacement (date ou compte) vers le jour du solde de départ exige le choix : éditer le montant
+    // d'une transaction déjà à cette date reste possible sans le redemander.
+    const [to, on] = [accountId ?? current.accountId, date ?? toLocalDate(current.date)];
+    if (to !== current.accountId || on !== toLocalDate(current.date)) await checkBalanceChoice(this.prisma, userId, to, on, rest.countInBalance ?? current.countInBalance, id);
     await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.transaction.updateMany({
         where: { id, ...live(userId), version },

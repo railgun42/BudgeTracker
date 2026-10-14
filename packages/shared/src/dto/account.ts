@@ -6,6 +6,8 @@ export interface AccountDto {
   id: string;
   name: string;
   trackingType: TrackingType;
+  /** Date du solde de départ le plus récent, `null` sans solde de départ (SPEC §3.3). */
+  openingDate: LocalDate | null;
   version: number;
 }
 
@@ -48,6 +50,8 @@ export interface CreateInterestRateInput {
 
 // GET /accounts/:id/balance[?today=YYYY-MM-DD] (jour du client ; défaut : jour UTC du serveur).
 // Actuel = transactions datées ≤ today ; prévisionnel = toutes. `null` pour un compte NOT_TRACKED.
+// Les transactions antérieures au solde de départ (déjà comprises dedans) n'y entrent pas ; celles
+// du même jour selon `countInBalance` (SPEC §3.3).
 export interface AccountBalanceDto {
   currentCents: number | null;
   forecastCents: number | null;

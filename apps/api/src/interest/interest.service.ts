@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { CreateInterestRateInput, InterestRatesDto, LocalDate, TrackingType } from '@budgetracker/shared';
+import { countedSql, openingCte } from '../balance/balance.service';
 import { InterestRate, Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { toDate, toLocalDate } from '../transactions/transactions.service';
@@ -10,13 +11,15 @@ const toRateDto = (r: InterestRate) => ({ id: r.id, accountId: r.accountId, rate
 // Le moteur exige un taux en vigueur à la dernière quinzaine de l'année.
 const rateDeadline = (year: number): LocalDate => `${year}-12-16`;
 
-// Solde de fin de journée à chaque jour mouvementé jusqu'au 31/12 (somme cumulée SQL, une ligne par jour).
+// Solde de fin de journée à chaque jour mouvementé jusqu'au 31/12 (somme cumulée SQL, une ligne par jour),
+// selon la même règle que le solde : rien avant le solde de départ.
 const dailyBalancesSql = (userId: string, accountId: string, until: LocalDate) => Prisma.sql`
-  SELECT "date", (SUM(SUM(CASE WHEN "type" = 'CREDIT' THEN "amountCents" ELSE -"amountCents" END)) OVER (ORDER BY "date"))::bigint AS "balance"
-  FROM "Transaction"
-  WHERE "accountId" = ${accountId}::uuid AND "userId" = ${userId}::uuid AND "deletedAt" IS NULL AND "date" <= ${until}::date
-  GROUP BY "date"
-  ORDER BY "date"`;
+  WITH ${openingCte(userId, accountId)}
+  SELECT t."date", (SUM(SUM(CASE WHEN t."type" = 'CREDIT' THEN t."amountCents" ELSE -t."amountCents" END)) OVER (ORDER BY t."date"))::bigint AS "balance"
+  FROM "Transaction" t, "opening" o
+  WHERE t."accountId" = ${accountId}::uuid AND t."userId" = ${userId}::uuid AND t."deletedAt" IS NULL AND t."date" <= ${until}::date AND ${countedSql}
+  GROUP BY t."date"
+  ORDER BY t."date"`;
 
 // Verrou consultatif par compte, relâché au COMMIT : deux crédits concurrents se sérialisent.
 const lock = (tx: Prisma.TransactionClient, id: string) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${id}::text, 0))`;

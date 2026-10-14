@@ -33,6 +33,8 @@ export interface TransactionDto {
   /** Non nul pour une jambe de virement. */
   transferId: string | null;
   recurrenceId: string | null;
+  /** Choix fait le jour du solde de départ ; `null` = pas de choix (comptée). */
+  countInBalance: boolean | null;
   attachment: AttachmentDto | null;
   version: number;
 }
@@ -40,6 +42,7 @@ export interface TransactionDto {
 // POST /transactions. Saisie en 3 champs (montant, catégorie, compte) ; la date (aujourd'hui
 // par défaut) est fournie par le client et validée par le serveur. `type` : DEBIT par défaut.
 // Compte, catégorie ou tag d'un autre utilisateur ⇒ 404 ; CREDIT sur un compte NOT_TRACKED ⇒ 422.
+// Datée du jour du solde de départ du compte (`AccountDto.openingDate`) : `countInBalance` obligatoire (400).
 export interface CreateTransactionInput {
   accountId: string;
   categoryId: string;
@@ -50,6 +53,8 @@ export interface CreateTransactionInput {
   name?: string;
   details?: string | null;
   tagIds?: string[];
+  /** Compter dans le solde une transaction du jour du solde de départ (sinon déjà comprise dedans). */
+  countInBalance?: boolean;
 }
 
 // PATCH /transactions/:id. `version` périmée ⇒ 409 ; `tagIds` remplace l'ensemble des tags.

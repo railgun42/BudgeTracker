@@ -9,8 +9,8 @@ import { provideApiHttp } from '../../core/http';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
 const ACCOUNTS: AccountDto[] = [
-  { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, version: 1 },
-  { id: 'a2', name: 'Livret', trackingType: TrackingType.WITH_INTEREST, version: 1 },
+  { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, openingDate: null, version: 1 },
+  { id: 'a2', name: 'Livret', trackingType: TrackingType.WITH_INTEREST, openingDate: null, version: 1 },
 ];
 const CATEGORIES: CategoryDto[] = [
   { id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null },
@@ -30,6 +30,7 @@ const tx = (id: string, over: Partial<TransactionDto> = {}): TransactionDto => (
   tagIds: [],
   transferId: null,
   recurrenceId: null,
+  countInBalance: null,
   attachment: null,
   version: 1,
   ...over,
@@ -63,10 +64,10 @@ async function page(items: TransactionDto[], nextCursor: string | null = null): 
 }
 
 /** Ouvre /history : références (comptes, catégories, tags) puis première page. */
-async function open(items: TransactionDto[], nextCursor: string | null = null): Promise<TestRequest> {
+async function open(items: TransactionDto[], nextCursor: string | null = null, accounts = ACCOUNTS): Promise<TestRequest> {
   harness = await RouterTestingHarness.create('/history');
   el = harness.routeNativeElement!;
-  http.expectOne('/api/v1/accounts').flush(ACCOUNTS);
+  http.expectOne('/api/v1/accounts').flush(accounts);
   http.expectOne('/api/v1/categories').flush(CATEGORIES);
   http.expectOne('/api/v1/tags').flush(TAGS);
   return page(items, nextCursor);
@@ -210,6 +211,31 @@ describe('Historique : modification et conflit 409', () => {
     expect(el.querySelector('#e-amount')).toBeNull();
     expect(rows()[0]).toContain('Marché bio');
     expect(rows()[0]).toContain('-20,50 €');
+  });
+
+  it('date déplacée sur le jour du solde de départ (E30) : choix obligatoire puis envoyé', async () => {
+    await open([tx('t1', { name: 'Marché', date: '2026-10-05' })], null, [{ ...ACCOUNTS[0], openingDate: '2026-10-01' }]);
+    button('Modifier Marché')!.click();
+    await stable();
+    // Date inchangée, même au jour J : pas de question (l'API ne la redemande pas).
+    expect(el.querySelector('legend')).toBeNull();
+    type('e-date', '2026-10-01');
+    await stable();
+    expect(el.querySelector('legend')?.textContent).toBe('Compter dans le solde ?');
+    expect(button('Enregistrer')!.disabled).toBe(true);
+
+    const radio = el.querySelector<HTMLInputElement>('input[type="radio"][value="false"]')!;
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+    await stable();
+    button('Enregistrer')!.click();
+    expect(http.expectOne('/api/v1/transactions/t1').request.body).toEqual({
+      version: 1,
+      amountCents: 1234,
+      name: 'Marché',
+      date: '2026-10-01',
+      countInBalance: false,
+    });
   });
 
   it('montant invalide ⇒ enregistrement impossible', async () => {

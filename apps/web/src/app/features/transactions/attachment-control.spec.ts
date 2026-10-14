@@ -22,6 +22,7 @@ const tx = (attachment: AttachmentDto | null = null): TransactionDto => ({
   tagIds: [],
   transferId: null,
   recurrenceId: null,
+  countInBalance: null,
   attachment,
   version: 1,
 });

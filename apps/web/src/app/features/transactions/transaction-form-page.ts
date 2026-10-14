@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import {
@@ -115,6 +116,21 @@ const RESERVED = new Set(['interest', 'opening_balance', 'transfer']);
         </div>
       </details>
 
+      @if (onOpening()) {
+        <fieldset class="field" aria-describedby="tx-count-hint">
+          <legend>Compter dans le solde ?</legend>
+          <p id="tx-count-hint" [class]="choiceMissing() ? 'field-error' : 'field-hint'">
+            Même jour que le solde de départ du compte : cette transaction y est-elle déjà comprise ?
+          </p>
+          <label><input type="radio" formControlName="countInBalance" value="true" /> Oui, l'ajouter au solde</label>
+          <label><input type="radio" formControlName="countInBalance" value="false" /> Non, déjà comprise dans le solde de départ</label>
+        </fieldset>
+      } @else if (beforeOpening()) {
+        <p id="tx-before-opening" class="field-hint">
+          Antérieure au solde de départ : visible dans l'historique et les statistiques, sans changer le solde.
+        </p>
+      }
+
       <button class="button" type="submit" [disabled]="pending()">Enregistrer</button>
     </form>
   `,
@@ -151,7 +167,15 @@ export class TransactionFormPage {
     date: [today(), Validators.required],
     name: ['', Validators.maxLength(100)],
     details: ['', Validators.maxLength(1000)],
+    countInBalance: [''],
   });
+  private readonly value = toSignal(this.form.valueChanges, { initialValue: this.form.value });
+  // Solde de départ du compte choisi (SPEC §3.3) : avant, hors solde ; le jour même, l'API exige un choix.
+  private readonly openingDate = computed(() => this.accounts().find((a) => a.id === this.value().accountId)?.openingDate ?? null);
+  protected readonly onOpening = computed(() => this.openingDate() !== null && this.value().date === this.openingDate());
+  protected readonly beforeOpening = computed(() => this.openingDate() !== null && (this.value().date ?? '') < this.openingDate()!);
+  private readonly submitted = signal(false);
+  protected readonly choiceMissing = computed(() => this.submitted() && this.onOpening() && !this.value().countInBalance);
 
   constructor() {
     forkJoin([this.api.get<AccountDto[]>('/accounts'), this.api.get<CategoryDto[]>('/categories')]).subscribe({
@@ -171,11 +195,12 @@ export class TransactionFormPage {
   }
 
   protected submit(): void {
-    if (this.form.invalid) {
+    this.submitted.set(true);
+    if (this.form.invalid || this.choiceMissing()) {
       this.form.markAllAsTouched();
       return;
     }
-    const { amount, categoryId, accountId, type, date, name, details } = this.form.getRawValue();
+    const { amount, categoryId, accountId, type, date, name, details, countInBalance } = this.form.getRawValue();
     const body: CreateTransactionInput = {
       accountId,
       categoryId,
@@ -184,6 +209,7 @@ export class TransactionFormPage {
       type,
       ...(name.trim() ? { name: name.trim() } : {}),
       ...(details.trim() ? { details: details.trim() } : {}),
+      ...(this.onOpening() ? { countInBalance: countInBalance === 'true' } : {}),
     };
     this.pending.set(true);
     this.error.set(null);

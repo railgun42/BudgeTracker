@@ -21,6 +21,8 @@ export interface CreateTransferInput {
   date: LocalDate;
   name?: string;
   details?: string | null;
+  /** Obligatoire si `date` est le jour du solde de départ d'un des comptes ; vaut pour les deux jambes. */
+  countInBalance?: boolean;
 }
 
 // PATCH /transfers/:id : appliqué aux deux jambes. `version` périmée ⇒ 409.
@@ -32,4 +34,5 @@ export interface UpdateTransferInput {
   date?: LocalDate;
   name?: string;
   details?: string | null;
+  countInBalance?: boolean;
 }

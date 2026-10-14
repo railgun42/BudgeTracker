@@ -10,7 +10,7 @@ import { today } from '../../core/today';
 import { monthLabel } from './stats-page';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
-const ACCOUNTS: AccountDto[] = [{ id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, version: 1 }];
+const ACCOUNTS: AccountDto[] = [{ id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, openingDate: null, version: 1 }];
 const CATEGORIES: CategoryDto[] = [
   { id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null },
   { id: 'c2', parentId: 'c1', system: true, nameKey: 'groceries.food', name: null, color: null },

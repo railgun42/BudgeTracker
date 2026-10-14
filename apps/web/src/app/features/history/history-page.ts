@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -112,8 +113,18 @@ import { AttachmentControl } from '../transactions/attachment-control';
                 <label for="e-date">Date</label>
                 <input id="e-date" type="date" formControlName="date" />
               </div>
+              @if (editOnOpening()) {
+                <fieldset class="field" aria-describedby="e-count-hint">
+                  <legend>Compter dans le solde ?</legend>
+                  <p id="e-count-hint" class="field-hint">
+                    Même jour que le solde de départ du compte : cette transaction y est-elle déjà comprise ?
+                  </p>
+                  <label><input type="radio" formControlName="countInBalance" value="true" /> Oui, l'ajouter au solde</label>
+                  <label><input type="radio" formControlName="countInBalance" value="false" /> Non, déjà comprise dans le solde de départ</label>
+                </fieldset>
+              }
               <div class="actions">
-                <button class="button" type="submit" [disabled]="editForm.invalid">Enregistrer</button>
+                <button class="button" type="submit" [disabled]="editForm.invalid || editChoiceMissing()">Enregistrer</button>
                 <button class="button button-secondary" type="button" (click)="editing.set(null)">Annuler la modification</button>
               </div>
             </form>
@@ -244,7 +255,16 @@ export class HistoryPage {
     amount: ['', [Validators.required, amountValidator]],
     name: ['', Validators.maxLength(100)],
     date: ['', Validators.required],
+    countInBalance: [''],
   });
+  private readonly editValue = toSignal(this.editForm.valueChanges, { initialValue: this.editForm.value });
+  // Déplacée sur le jour du solde de départ de son compte : l'API exige le choix (SPEC §3.3).
+  protected readonly editOnOpening = computed(() => {
+    const t = this.editing();
+    const date = this.editValue().date;
+    return !!t && date !== t.date && date === this.accounts().find((a) => a.id === t.accountId)?.openingDate;
+  });
+  protected readonly editChoiceMissing = computed(() => this.editOnOpening() && !this.editValue().countInBalance);
 
   constructor() {
     forkJoin([
@@ -306,13 +326,19 @@ export class HistoryPage {
 
   protected edit(t: TransactionDto): void {
     this.editing.set(t);
-    this.editForm.reset({ amount: centsToEuros(t.amountCents), name: t.name, date: t.date });
+    this.editForm.reset({ amount: centsToEuros(t.amountCents), name: t.name, date: t.date, countInBalance: '' });
   }
 
   protected save(t: TransactionDto): void {
-    if (this.editForm.invalid) return;
-    const { amount, name, date } = this.editForm.getRawValue();
-    const body: UpdateTransactionInput = { version: t.version, amountCents: eurosToCents(amount)!, name: name.trim(), date };
+    if (this.editForm.invalid || this.editChoiceMissing()) return;
+    const { amount, name, date, countInBalance } = this.editForm.getRawValue();
+    const body: UpdateTransactionInput = {
+      version: t.version,
+      amountCents: eurosToCents(amount)!,
+      name: name.trim(),
+      date,
+      ...(this.editOnOpening() ? { countInBalance: countInBalance === 'true' } : {}),
+    };
     this.error.set(null);
     this.api.patch<TransactionDto>(`/transactions/${t.id}`, body).subscribe({
       next: (updated) => {

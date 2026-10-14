@@ -9,8 +9,8 @@ import { provideApiHttp } from '../../core/http';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
 const ACCOUNTS: AccountDto[] = [
-  { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, version: 1 },
-  { id: 'a2', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, version: 1 },
+  { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, openingDate: null, version: 1 },
+  { id: 'a2', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, openingDate: null, version: 1 },
 ];
 const CATEGORIES: CategoryDto[] = [{ id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null }];
 const SCENARIOS: ScenarioDto[] = [

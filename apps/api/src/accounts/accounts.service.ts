@@ -1,13 +1,21 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { AccountDto, TrackingType } from '@budgetracker/shared';
-import { Account } from '../generated/prisma/client';
+import { Prisma } from '../generated/prisma/client';
+import { toLocalDate } from '../transactions/transactions.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccountDto, UpdateAccountDto } from './accounts.dto';
+
+// Solde de départ le plus récent : seule sa date est lue (SPEC §3.3).
+const include = {
+  transactions: { where: { deletedAt: null, category: { nameKey: 'opening_balance' } }, orderBy: { date: 'desc' }, take: 1, select: { date: true } },
+} satisfies Prisma.AccountInclude;
+type Account = Prisma.AccountGetPayload<{ include: typeof include }>;
 
 export const toAccountDto = (a: Account): AccountDto => ({
   id: a.id,
   name: a.name,
   trackingType: a.trackingType as TrackingType,
+  openingDate: a.transactions[0] ? toLocalDate(a.transactions[0].date) : null,
   version: a.version,
 });
 
@@ -17,11 +25,11 @@ export class AccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
   list(userId: string): Promise<Account[]> {
-    return this.prisma.account.findMany({ where: { userId, deletedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+    return this.prisma.account.findMany({ where: { userId, deletedAt: null }, include, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
   }
 
   async get(userId: string, id: string): Promise<Account> {
-    const account = await this.prisma.account.findFirst({ where: { id, userId, deletedAt: null } });
+    const account = await this.prisma.account.findFirst({ where: { id, userId, deletedAt: null }, include });
     if (!account) throw new NotFoundException();
     return account;
   }
@@ -29,7 +37,7 @@ export class AccountsService {
   async create(userId: string, { name, trackingType, openingBalance }: CreateAccountDto): Promise<Account> {
     if (openingBalance && trackingType === TrackingType.NOT_TRACKED)
       throw new UnprocessableEntityException('Un compte NOT_TRACKED n’a pas de solde de départ');
-    return this.prisma.$transaction(async (tx) => {
+    const { id } = await this.prisma.$transaction(async (tx) => {
       const account = await tx.account.create({ data: { userId, name, trackingType } });
       if (openingBalance) {
         const category = await tx.category.findUniqueOrThrow({ where: { nameKey: 'opening_balance' } });
@@ -47,6 +55,7 @@ export class AccountsService {
       }
       return account;
     });
+    return this.get(userId, id);
   }
 
   // Verrou optimiste : l'écriture n'a lieu que si la version lue est encore la version en base.

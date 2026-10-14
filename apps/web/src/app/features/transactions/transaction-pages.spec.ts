@@ -9,9 +9,9 @@ import { provideApiHttp } from '../../core/http';
 import { today } from '../../core/today';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
-const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, version: 1 };
-const LIVRET: AccountDto = { id: 'a2', name: 'Livret', trackingType: TrackingType.WITH_INTEREST, version: 1 };
-const WALLET: AccountDto = { id: 'a3', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, version: 1 };
+const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, openingDate: null, version: 1 };
+const LIVRET: AccountDto = { id: 'a2', name: 'Livret', trackingType: TrackingType.WITH_INTEREST, openingDate: null, version: 1 };
+const WALLET: AccountDto = { id: 'a3', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, openingDate: null, version: 1 };
 const cat = (id: string, nameKey: string | null, parentId: string | null = null, name: string | null = null): CategoryDto => ({
   id,
   parentId,
@@ -229,5 +229,55 @@ describe('Virement', () => {
     for (const c of el.querySelectorAll('input, select')) {
       expect(el.querySelector(`label[for="${c.id}"]`), c.id).not.toBeNull();
     }
+  });
+});
+
+describe('Jour du solde de départ (E30)', () => {
+  const OPENED: AccountDto = { ...COURANT, openingDate: today() };
+  const choose = (value: string) => {
+    const radio = el.querySelector<HTMLInputElement>(`input[type="radio"][value="${value}"]`)!;
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+  };
+
+  it('dépense le jour même : la question est posée et le choix est obligatoire puis envoyé', async () => {
+    await openExpense([OPENED]);
+    expect(text('legend')).toBe('Compter dans le solde ?');
+    type('tx-amount', '5');
+    type('tx-category', 'c2');
+    await submit();
+    http.expectNone('/api/v1/transactions');
+    expect(el.querySelector('#tx-count-hint')!.className).toBe('field-error');
+
+    choose('false');
+    await submit();
+    expect(http.expectOne('/api/v1/transactions').request.body).toMatchObject({ amountCents: 500, countInBalance: false });
+  });
+
+  it('dépense antérieure : pas de question, explication « hors solde », aucun drapeau envoyé', async () => {
+    await openExpense([{ ...COURANT, openingDate: '2026-03-01' }]);
+    type('tx-date', '2026-02-15');
+    await stable();
+    expect(el.querySelector('legend')).toBeNull();
+    expect(text('#tx-before-opening')).toContain('sans changer le solde');
+    type('tx-amount', '5');
+    type('tx-category', 'c2');
+    await submit();
+    expect(http.expectOne('/api/v1/transactions').request.body).not.toHaveProperty('countInBalance');
+  });
+
+  it('virement le jour du solde de départ d’un des comptes : choix envoyé pour les deux jambes', async () => {
+    await navigate('/transfers/new');
+    http.expectOne('/api/v1/accounts').flush([COURANT, { ...LIVRET, openingDate: today() }]);
+    await stable();
+    type('transfer-from', 'a1');
+    expect(el.querySelector('legend')).toBeNull();
+    type('transfer-to', 'a2');
+    type('transfer-amount', '10');
+    await stable();
+    expect(text('legend')).toBe('Compter dans le solde ?');
+    choose('true');
+    await submit();
+    expect(http.expectOne('/api/v1/transfers').request.body).toMatchObject({ amountCents: 1000, countInBalance: true });
   });
 });

@@ -9,7 +9,7 @@ import { provideApiHttp } from '../../core/http';
 import { today } from '../../core/today';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
-const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, version: 1 };
+const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, openingDate: null, version: 1 };
 const CATEGORIES = [
   { id: 'c1', parentId: null, system: true, nameKey: 'housing.rent', name: null, color: null },
   { id: 'c2', parentId: null, system: true, nameKey: 'transfer', name: null, color: null },

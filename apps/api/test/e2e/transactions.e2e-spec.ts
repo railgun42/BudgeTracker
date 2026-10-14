@@ -58,6 +58,7 @@ describe('Transactions (e2e)', () => {
         tagIds: [],
         transferId: null,
         recurrenceId: null,
+        countInBalance: null,
         attachment: null,
         version: 1,
       });

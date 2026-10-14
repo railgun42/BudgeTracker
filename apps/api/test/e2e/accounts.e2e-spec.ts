@@ -36,7 +36,7 @@ describe('Comptes (e2e)', () => {
     const created = [];
     for (const trackingType of ['NORMAL', 'NOT_TRACKED', 'WITH_INTEREST']) {
       const { body } = await create({ name: `  ${trackingType}  `, trackingType }).expect(201);
-      expect(body).toEqual({ id: expect.any(String), name: trackingType, trackingType, version: 1 });
+      expect(body).toEqual({ id: expect.any(String), name: trackingType, trackingType, openingDate: null, version: 1 });
       created.push(body);
     }
     expect(await listIds()).toEqual(expect.arrayContaining(created.map((c) => c.id)));
@@ -87,7 +87,7 @@ describe('Comptes (e2e)', () => {
     const patch = (body: object) => a.call('patch', `/api/v1/accounts/${acc.id}`).send(body);
 
     const { body: updated } = await patch({ version: 1, name: 'Livret A', trackingType: 'WITH_INTEREST' }).expect(200);
-    expect(updated).toEqual({ id: acc.id, name: 'Livret A', trackingType: 'WITH_INTEREST', version: 2 });
+    expect(updated).toEqual({ id: acc.id, name: 'Livret A', trackingType: 'WITH_INTEREST', openingDate: null, version: 2 });
 
     const conflict = await patch({ version: 1, name: 'Écrasé' }).expect(409);
     expect(conflict.body.statusCode).toBe(409);

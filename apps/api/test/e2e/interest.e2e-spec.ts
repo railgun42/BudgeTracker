@@ -129,6 +129,13 @@ describe('Intérêts (e2e)', () => {
       expect(await credits(id)).toEqual([['2030-12-31', 750 + 23 * 1250]]);
     });
 
+    it('transaction antérieure au solde de départ (E30) : hors des soldes journaliers', async () => {
+      const id = await livret(2030, 300);
+      await a.call('post', '/api/v1/transactions').send({ accountId: id, categoryId: rentCategoryId, amountCents: 400_000, type: 'CREDIT', date: '2029-12-15' }).expect(201);
+      await service.credit(a.id, id, '2031-01-01');
+      expect(await credits(id)).toEqual([['2030-12-31', 30_000]]);
+    });
+
     it('deux fois ⇒ une seule transaction ; cinq exécutions simultanées ⇒ une seule', async () => {
       const id = await livret(2030, 300);
       expect(await service.credit(a.id, id, '2031-01-01')).toBe(1);

@@ -90,6 +90,21 @@ const sameAccount = (g: AbstractControl): ValidationErrors | null => {
         <input id="transfer-date" type="date" formControlName="date" />
       </div>
 
+      @if (onOpening()) {
+        <fieldset class="field" aria-describedby="transfer-count-hint">
+          <legend>Compter dans le solde ?</legend>
+          <p id="transfer-count-hint" [class]="choiceMissing() ? 'field-error' : 'field-hint'">
+            Même jour que le solde de départ d'un des comptes : ce virement y est-il déjà compris ?
+          </p>
+          <label><input type="radio" formControlName="countInBalance" value="true" /> Oui, l'ajouter au solde</label>
+          <label><input type="radio" formControlName="countInBalance" value="false" /> Non, déjà comprise dans le solde de départ</label>
+        </fieldset>
+      } @else if (beforeOpening()) {
+        <p id="transfer-before-opening" class="field-hint">
+          Antérieure au solde de départ : visible dans l'historique et les statistiques, sans changer le solde.
+        </p>
+      }
+
       <div class="field">
         <label for="transfer-name">Libellé (facultatif)</label>
         <input id="transfer-name" formControlName="name" maxlength="100" autocomplete="off" />
@@ -118,6 +133,7 @@ export class TransferFormPage {
       amount: ['', [Validators.required, amountValidator]],
       date: [today(), Validators.required],
       name: ['', Validators.maxLength(100)],
+      countInBalance: [''],
     },
     { validators: sameAccount },
   );
@@ -125,6 +141,17 @@ export class TransferFormPage {
   protected readonly toPortfolio = computed(
     () => this.accounts().find((a) => a.id === this.value().toAccountId)?.trackingType === TrackingType.NOT_TRACKED,
   );
+
+  // Règle du solde de départ appliquée jambe par jambe (SPEC §3.3) : chaque compte a le sien.
+  private readonly openingDates = computed(() =>
+    this.accounts()
+      .filter((a) => a.id === this.value().fromAccountId || a.id === this.value().toAccountId)
+      .flatMap((a) => (a.openingDate ? [a.openingDate] : [])),
+  );
+  protected readonly onOpening = computed(() => this.openingDates().includes(this.value().date ?? ''));
+  protected readonly beforeOpening = computed(() => this.openingDates().some((d) => (this.value().date ?? '') < d));
+  private readonly submitted = signal(false);
+  protected readonly choiceMissing = computed(() => this.submitted() && this.onOpening() && !this.value().countInBalance);
 
   constructor() {
     this.api.get<AccountDto[]>('/accounts').subscribe({
@@ -143,17 +170,19 @@ export class TransferFormPage {
   }
 
   protected submit(): void {
-    if (this.form.invalid) {
+    this.submitted.set(true);
+    if (this.form.invalid || this.choiceMissing()) {
       this.form.markAllAsTouched();
       return;
     }
-    const { fromAccountId, toAccountId, amount, date, name } = this.form.getRawValue();
+    const { fromAccountId, toAccountId, amount, date, name, countInBalance } = this.form.getRawValue();
     const body: CreateTransferInput = {
       fromAccountId,
       toAccountId,
       amountCents: eurosToCents(amount)!,
       date,
       ...(name.trim() ? { name: name.trim() } : {}),
+      ...(this.onOpening() ? { countInBalance: countInBalance === 'true' } : {}),
     };
     this.pending.set(true);
     this.error.set(null);

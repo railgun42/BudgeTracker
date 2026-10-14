@@ -9,9 +9,9 @@ import { provideApiHttp } from '../../core/http';
 import { today } from '../../core/today';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
-const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, version: 1 };
-const WALLET: AccountDto = { id: 'a2', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, version: 3 };
-const LIVRET: AccountDto = { id: 'a3', name: 'Livret A', trackingType: TrackingType.WITH_INTEREST, version: 1 };
+const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, openingDate: null, version: 1 };
+const WALLET: AccountDto = { id: 'a2', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, openingDate: null, version: 3 };
+const LIVRET: AccountDto = { id: 'a3', name: 'Livret A', trackingType: TrackingType.WITH_INTEREST, openingDate: null, version: 1 };
 const NO_RATE: InterestRatesDto = { rates: [], missingRate: true };
 const status = (code: number) => ({ status: code, statusText: String(code) });
 const balanceUrl = (id: string) => `/api/v1/accounts/${id}/balance?today=${today()}`;

@@ -172,6 +172,8 @@ model Transaction {
   transferId     String?         @db.Uuid
   recurrenceId   String?         @db.Uuid
   occurrenceDate DateTime?       @db.Date
+  // Choix explicite le jour du solde de départ (SPEC §3.3) ; NULL = pas de choix, comptée.
+  countInBalance Boolean?
   version        Int             @default(1)
   deletedAt      DateTime?       @db.Timestamptz(3)
   createdAt      DateTime        @default(now()) @db.Timestamptz(3)

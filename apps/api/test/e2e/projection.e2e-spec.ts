@@ -39,7 +39,7 @@ describe('Projection et objectif d’épargne (e2e)', () => {
     ids.empty = await account('Vide', 'NORMAL');
 
     // Fenêtre de 3 mois = ]31/12/2025, 31/03/2026] : dépenses non récurrentes = 300 + 150 + 60 (espèces) = 510 €.
-    await add('2025-12-31', 99_999); // hors fenêtre (borne exclue), mais dans le solde
+    await add('2025-12-31', 99_999); // hors fenêtre (borne exclue) ; antérieure au solde de départ ⇒ hors solde (E30)
     await add('2026-01-10', 30_000);
     await add('2026-02-05', 250_000, 'CREDIT'); // revenu : pas une dépense
     await transfer(ids.savings, 50_000, '2026-02-10'); // virement interne : exclu du rythme
@@ -63,14 +63,14 @@ describe('Projection et objectif d’épargne (e2e)', () => {
   });
 
   it('solde + récurrences futures + transactions futures − rythme moyen (3 mois par défaut)', async () => {
-    // Solde au 31/03 : 1 000 − 999,99 − 300 + 2 500 − 500 − 60 − 150 − 3 × 90 = 1 220,01 €.
+    // Solde au 31/03 : 1 000 − 300 + 2 500 − 500 − 60 − 150 − 3 × 90 = 2 220 €.
     const { body } = await projection(`accountId=${ids.main}&months=2`).expect(200);
     expect(body).toEqual({
       averageMonthlySpendCents: 17_000,
       points: [
-        { date: '2026-03-31', balanceCents: 122_001 },
-        { date: '2026-04-30', balanceCents: 122_001 - 9_000 - 17_000 },
-        { date: '2026-05-31', balanceCents: 122_001 - 2 * 9_000 + 50_000 - 2 * 17_000 },
+        { date: '2026-03-31', balanceCents: 222_000 },
+        { date: '2026-04-30', balanceCents: 222_000 - 9_000 - 17_000 },
+        { date: '2026-05-31', balanceCents: 222_000 - 2 * 9_000 + 50_000 - 2 * 17_000 },
       ],
     });
   });
@@ -98,8 +98,8 @@ describe('Projection et objectif d’épargne (e2e)', () => {
 
   it('objectif sur un compte : épargne = solde actuel, effort mensuel et progression', async () => {
     const { body } = await a.call('get', `/api/v1/simulations/savings-goal?targetCents=500000&months=10&accountId=${ids.main}&today=2026-03-31`).expect(200);
-    // Reste 3 779,99 € / 10 ⇒ 378,00 € (arrondi supérieur) ; 1 220,01 / 5 000 = 24,40 %.
-    expect(body).toEqual({ savedCents: 122_001, remainingCents: 377_999, monthlyCents: 37_800, progressBp: 2_440 });
+    // Reste 2 780 € / 10 ⇒ 278,00 € ; 2 220 / 5 000 = 44,40 %.
+    expect(body).toEqual({ savedCents: 222_000, remainingCents: 278_000, monthlyCents: 27_800, progressBp: 4_440 });
   });
 
   it('objectif sans compte : épargne 0', async () => {

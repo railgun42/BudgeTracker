@@ -112,6 +112,7 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 
 - Route (authentifiée) : `GET /api/v1/accounts/:id/balance[?today=YYYY-MM-DD]` → `{ currentCents, forecastCents }`.
 - **Actuel** = transactions datées ≤ `today` ; **prévisionnel** = toutes les transactions (futures incluses). CREDIT +, DEBIT −, solde de départ inclus. Supprimées logiquement exclues ; une transaction antidatée change naturellement le solde actuel.
+- **Solde de départ (E30)** : une transaction **antérieure** à la date du solde de départ le plus récent du compte est conservée (historique, stats) mais **hors des soldes actuel et prévisionnel** (déjà comprise dans le solde saisi). Le **même jour**, `countInBalance` (booléen) est obligatoire à la création (400 sinon) ; il n'est redemandé en PATCH que si la transaction est déplacée sur ce jour (date ou compte). Colonne nullable `Transaction.countInBalance` (`NULL` = pas de choix, comptée). La règle est évaluée à la lecture ([balance.service.ts](apps/api/src/balance/balance.service.ts)) : modifier la date du solde de départ, le supprimer ou le restaurer recalcule tout. Virements : même règle jambe par jambe, un seul choix pour les deux. Les intérêts (E22) suivent la même règle. `AccountDto.openingDate` expose la date. Front : question « Compter dans le solde ? » dans les formulaires de transaction, de virement et de modification de l'historique.
 - Un seul `SUM` SQL (`$queryRaw` paramétré) sur l'index `(accountId, date)`, sans charger les lignes ; un test `EXPLAIN` le vérifie.
 - Compte `NOT_TRACKED` ⇒ `null` / `null`. Compte d'un autre utilisateur ou supprimé ⇒ **404**.
 - `today` est facultatif : c'est le jour du client (évite le décalage de fuseau autour de minuit) ; absent, le jour UTC du serveur est utilisé.
@@ -252,7 +253,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E29 — Pages légales (mentions, confidentialité, CGU, pied de page, case CGU à l'inscription) | ✅ (contenu éditeur à compléter) |
 | E29b — Consentement CGU côté serveur (inscription e-mail) | ✅ |
 | E29c — Consentement CGU côté serveur (Google) | ✅ |
-| E30 → E43 | ⏳ Évolutions après essai local (solde de départ, catégories, simulation), administration et communication, tableau de bord, style |
+| E30 — Transactions antérieures au solde de départ | ✅ |
+| E31 → E43 | ⏳ Évolutions après essai local (catégories, simulation), administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.
