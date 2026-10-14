@@ -229,6 +229,14 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - [not-found-page.ts](apps/web/src/app/shared-ui/not-found-page.ts) : le bouton de retour suit la session. Connecté ⇒ « Retour au tableau de bord » (`/`) ; non connecté ⇒ « Se connecter » (`/login`), car `/` y redirigerait de toute façon.
 - Tests : `npm test -w web` (`shared-ui/not-found-page.spec.ts`).
 
+## Simulation de trésorerie : moteur et API (E33)
+
+- `POST /api/v1/simulations/cashflow` (CSRF exigé, **rien n'est écrit**) : « combien me restera-t-il au jour X ». Corps : `accountIds` (1 à 20 comptes avec solde, additionnés), `startDate` (≥ aujourd'hui, défaut aujourd'hui), `endDate` (≥ début, ≤ aujourd'hui + 600 mois), `excludedRecurrenceIds` (récurrences décochées), `extraRecurrences` et `oneOffs` propres à la simulation, `today` facultatif.
+- Réponse : solde au soir du début (solde actuel + mouvements de ]aujourd'hui, début]) et de la fin, totaux crédit/débit, détail par ligne (`RECURRENCE` toutes listées, décochées avec `included: false` ; `EXTRA_RECURRENCE`, `ONE_OFF`, `PLANNED` = transactions futures saisies) sur ]début, fin], courbe (un point par jour de mouvement). Virement entre deux comptes simulés : neutre, absent du détail. Pas de rythme moyen de dépenses (contrairement à la projection E26) : l'enveloppe dépensable d'E34 s'en déduira.
+- Moteur pur [cashflow.ts](apps/api/src/simulations/engine/cashflow.ts) (dates via le moteur de récurrence E19). Compte ou récurrence d'un autre ⇒ 404, `NOT_TRACKED` ⇒ 422, fin < début ou début passé ⇒ 400.
+- Coexiste avec les scénarios « et si » (E27) ; leur retrait éventuel n'interviendra qu'une fois l'interface migrée (E35).
+- Tests : `src/simulations/engine/cashflow.spec.ts`, `test/e2e/cashflow.e2e-spec.ts` (dont comptage des lignes de toutes les tables avant/après, helper `test/helpers/row-counts.ts`), registre d'isolation.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -270,7 +278,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E30 — Transactions antérieures au solde de départ | ✅ |
 | E31 — Catégorie puis sous-catégorie, facultatives | ✅ |
 | E32 — Page 404 : libellé du bouton de retour | ✅ |
-| E33 → E43 | ⏳ Évolutions après essai local (simulation), administration et communication, tableau de bord, style |
+| E33 — Simulation de trésorerie : moteur et API | ✅ |
+| E34 → E43 | ⏳ Évolutions après essai local (simulation), administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

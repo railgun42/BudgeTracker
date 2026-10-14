@@ -1,4 +1,5 @@
 import type { LocalDate } from '../local-date';
+import type { IntervalUnit, TransactionType } from '../enums';
 
 // Calculateurs (SPEC §6.4) : purs, aucun accès aux transactions. Taux en points de base (500 = 5 %).
 // Bornes communes (validées par l'API) : elles gardent tous les résultats sous 2^53 centimes.
@@ -92,4 +93,79 @@ export interface SavingsGoalDto {
   monthlyCents: number;
   /** Progression en points de base, 0 à 10 000 (10 000 = objectif atteint). */
   progressBp: number;
+}
+
+// POST /simulations/cashflow (SPEC §6.2). Simulation de trésorerie : « combien me restera-t-il au jour X ».
+// Rien n'est écrit : les récurrences supplémentaires et les ponctuelles n'existent que dans la simulation.
+export const CASHFLOW_LIMITS = { maxAccounts: 20, maxExtraRecurrences: 20, maxOneOffs: 100, maxNameLength: 100 } as const;
+
+/** Récurrence propre à la simulation ; montant 1 à SIMULATION_LIMITS.maxMonthlyCents. */
+export interface CashflowRecurrenceInput {
+  name: string;
+  type: TransactionType;
+  amountCents: number;
+  /** 1 à 1 000. */
+  interval: number;
+  unit: IntervalUnit;
+  startDate: LocalDate;
+  /** Inclusive. */
+  endDate?: LocalDate | null;
+}
+
+/** Dépense ou revenu ponctuel anticipé, propre à la simulation. */
+export interface CashflowOneOffInput {
+  name: string;
+  type: TransactionType;
+  amountCents: number;
+  date: LocalDate;
+}
+
+export interface CashflowInput {
+  /** 1 à 20 comptes avec solde (NOT_TRACKED ⇒ 422) ; leurs soldes sont additionnés. */
+  accountIds: string[];
+  /** ≥ today ; absente ⇒ today. */
+  startDate?: LocalDate;
+  /** ≥ startDate, au plus today + 600 mois. */
+  endDate: LocalDate;
+  /** Récurrences des comptes choisis, décochées pour la simulation (autre id ⇒ 404). */
+  excludedRecurrenceIds?: string[];
+  extraRecurrences?: CashflowRecurrenceInput[];
+  oneOffs?: CashflowOneOffInput[];
+  /** Jour du client ; absent ⇒ jour du serveur (UTC). */
+  today?: LocalDate;
+}
+
+/** RECURRENCE : récurrence enregistrée ; PLANNED : transaction future déjà saisie. */
+export type CashflowSource = 'RECURRENCE' | 'EXTRA_RECURRENCE' | 'ONE_OFF' | 'PLANNED';
+
+export interface CashflowItemDto {
+  source: CashflowSource;
+  /** Id de la récurrence (RECURRENCE) ou de la transaction (PLANNED) ; null pour ce qui est propre à la simulation. */
+  id: string | null;
+  name: string;
+  type: TransactionType;
+  /** Montant d'une occurrence, > 0. */
+  amountCents: number;
+  /** false : récurrence décochée, listée avec ce qu'elle aurait coûté mais hors solde. */
+  included: boolean;
+  /** Occurrences dans ]startDate, endDate]. */
+  occurrences: number;
+  /** amountCents × occurrences. */
+  totalCents: number;
+}
+
+export interface CashflowDto {
+  startDate: LocalDate;
+  endDate: LocalDate;
+  /** Solde projeté au soir de startDate (solde actuel si startDate = today). */
+  startBalanceCents: number;
+  /** « Ce qui me restera » au soir de endDate. */
+  endBalanceCents: number;
+  /** Totaux des lignes incluses sur ]startDate, endDate], ≥ 0. */
+  creditCents: number;
+  debitCents: number;
+  /** Récurrences (toutes, décochées comprises), supplémentaires, ponctuelles, puis transactions futures de la période. */
+  items: CashflowItemDto[];
+  /** startDate, chaque jour portant un mouvement, puis endDate. */
+  points: ProjectionPointDto[];
 }

@@ -4,18 +4,8 @@ import { seed } from '../../prisma/seed';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/main';
 import { PrismaService } from '../../src/prisma/prisma.service';
+import { rowCounts } from '../helpers/row-counts';
 import { createTwoUsers, TestUser, TwoUsers } from '../helpers/two-users';
-
-// Tables sans colonne userId : rattachées à l'utilisateur par leur parent. Une nouvelle table fait échouer
-// le test de comptage tant qu'elle n'est pas ajoutée ici (ou ne porte pas userId).
-const CHILD_TABLES: Record<string, string> = {
-  User: 'SELECT count(*) FROM "User" WHERE id = $1::uuid',
-  TransactionTag: 'SELECT count(*) FROM "TransactionTag" x JOIN "Transaction" t ON t.id = x."transactionId" WHERE t."userId" = $1::uuid',
-  TransactionTemplate: 'SELECT count(*) FROM "TransactionTemplate" x JOIN "Recurrence" r ON r.id = x."recurrenceId" WHERE r."userId" = $1::uuid',
-  TemplateTag:
-    'SELECT count(*) FROM "TemplateTag" x JOIN "TransactionTemplate" tt ON tt.id = x."templateId" JOIN "Recurrence" r ON r.id = tt."recurrenceId" WHERE r."userId" = $1::uuid',
-  InterestCredit: 'SELECT count(*) FROM "InterestCredit" x JOIN "Account" a ON a.id = x."accountId" WHERE a."userId" = $1::uuid',
-};
 
 // E27 — scénarios « et si » : CRUD versionné, application à une copie virtuelle, comparaison côte à côte.
 // Calculs détaillés dans src/simulations/engine/scenario.spec.ts.
@@ -28,20 +18,6 @@ describe('Scénarios (e2e)', () => {
   let groceries: string;
   const compare = (ids: string[], extra = '') => a.call('get', `/api/v1/scenarios/compare?accountId=${accountId}&ids=${ids.join(',')}&months=3&today=2026-03-31${extra}`);
   const create = (body: object) => a.call('post', '/api/v1/scenarios').send(body);
-
-  // Nombre de lignes de l'utilisateur dans chaque table de la base.
-  async function rowCounts(userId: string): Promise<Record<string, number>> {
-    const tables = await prisma.$queryRaw<{ table_name: string; has_user: boolean }[]>`
-      SELECT table_name, bool_or(column_name = 'userId') AS has_user
-      FROM information_schema.columns WHERE table_schema = 'public' AND table_name <> '_prisma_migrations' GROUP BY table_name`;
-    expect(tables.filter((t) => !t.has_user).map((t) => t.table_name).sort()).toEqual(Object.keys(CHILD_TABLES).sort());
-    const counts: Record<string, number> = {};
-    for (const { table_name, has_user } of tables) {
-      const sql = has_user ? `SELECT count(*) FROM "${table_name}" WHERE "userId" = $1::uuid` : CHILD_TABLES[table_name];
-      counts[table_name] = Number((await prisma.$queryRawUnsafe<{ count: bigint }[]>(sql, userId))[0].count);
-    }
-    return counts;
-  }
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -102,9 +78,9 @@ describe('Scénarios (e2e)', () => {
       },
     }).expect(201);
 
-    const before = await rowCounts(a.id);
+    const before = await rowCounts(prisma, a.id);
     const { body } = await compare([frugal.id, spender.id]).expect(200);
-    expect(await rowCounts(a.id)).toEqual(before);
+    expect(await rowCounts(prisma, a.id)).toEqual(before);
     expect((await a.call('get', `/api/v1/scenarios/${frugal.id}`).expect(200)).body).toEqual(frugal); // version inchangée
 
     // Base : 910 € au 31/03, rythme 30 €/mois.

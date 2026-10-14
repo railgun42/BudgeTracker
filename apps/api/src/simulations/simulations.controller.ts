@@ -1,5 +1,11 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
 import {
+  CASHFLOW_LIMITS,
+  CashflowDto,
+  CashflowInput,
+  CashflowOneOffInput,
+  CashflowRecurrenceInput,
+  IntervalUnit,
   InvestmentQuery,
   InvestmentResultDto,
   LoanQuery,
@@ -10,9 +16,24 @@ import {
   SavingsGoalDto,
   SavingsGoalQuery,
   SIMULATION_LIMITS,
+  TransactionType,
 } from '@budgetracker/shared';
-import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { Transform, TransformFnParams, Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { IsLocalDate } from '../common/is-local-date';
 import { AuthUser, CurrentUser, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { investment } from './engine/investment';
@@ -20,6 +41,8 @@ import { loan } from './engine/loan';
 import { SimulationsService } from './simulations.service';
 
 const { maxAmountCents, maxMonthlyCents, maxRateBp, maxMonths } = SIMULATION_LIMITS;
+const { maxAccounts, maxExtraRecurrences, maxOneOffs, maxNameLength } = CASHFLOW_LIMITS;
+const trim = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim() : value);
 
 export class LoanQueryDto implements LoanQuery {
   @Type(() => Number)
@@ -119,8 +142,96 @@ export class SavingsGoalQueryDto implements SavingsGoalQuery {
   today?: LocalDate;
 }
 
+class CashflowOneOffDto implements CashflowOneOffInput {
+  @Transform(trim)
+  @IsString()
+  @Length(1, maxNameLength)
+  name!: string;
+
+  @IsEnum(TransactionType)
+  type!: TransactionType;
+
+  @IsInt()
+  @Min(1)
+  @Max(maxMonthlyCents)
+  amountCents!: number;
+
+  @IsLocalDate()
+  date!: LocalDate;
+}
+
+class CashflowRecurrenceDto implements CashflowRecurrenceInput {
+  @Transform(trim)
+  @IsString()
+  @Length(1, maxNameLength)
+  name!: string;
+
+  @IsEnum(TransactionType)
+  type!: TransactionType;
+
+  @IsInt()
+  @Min(1)
+  @Max(maxMonthlyCents)
+  amountCents!: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  interval!: number;
+
+  @IsEnum(IntervalUnit)
+  unit!: IntervalUnit;
+
+  @IsLocalDate()
+  startDate!: LocalDate;
+
+  @IsOptional()
+  @IsLocalDate()
+  endDate?: LocalDate | null;
+}
+
+export class CashflowBodyDto implements CashflowInput {
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(maxAccounts)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  accountIds!: string[];
+
+  @IsOptional()
+  @IsLocalDate()
+  startDate?: LocalDate;
+
+  @IsLocalDate()
+  endDate!: LocalDate;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  excludedRecurrenceIds?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(maxExtraRecurrences)
+  @ValidateNested({ each: true })
+  @Type(() => CashflowRecurrenceDto)
+  extraRecurrences?: CashflowRecurrenceDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(maxOneOffs)
+  @ValidateNested({ each: true })
+  @Type(() => CashflowOneOffDto)
+  oneOffs?: CashflowOneOffDto[];
+
+  @IsOptional()
+  @IsLocalDate()
+  today?: LocalDate;
+}
+
 // Calculateurs (SPEC §6.4) : aucun accès BDD ni aux transactions ; session requise comme le reste de l'app.
-// Projection et objectif d'épargne (SPEC §6.1, §6.3) : lecture des données du compte, calcul par les moteurs purs.
+// Projection, objectif d'épargne et trésorerie (SPEC §6.1 à §6.3) : lecture des données du compte, calcul par les moteurs purs.
 @Controller('v1/simulations')
 @UseGuards(JwtAuthGuard)
 export class SimulationsController {
@@ -139,6 +250,13 @@ export class SimulationsController {
   @Get('projection')
   projection(@CurrentUser() user: AuthUser, @Query() query: ProjectionQueryDto): Promise<ProjectionDto> {
     return this.simulations.projection(user.id, query);
+  }
+
+  // POST : l'entrée (listes de récurrences et de ponctuelles) ne tient pas dans une query. Rien n'est écrit.
+  @Post('cashflow')
+  @HttpCode(200)
+  cashflow(@CurrentUser() user: AuthUser, @Body() body: CashflowBodyDto): Promise<CashflowDto> {
+    return this.simulations.cashflow(user.id, body);
   }
 
   @Get('savings-goal')

@@ -1,4 +1,4 @@
-import { TwoUsers } from './two-users';
+import { TestUser, TwoUsers } from './two-users';
 
 // Registre d'isolation (PLAN E7). Chaque route de l'API figure ici, une seule fois :
 // - dans publicRoutes si elle est accessible sans session ;
@@ -417,6 +417,18 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     const path = `/api/v1/simulations/savings-goal?targetCents=100000&months=10&accountId=${accountId}&today=2026-03-31`;
     await users.a.call('get', path).expect(404);
     expect((await users.b.call('get', path).expect(200)).body.savedCents).toBe(-1234);
+  },
+  // Compte de B, ou récurrence de B décochée sur le compte de A ⇒ 404 ; B simule son compte (rien de dû avant 2030).
+  'POST /api/v1/simulations/cashflow': async (users) => {
+    const { id, accountId, intact } = await recurrenceOfB(users);
+    const ownAccount = await accountOfA(users);
+    const send = (user: TestUser, body: object) => user.call('post', '/api/v1/simulations/cashflow').send({ endDate: '2030-03-31', today: '2026-03-31', ...body });
+    await send(users.a, { accountIds: [accountId] }).expect(404);
+    await send(users.a, { accountIds: [ownAccount, accountId] }).expect(404);
+    await send(users.a, { accountIds: [ownAccount], excludedRecurrenceIds: [id] }).expect(404);
+    expect((await send(users.a, { accountIds: [ownAccount] }).expect(200)).body.items).toEqual([]);
+    expect((await send(users.b, { accountIds: [accountId] }).expect(200)).body.items[0]).toMatchObject({ id, occurrences: 3, totalCents: 2_700 });
+    await intact();
   },
   'GET /api/v1/scenarios': async (users) => {
     const { id } = await scenarioOfB(users);
