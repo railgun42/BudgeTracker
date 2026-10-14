@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import {
   AccountDto,
@@ -13,12 +14,9 @@ import { forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api-client';
 import { amountValidator, EurPipe } from '../../core/money';
 import { today } from '../../core/today';
-import { categoryLabel, UNIT_LABELS } from '../../shared-ui/labels';
+import { categoryOptions, UNIT_LABELS } from '../../shared-ui/labels';
 import { UndoBanner } from '../../shared-ui/undo-banner';
 import { errorMessage } from '../auth/auth-form';
-
-// Catégories posées par le serveur : pas de saisie manuelle.
-const RESERVED = new Set(['interest', 'opening_balance', 'transfer']);
 
 // UI minimale (E20) : liste, création, suppression avec annulation. Le serveur génère les occurrences
 // jusqu'à aujourd'hui ; elles apparaissent ensuite dans l'historique comme des transactions ordinaires.
@@ -72,14 +70,25 @@ const RESERVED = new Set(['interest', 'opening_balance', 'transfer']);
         <p id="rec-amount-hint" [class]="invalid('amount') ? 'field-error' : 'field-hint'">Montant positif, ex. 12,34.</p>
       </div>
       <div class="field">
-        <label for="rec-category">Catégorie</label>
-        <select id="rec-category" formControlName="categoryId" [attr.aria-invalid]="invalid('categoryId')">
-          <option value="">Choisir une catégorie</option>
+        <label for="rec-category">Catégorie (facultatif)</label>
+        <select id="rec-category" formControlName="categoryId" (change)="form.controls.subcategoryId.setValue('')">
+          <option value="">Sans catégorie</option>
           @for (c of categories(); track c.id) {
             <option [value]="c.id">{{ c.label }}</option>
           }
         </select>
       </div>
+      @if (subcategories().length) {
+        <div class="field">
+          <label for="rec-subcategory">Sous-catégorie (facultatif)</label>
+          <select id="rec-subcategory" formControlName="subcategoryId">
+            <option value="">Aucune</option>
+            @for (c of subcategories(); track c.id) {
+              <option [value]="c.id">{{ c.label }}</option>
+            }
+          </select>
+        </div>
+      }
       <div class="field">
         <label for="rec-account">Compte</label>
         <select id="rec-account" formControlName="accountId" [attr.aria-invalid]="invalid('accountId')">
@@ -149,19 +158,15 @@ export class RecurrencesPage {
   protected readonly recurrences = signal<RecurrenceDto[]>([]);
   protected readonly accounts = signal<AccountDto[]>([]);
   private readonly allCategories = signal<CategoryDto[]>([]);
-  protected readonly categories = computed(() =>
-    this.allCategories()
-      .filter((c) => !RESERVED.has(c.nameKey ?? ''))
-      .map((c) => ({ id: c.id, label: categoryLabel(c) }))
-      .sort((a, b) => a.label.localeCompare(b.label, 'fr')),
-  );
+  protected readonly categories = computed(() => categoryOptions(this.allCategories(), null));
   protected readonly undoable = signal<RecurrenceDto | null>(null);
   protected readonly pending = signal(false);
   protected readonly error = signal<string | null>(null);
 
   protected readonly form = inject(NonNullableFormBuilder).group({
     amount: ['', [Validators.required, amountValidator]],
-    categoryId: ['', Validators.required],
+    categoryId: [''],
+    subcategoryId: [''],
     accountId: ['', Validators.required],
     type: [TransactionType.DEBIT],
     interval: [1, [Validators.required, Validators.min(1)]],
@@ -169,6 +174,12 @@ export class RecurrencesPage {
     startDate: [today(), Validators.required],
     endDate: [''],
     name: ['', Validators.maxLength(100)],
+  });
+  private readonly categoryId = toSignal(this.form.controls.categoryId.valueChanges, { initialValue: '' });
+  /** Sous-catégories de la catégorie choisie ; aucune catégorie ⇒ liste masquée. */
+  protected readonly subcategories = computed(() => {
+    const parentId = this.categoryId();
+    return parentId ? categoryOptions(this.allCategories(), parentId) : [];
   });
 
   constructor() {
@@ -186,7 +197,7 @@ export class RecurrencesPage {
     return this.accounts().find((a) => a.id === id)?.name ?? '';
   }
 
-  protected invalid(name: 'amount' | 'categoryId' | 'accountId' | 'interval'): boolean {
+  protected invalid(name: 'amount' | 'accountId' | 'interval'): boolean {
     const c = this.form.controls[name];
     return c.invalid && c.touched;
   }
@@ -203,14 +214,20 @@ export class RecurrencesPage {
       this.form.markAllAsTouched();
       return;
     }
-    const { amount, categoryId, accountId, type, interval, unit, startDate, endDate, name } = this.form.getRawValue();
+    const { amount, categoryId, subcategoryId, accountId, type, interval, unit, startDate, endDate, name } = this.form.getRawValue();
     const body: CreateRecurrenceInput = {
       accountId,
       interval: Number(interval),
       unit,
       startDate,
       ...(endDate ? { endDate } : {}),
-      template: { categoryId, amountCents: eurosToCents(amount)!, type, ...(name.trim() ? { name: name.trim() } : {}) },
+      template: {
+        ...(categoryId ? { categoryId } : {}),
+        ...(categoryId && subcategoryId ? { subcategoryId } : {}),
+        amountCents: eurosToCents(amount)!,
+        type,
+        ...(name.trim() ? { name: name.trim() } : {}),
+      },
     };
     this.pending.set(true);
     this.error.set(null);

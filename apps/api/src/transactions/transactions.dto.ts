@@ -1,18 +1,24 @@
-import { CreateTransactionInput, LocalDate, TransactionListQuery, TransactionType, UpdateTransactionInput } from '@budgetracker/shared';
+import { CreateTransactionInput, LocalDate, TransactionListQuery, TransactionType, UNCATEGORIZED, UpdateTransactionInput } from '@budgetracker/shared';
 import { Transform, TransformFnParams, Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { IsLocalDate } from '../common/is-local-date';
 
 const trim = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim() : value);
-// PATCH : champ absent ⇒ inchangé ; `null` refusé (sauf details, effaçable).
+// PATCH : champ absent ⇒ inchangé ; `null` refusé (sauf details et catégorie, effaçables).
 const Present = () => ValidateIf((_, value) => value !== undefined);
 
 export class CreateTransactionDto implements CreateTransactionInput {
   @IsUUID()
   accountId!: string;
 
+  // Facultatives (SPEC §3.2) ; la sous-catégorie doit appartenir à la catégorie (service, 422).
+  @IsOptional()
   @IsUUID()
-  categoryId!: string;
+  categoryId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  subcategoryId?: string | null;
 
   // Centimes : entier strictement positif, le sens est porté par `type`.
   @IsInt()
@@ -58,9 +64,13 @@ export class UpdateTransactionDto implements UpdateTransactionInput {
   @IsUUID()
   accountId?: string;
 
-  @Present()
+  @IsOptional()
   @IsUUID()
-  categoryId?: string;
+  categoryId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  subcategoryId?: string | null;
 
   @Present()
   @IsInt()
@@ -123,6 +133,7 @@ export class TransactionListQueryDto implements TransactionListQuery {
   accountId?: string;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== UNCATEGORIZED)
   @IsUUID()
   categoryId?: string;
 

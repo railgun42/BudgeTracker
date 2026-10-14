@@ -14,12 +14,13 @@ import {
   TransactionListQuery,
   TransactionPage,
   TransactionType,
+  UNCATEGORIZED,
   UpdateTransactionInput,
 } from '@budgetracker/shared';
 import { forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api-client';
 import { amountValidator, EurPipe } from '../../core/money';
-import { categoryLabel } from '../../shared-ui/labels';
+import { categoryLabel, NO_CATEGORY_LABEL } from '../../shared-ui/labels';
 import { UndoBanner } from '../../shared-ui/undo-banner';
 import { errorMessage } from '../auth/auth-form';
 import { AttachmentControl } from '../transactions/attachment-control';
@@ -66,6 +67,7 @@ import { AttachmentControl } from '../transactions/attachment-control';
         <label for="f-category">Catégorie</label>
         <select id="f-category" formControlName="categoryId">
           <option value="">Toutes les catégories</option>
+          <option [value]="UNCATEGORIZED">{{ NO_CATEGORY_LABEL }}</option>
           @for (c of categoryOptions(); track c.id) {
             <option [value]="c.id">{{ c.label }}</option>
           }
@@ -133,7 +135,7 @@ import { AttachmentControl } from '../transactions/attachment-control';
               <span class="muted">{{ t.date }}</span>
               <strong>{{ label(t) }}</strong>
               <span class="muted">
-                {{ accountNames()[t.accountId] }} · {{ categoryLabels()[t.categoryId] }}
+                {{ accountNames()[t.accountId] }} · {{ categoryOf(t) }}
                 @if (t.transferId) {
                   · Virement
                 }
@@ -218,6 +220,8 @@ export class HistoryPage {
   private readonly fb = inject(NonNullableFormBuilder);
 
   protected readonly CREDIT = TransactionType.CREDIT;
+  protected readonly UNCATEGORIZED = UNCATEGORIZED;
+  protected readonly NO_CATEGORY_LABEL = NO_CATEGORY_LABEL;
 
   protected readonly accounts = signal<AccountDto[]>([]);
   protected readonly tags = signal<TagDto[]>([]);
@@ -282,8 +286,12 @@ export class HistoryPage {
     this.fetch();
   }
 
+  protected categoryOf(t: TransactionDto): string {
+    return t.categoryId ? (this.categoryLabels()[t.categoryId] ?? '') : NO_CATEGORY_LABEL;
+  }
+
   protected label(t: TransactionDto): string {
-    return t.name || this.categoryLabels()[t.categoryId] || 'Transaction';
+    return t.name || (t.categoryId && this.categoryLabels()[t.categoryId]) || 'Transaction';
   }
 
   protected search(): void {

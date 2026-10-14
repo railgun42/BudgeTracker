@@ -168,7 +168,8 @@ model Transaction {
   amountCents    BigInt
   type           TransactionType
   details        String?
-  categoryId     String          @db.Uuid
+  // Facultative (SPEC §3.2) : la plus précise des deux, sous-catégorie ou catégorie.
+  categoryId     String?         @db.Uuid
   transferId     String?         @db.Uuid
   recurrenceId   String?         @db.Uuid
   occurrenceDate DateTime?       @db.Date
@@ -183,7 +184,7 @@ model Transaction {
   account        Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
   // NoAction + DEFERRABLE (migration) : une catégorie utilisée se réaffecte avant
   // suppression, mais la cascade de suppression d'un utilisateur passe.
-  category       Category         @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+  category       Category?        @relation(fields: [categoryId], references: [id], onDelete: NoAction)
   transfer       Transfer?        @relation(fields: [transferId], references: [id], onDelete: Cascade)
   recurrence     Recurrence?      @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
   tags           TransactionTag[]
@@ -292,12 +293,12 @@ model TransactionTemplate {
   name         String
   amountCents  BigInt
   type         TransactionType
-  categoryId   String          @db.Uuid
+  categoryId   String?         @db.Uuid
   details      String?
   updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
 
   recurrence Recurrence    @relation(fields: [recurrenceId], references: [id], onDelete: Cascade)
-  category   Category      @relation(fields: [categoryId], references: [id], onDelete: NoAction)
+  category   Category?     @relation(fields: [categoryId], references: [id], onDelete: NoAction)
   tags       TemplateTag[]
 
   @@index([categoryId])

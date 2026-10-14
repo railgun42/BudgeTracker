@@ -101,11 +101,12 @@ export class ScenariosService {
       },
     });
     const parents = new Map(
-      (await this.prisma.category.findMany({ where: { id: { in: rows.map((r) => r.categoryId) } }, select: { id: true, parentId: true } })).map((c) => [c.id, c.parentId]),
+      (await this.prisma.category.findMany({ where: { id: { in: rows.map((r) => r.categoryId!) } }, select: { id: true, parentId: true } })).map((c) => [c.id, c.parentId]),
     );
     const total: Record<string, number> = {};
+    // Le filtre OR ci-dessus exclut les transactions sans catégorie : categoryId jamais nul ici.
     for (const { categoryId, _sum } of rows) {
-      const key = ids.includes(categoryId) ? categoryId : parents.get(categoryId)!;
+      const key = ids.includes(categoryId!) ? categoryId! : parents.get(categoryId!)!;
       total[key] = (total[key] ?? 0) + Number(_sum.amountCents ?? 0);
     }
     return Object.fromEntries(Object.entries(total).map(([id, cents]) => [id, Math.round(cents / windowMonths)]));

@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { LocalDate, TrackingType, TransactionDto, TransactionPage, TransactionType } from '@budgetracker/shared';
+import { LocalDate, TrackingType, TransactionDto, TransactionPage, TransactionType, UNCATEGORIZED } from '@budgetracker/shared';
 import { decodeCursor, encodeCursor } from '../common/cursor';
 import { Prisma, PrismaClient } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -57,8 +57,22 @@ export class TransactionsService {
       throw new UnprocessableEntityException('Un compte NOT_TRACKED n’accepte pas de CREDIT');
   }
 
-  async checkCategory(userId: string, id: string): Promise<void> {
-    if (!(await this.prisma.category.findFirst({ where: { id, OR: [{ userId: null }, { userId }] } }))) throw new NotFoundException('Catégorie introuvable');
+  async checkCategory(userId: string, id: string): Promise<{ parentId: string | null }> {
+    const category = await this.prisma.category.findFirst({ where: { id, OR: [{ userId: null }, { userId }] }, select: { parentId: true } });
+    if (!category) throw new NotFoundException('Catégorie introuvable');
+    return category;
+  }
+
+  // Catégorie puis sous-catégorie, toutes deux facultatives (SPEC §3.2) : seule la plus précise est stockée.
+  // Une sous-catégorie sans sa catégorie, ou rattachée à une autre, ⇒ 422.
+  async resolveCategory(userId: string, categoryId?: string | null, subcategoryId?: string | null): Promise<string | null> {
+    if (!subcategoryId) {
+      if (categoryId) await this.checkCategory(userId, categoryId);
+      return categoryId ?? null;
+    }
+    const { parentId } = await this.checkCategory(userId, subcategoryId);
+    if (!categoryId || parentId !== categoryId) throw new UnprocessableEntityException('La sous-catégorie n’appartient pas à la catégorie choisie');
+    return subcategoryId;
   }
 
   async checkTags(userId: string, ids: string[]): Promise<void> {
@@ -68,13 +82,13 @@ export class TransactionsService {
   async list(userId: string, { cursor, limit = 50, from, to, accountId, categoryId, tagId }: TransactionListQueryDto): Promise<TransactionPage> {
     const after = cursor ? decodeCursor(cursor) : undefined;
     if (accountId && !(await this.prisma.account.count({ where: { id: accountId, userId, deletedAt: null } }))) throw new NotFoundException('Compte introuvable');
-    if (categoryId) await this.checkCategory(userId, categoryId);
+    if (categoryId && categoryId !== UNCATEGORIZED) await this.checkCategory(userId, categoryId);
     if (tagId) await this.checkTags(userId, [tagId]);
     const rows = await this.prisma.transaction.findMany({
       where: {
         ...live(userId),
         accountId,
-        categoryId,
+        categoryId: categoryId === UNCATEGORIZED ? null : categoryId,
         tags: tagId ? { some: { tagId } } : undefined,
         date: { gte: from && toDate(from), lte: to && toDate(to) },
         // Strictement après le curseur dans l'ordre (date, id) décroissant : ni doublon ni trou à date égale.
@@ -95,9 +109,9 @@ export class TransactionsService {
   }
 
   async create(userId: string, dto: CreateTransactionDto): Promise<TransactionRow> {
-    const { accountId, categoryId, amountCents, date, type = TransactionType.DEBIT, name = '', details, tagIds = [], countInBalance } = dto;
+    const { accountId, amountCents, date, type = TransactionType.DEBIT, name = '', details, tagIds = [], countInBalance } = dto;
     await this.checkAccount(userId, accountId, type);
-    await this.checkCategory(userId, categoryId);
+    const categoryId = await this.resolveCategory(userId, dto.categoryId, dto.subcategoryId);
     await this.checkTags(userId, tagIds);
     await checkBalanceChoice(this.prisma, userId, accountId, date, countInBalance);
     return this.prisma.transaction.create({
@@ -118,11 +132,12 @@ export class TransactionsService {
   }
 
   // Verrou optimiste : l'écriture n'a lieu que si la version lue est encore la version en base.
-  async update(userId: string, id: string, { version, accountId, categoryId, amountCents, date, tagIds, ...rest }: UpdateTransactionDto): Promise<TransactionRow> {
+  async update(userId: string, id: string, { version, accountId, categoryId, subcategoryId, amountCents, date, tagIds, ...rest }: UpdateTransactionDto): Promise<TransactionRow> {
     const current = await this.get(userId, id);
     if (current.transferId) throw new UnprocessableEntityException('Jambe de virement : modifier via /transfers/:id');
     await this.checkAccount(userId, accountId ?? current.accountId, rest.type ?? (current.type as TransactionType));
-    if (categoryId) await this.checkCategory(userId, categoryId);
+    // Catégorie absente ⇒ inchangée ; une sous-catégorie seule est refusée par resolveCategory.
+    const category = categoryId === undefined && !subcategoryId ? undefined : await this.resolveCategory(userId, categoryId, subcategoryId);
     if (tagIds) await this.checkTags(userId, tagIds);
     // Seul un déplacement (date ou compte) vers le jour du solde de départ exige le choix : éditer le montant
     // d'une transaction déjà à cette date reste possible sans le redemander.
@@ -134,7 +149,7 @@ export class TransactionsService {
         data: {
           ...rest,
           accountId,
-          categoryId,
+          categoryId: category,
           date: date && toDate(date),
           amountCents: amountCents === undefined ? undefined : BigInt(amountCents),
           version: { increment: 1 },

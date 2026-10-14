@@ -13,6 +13,8 @@ const COURANT: AccountDto = { id: 'a1', name: 'Courant', trackingType: TrackingT
 const CATEGORIES = [
   { id: 'c1', parentId: null, system: true, nameKey: 'housing.rent', name: null, color: null },
   { id: 'c2', parentId: null, system: true, nameKey: 'transfer', name: null, color: null },
+  { id: 'c3', parentId: null, system: true, nameKey: 'sport', name: null, color: null },
+  { id: 'c4', parentId: 'c3', system: true, nameKey: 'sport.license', name: null, color: null },
 ];
 const LOYER: RecurrenceDto = {
   id: 'r1',
@@ -63,7 +65,34 @@ describe('Récurrences', () => {
     await open([LOYER]);
     expect(text('.card p')).toBe('Loyer : −800,00 €, tous les 1 mois depuis le 2026-01-31 (Courant)');
     const options = [...el.querySelectorAll('#rec-category option')].map((o) => o.textContent?.trim());
-    expect(options).toEqual(['Choisir une catégorie', 'Loyer']);
+    expect(options).toEqual(['Sans catégorie', 'Loyer', 'Sport']);
+  });
+
+  it('catégorie puis sous-catégorie liées, facultatives', async () => {
+    await open([]);
+    expect(el.querySelector('#rec-subcategory')).toBeNull();
+    type('rec-amount', '30');
+    type('rec-account', 'a1');
+    type('rec-category', 'c3');
+    await stable();
+    expect([...el.querySelectorAll('#rec-subcategory option')].map((o) => o.textContent?.trim())).toEqual(['Aucune', 'Licence']);
+    type('rec-subcategory', 'c4');
+    el.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await stable();
+    const req = http.expectOne('/api/v1/recurrences');
+    expect(req.request.body.template).toEqual({ categoryId: 'c3', subcategoryId: 'c4', amountCents: 3000, type: 'DEBIT' });
+    req.flush(LOYER);
+    await stable();
+    http.expectOne('/api/v1/recurrences').flush([LOYER]);
+    await stable();
+
+    // Formulaire remis à zéro : sans catégorie, rien n'est envoyé.
+    expect(el.querySelector('#rec-subcategory')).toBeNull();
+    type('rec-amount', '30');
+    type('rec-account', 'a1');
+    el.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await stable();
+    expect(http.expectOne('/api/v1/recurrences').request.body.template).toEqual({ amountCents: 3000, type: 'DEBIT' });
   });
 
   it('création : POST en centimes, puis liste relue', async () => {

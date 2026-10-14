@@ -2,17 +2,22 @@ import { PrismaClient } from '../src/generated/prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 // Catégories système globales (userId NULL) : nameKey = clé de traduction côté front.
-// Les quatre premières sont utilisées par le code (intérêts, virement vers portefeuille,
-// solde de départ, jambes de virement) ; les autres reprennent le jeu de base de l'ancien front.
+// Les quatre premières sont techniques, posées par le code (intérêts, virement vers portefeuille,
+// solde de départ, jambes de virement) et jamais proposées à la saisie. Les autres : catégorie générale
+// puis sous-catégories précises (SPEC §3.2). Ne jamais retirer une clé : des transactions la référencent
+// (le seed n'ajoute que ; une clé obsolète se réaffecte dans une migration).
 export const SYSTEM_CATEGORIES: Record<string, string[]> = {
   interest: [],
   cash: [],
   opening_balance: [],
   transfer: [],
-  entertainment: ['multimedia', 'outings'],
-  sport: ['subscription', 'equipment'],
-  groceries: ['food', 'hygiene'],
-  housing: ['rent', 'utilities'],
+  entertainment: ['video_games', 'multimedia', 'outings'],
+  sport: ['subscription', 'license', 'session', 'equipment'],
+  groceries: ['food', 'clothing', 'hygiene'],
+  housing: ['rent', 'utilities', 'insurance'],
+  transport: ['fuel', 'public_transport', 'maintenance'],
+  health: ['doctor', 'pharmacy'],
+  income: ['salary', 'refund'],
 };
 
 // L'upsert Prisma n'est pas atomique (SELECT puis INSERT) : deux seeds simultanés (suites Jest en parallèle

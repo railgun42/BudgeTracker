@@ -102,9 +102,9 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 ## Transactions (E10)
 
 - Routes (authentifiées, préfixe `/api/v1`) : `GET/POST /transactions`, `GET/PATCH/DELETE /transactions/:id`, `POST /transactions/:id/restore`.
-- Création : `accountId`, `categoryId`, `amountCents` (entier > 0, sinon **400**) et `date` (`YYYY-MM-DD`, validée) ; `type` (`DEBIT` par défaut), `name`, `details` et `tagIds` facultatifs. Compte, catégorie ou tag d'un autre utilisateur (ou compte supprimé) ⇒ **404** ; `CREDIT` sur un compte `NOT_TRACKED` ⇒ **422**.
+- Création : `accountId`, `amountCents` (entier > 0, sinon **400**) et `date` (`YYYY-MM-DD`, validée) ; `categoryId`/`subcategoryId` (voir E31), `type` (`DEBIT` par défaut), `name`, `details` et `tagIds` facultatifs. Compte, catégorie ou tag d'un autre utilisateur (ou compte supprimé) ⇒ **404** ; `CREDIT` sur un compte `NOT_TRACKED` ⇒ **422**.
 - `PATCH` exige la `version` lue (périmée ⇒ **409**) ; `tagIds` remplace l'ensemble des tags. Le champ `transferId` n'est pas accepté (virements : voir E12) ; modifier directement une jambe de virement ⇒ **422**.
-- Liste `GET /transactions` : pagination par curseur opaque (`limit` 1–100, 50 par défaut ; `nextCursor` nul sur la dernière page), tri `(date, id)` décroissant sans doublon ni trou, filtres `from`/`to` (inclusifs), `accountId`, `categoryId` (exacte, sous-catégories exclues), `tagId`.
+- Liste `GET /transactions` : pagination par curseur opaque (`limit` 1–100, 50 par défaut ; `nextCursor` nul sur la dernière page), tri `(date, id)` décroissant sans doublon ni trou, filtres `from`/`to` (inclusifs), `accountId`, `categoryId` (exacte, sous-catégories exclues ; `none` = sans catégorie), `tagId`.
 - Suppression logique : `DELETE` masque la transaction, `POST …/restore` l'annule (purge à 30 jours, voir E13). Les transactions d'un compte supprimé sont masquées, et réapparaissent à la restauration du compte.
 - Code : [apps/api/src/transactions/](apps/api/src/transactions/), [cursor.ts](apps/api/src/common/cursor.ts) ; contrats dans `packages/shared/src/dto/transaction.ts`.
 
@@ -215,6 +215,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Inscription Google (E29c) : le bouton « S'inscrire avec Google » (case cochée) appelle `/api/v1/auth/google?terms=accepted`, l'API pose le cookie httpOnly/Secure/Lax `terms_consent` (10 min, valeur = `TERMS_VERSION`). Le callback l'exige pour tout *nouveau* compte (sinon redirection `/login?error=google_terms`, aucun compte créé) et renseigne `termsAcceptedAt`/`termsVersion` ; la connexion d'un compte existant n'en a pas besoin.
 - Tests : `features/legal/legal-pages.spec.ts`, `app.spec.ts` (pied de page, routes publiques), `features/auth/auth-pages.spec.ts` (consentement).
 
+## Catégorie puis sous-catégorie, facultatives (E31)
+
+- `Transaction.categoryId` et `TransactionTemplate.categoryId` deviennent nullables (migration `optional_category`, sans réécriture de données) : seule la plus précise des deux est stockée.
+- Saisie (`POST/PATCH /transactions`, `template` des récurrences) : `categoryId` et `subcategoryId`, tous deux facultatifs ; la sous-catégorie doit être un enfant de `categoryId`, sinon **422** (sous-catégorie seule comprise). En `PATCH`, `categoryId: null` efface la catégorie.
+- Seed : catégories générales et sous-catégories précises (Sport → abonnement, licence, séance… ; Courses → alimentaire, vêtements… ; Divertissement → jeux vidéo, multimédia…). Aucune clé retirée : les transactions existantes gardent leur catégorie. Sur une base existante : `npm run db:migrate -w api && npm run db:seed -w api`.
+- Stats par catégorie : une ligne `categoryId: null` (« Sans catégorie ») ; historique : filtre `categoryId=none`.
+- Front : deux listes liées (catégorie, puis sous-catégorie filtrée) dans la saisie de transaction et de récurrence ; les catégories techniques (Intérêts, Espèces, Solde de départ, Virement) n'y sont pas proposées ([labels.ts](apps/web/src/app/shared-ui/labels.ts), `categoryOptions`).
+- Tests : `npm test -w api` (`test/e2e/optional-category.e2e-spec.ts`), `npm test -w web` (formulaires, historique, stats).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -254,7 +263,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E29b — Consentement CGU côté serveur (inscription e-mail) | ✅ |
 | E29c — Consentement CGU côté serveur (Google) | ✅ |
 | E30 — Transactions antérieures au solde de départ | ✅ |
-| E31 → E43 | ⏳ Évolutions après essai local (catégories, simulation), administration et communication, tableau de bord, style |
+| E31 — Catégorie puis sous-catégorie, facultatives | ✅ |
+| E32 → E43 | ⏳ Évolutions après essai local (catégories, simulation), administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

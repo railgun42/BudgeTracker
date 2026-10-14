@@ -6,7 +6,8 @@ export interface TransactionTemplateDto {
   name: string;
   amountCents: number;
   type: TransactionType;
-  categoryId: string;
+  /** Comme `TransactionDto.categoryId` : la plus précise, `null` = sans catégorie. */
+  categoryId: string | null;
   details: string | null;
   tagIds: string[];
 }
@@ -35,8 +36,10 @@ export interface CreateRecurrenceInput {
   template: TransactionTemplateInput;
 }
 
+// Catégorie et sous-catégorie facultatives, mêmes règles que CreateTransactionInput.
 export interface TransactionTemplateInput {
-  categoryId: string;
+  categoryId?: string | null;
+  subcategoryId?: string | null;
   /** Entier > 0. */
   amountCents: number;
   type?: TransactionType;

@@ -5,7 +5,7 @@ import { forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api-client';
 import { EurPipe } from '../../core/money';
 import { today } from '../../core/today';
-import { categoryLabel } from '../../shared-ui/labels';
+import { categoryLabel, NO_CATEGORY_LABEL } from '../../shared-ui/labels';
 import { errorMessage } from '../auth/auth-form';
 
 interface Row extends StatTotals {
@@ -168,8 +168,9 @@ export class StatsPage {
   protected readonly sections = computed(() => {
     const categories = new Map(this.categories().map((c) => [c.id, c]));
     const tags = new Map(this.tags().map((t) => [t.id, t.name]));
-    // Libellé « Parent › Enfant » ; catégorie inconnue (ex. supprimée entre-temps) ⇒ libellé générique.
-    const category = (id: string) => {
+    // Libellé « Parent › Enfant » ; null ⇒ « Sans catégorie » ; inconnue (ex. supprimée entre-temps) ⇒ libellé générique.
+    const category = (id: string | null) => {
+      if (!id) return NO_CATEGORY_LABEL;
       const c = categories.get(id);
       const parent = c?.parentId ? categories.get(c.parentId) : undefined;
       return !c ? 'Catégorie' : parent ? `${categoryLabel(parent)} › ${categoryLabel(c)}` : categoryLabel(c);
@@ -184,7 +185,7 @@ export class StatsPage {
     });
     return [
       section('monthly', 'Évolution mensuelle', 'Mois', this.monthly().map((m) => ({ ...m, key: m.month, label: monthLabel(m.month) }))),
-      section('category', 'Par catégorie', 'Catégorie', this.byCategory().map((c) => ({ ...c, key: c.categoryId, label: category(c.categoryId) }))),
+      section('category', 'Par catégorie', 'Catégorie', this.byCategory().map((c) => ({ ...c, key: c.categoryId ?? '', label: category(c.categoryId) }))),
       section('tag', 'Par tag', 'Tag', this.byTag().map((t) => ({ ...t, key: t.tagId, label: tags.get(t.tagId) ?? 'Tag' }))),
     ];
   });

@@ -27,6 +27,7 @@ const CATEGORIES = [
   cat('c4', 'transfer'),
   cat('c5', 'interest'),
   cat('c6', null, null, 'Animaux'),
+  cat('c7', 'cash'),
 ];
 const status = (code: number) => ({ status: code, statusText: String(code) });
 
@@ -89,12 +90,14 @@ describe('Saisie d’une dépense', () => {
     // Compte unique présélectionné.
     expect(el.querySelector<HTMLSelectElement>('#tx-account')!.value).toBe('a1');
     type('tx-amount', '12,34');
-    type('tx-category', 'c2');
+    type('tx-category', 'c1');
+    await stable();
+    type('tx-subcategory', 'c2');
     await submit();
 
     const req = http.expectOne('/api/v1/transactions');
     expect(req.request.method).toBe('POST');
-    expect(req.request.body).toEqual({ accountId: 'a1', categoryId: 'c2', amountCents: 1234, date: today(), type: 'DEBIT' });
+    expect(req.request.body).toEqual({ accountId: 'a1', categoryId: 'c1', subcategoryId: 'c2', amountCents: 1234, date: today(), type: 'DEBIT' });
     req.flush({});
     await stable();
 
@@ -126,16 +129,51 @@ describe('Saisie d’une dépense', () => {
     });
   });
 
-  it('catégories : libellés traduits « Parent › Enfant », catégories réservées au serveur absentes', async () => {
+  const options = (id: string) => [...el.querySelectorAll(`#${id} option`)].map((o) => o.textContent?.trim());
+
+  it('catégorie puis sous-catégorie : la seconde liste dépend de la première, catégories techniques absentes', async () => {
     await openExpense();
-    const options = [...el.querySelectorAll('#tx-category option')].map((o) => o.textContent?.trim());
-    expect(options).toEqual(['Choisir une catégorie', 'Animaux', 'Courses', 'Courses › Alimentation']);
+    expect(options('tx-category')).toEqual(['Sans catégorie', 'Animaux', 'Courses']);
+    expect(el.querySelector('#tx-subcategory')).toBeNull();
+
+    type('tx-category', 'c1');
+    await stable();
+    expect(options('tx-subcategory')).toEqual(['Aucune', 'Alimentaire']);
+
+    // Catégorie sans sous-catégorie : la seconde liste disparaît.
+    type('tx-category', 'c6');
+    await stable();
+    expect(el.querySelector('#tx-subcategory')).toBeNull();
+  });
+
+  it('catégorie et sous-catégorie facultatives : ni l’une ni l’autre n’est envoyée si vide', async () => {
+    await openExpense();
+    type('tx-amount', '5');
+    type('tx-account', 'a1');
+    await submit();
+    const body = http.expectOne('/api/v1/transactions').request.body;
+    expect(body).not.toHaveProperty('categoryId');
+    expect(body).not.toHaveProperty('subcategoryId');
+  });
+
+  it('changer de catégorie efface la sous-catégorie choisie', async () => {
+    await openExpense();
+    type('tx-amount', '5');
+    type('tx-account', 'a1');
+    type('tx-category', 'c1');
+    await stable();
+    type('tx-subcategory', 'c2');
+    type('tx-category', 'c6');
+    await submit();
+    const body = http.expectOne('/api/v1/transactions').request.body;
+    expect(body).toMatchObject({ categoryId: 'c6' });
+    expect(body).not.toHaveProperty('subcategoryId');
   });
 
   it.each(['0', '-5', '12,345', 'abc'])('montant « %s » refusé sans requête', async (amount) => {
     await openExpense();
     type('tx-amount', amount);
-    type('tx-category', 'c2');
+    type('tx-category', 'c1');
     type('tx-account', 'a1');
     await submit();
 
@@ -148,7 +186,8 @@ describe('Saisie d’une dépense', () => {
     await openExpense();
     await submit();
     http.expectNone('/api/v1/transactions');
-    for (const id of ['tx-category', 'tx-account']) {
+    expect(el.querySelector('#tx-category')!.getAttribute('aria-invalid')).toBeNull();
+    for (const id of ['tx-account']) {
       const field = el.querySelector(`#${id}`)!;
       expect(field.getAttribute('aria-invalid')).toBe('true');
       expect(el.querySelector(`#${field.getAttribute('aria-describedby')}`)?.textContent).toContain('Choisissez');
@@ -158,7 +197,7 @@ describe('Saisie d’une dépense', () => {
   it('revenu sur un portefeuille NOT_TRACKED (422) ⇒ explication', async () => {
     await openExpense();
     type('tx-amount', '5');
-    type('tx-category', 'c2');
+    type('tx-category', 'c1');
     type('tx-account', 'a3');
     type('tx-type', 'CREDIT');
     await submit();
@@ -244,7 +283,7 @@ describe('Jour du solde de départ (E30)', () => {
     await openExpense([OPENED]);
     expect(text('legend')).toBe('Compter dans le solde ?');
     type('tx-amount', '5');
-    type('tx-category', 'c2');
+    type('tx-category', 'c1');
     await submit();
     http.expectNone('/api/v1/transactions');
     expect(el.querySelector('#tx-count-hint')!.className).toBe('field-error');
@@ -261,7 +300,7 @@ describe('Jour du solde de départ (E30)', () => {
     expect(el.querySelector('legend')).toBeNull();
     expect(text('#tx-before-opening')).toContain('sans changer le solde');
     type('tx-amount', '5');
-    type('tx-category', 'c2');
+    type('tx-category', 'c1');
     await submit();
     expect(http.expectOne('/api/v1/transactions').request.body).not.toHaveProperty('countInBalance');
   });

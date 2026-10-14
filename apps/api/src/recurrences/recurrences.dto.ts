@@ -19,12 +19,18 @@ import {
 import { IsLocalDate } from '../common/is-local-date';
 
 const trim = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim() : value);
-// PATCH : champ absent ⇒ inchangé ; `null` refusé (sauf details et endDate, effaçables).
+// PATCH : champ absent ⇒ inchangé ; `null` refusé (sauf details, endDate et catégorie, effaçables).
 const Present = () => ValidateIf((_, value) => value !== undefined);
 
 export class TemplateDto implements TransactionTemplateInput {
+  // Facultatives, mêmes règles que pour une transaction (TransactionsService.resolveCategory).
+  @IsOptional()
   @IsUUID()
-  categoryId!: string;
+  categoryId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  subcategoryId?: string | null;
 
   @IsInt()
   @Min(1)
@@ -55,9 +61,13 @@ export class TemplateDto implements TransactionTemplateInput {
 }
 
 export class UpdateTemplateDto implements Partial<TransactionTemplateInput> {
-  @Present()
+  @IsOptional()
   @IsUUID()
-  categoryId?: string;
+  categoryId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  subcategoryId?: string | null;
 
   @Present()
   @IsInt()

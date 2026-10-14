@@ -94,7 +94,7 @@ describe('Historique : liste et pagination', () => {
     const [debit, credit] = rows();
     expect(debit).toContain('2026-10-01');
     expect(debit).toContain('Marché');
-    expect(debit).toContain('Courant · Courses › Alimentation');
+    expect(debit).toContain('Courant · Courses › Alimentaire');
     expect(debit).toContain('-12,34 €');
     expect(credit).toContain('Livret · Courses');
     expect(credit).toContain('+500,00 €');
@@ -143,11 +143,20 @@ describe('Historique : filtres', () => {
     expect(params(await page([]))).toEqual({});
   });
 
+  it('filtre « Sans catégorie » ⇒ categoryId=none ; une transaction sans catégorie l’affiche', async () => {
+    await open([tx('t1')]);
+    type('f-category', 'none');
+    button('Filtrer')!.click();
+    const req = await page([tx('t2', { categoryId: null })]);
+    expect(params(req)).toEqual({ categoryId: 'none' });
+    expect(rows()[0]).toContain('Courant · Sans catégorie');
+  });
+
   it('options : comptes, catégories triées avec parent, tags', async () => {
     await open([]);
     const options = (id: string) => [...el.querySelectorAll(`#${id} option`)].map((o) => o.textContent!.trim());
     expect(options('f-account')).toEqual(['Tous les comptes', 'Courant', 'Livret']);
-    expect(options('f-category')).toEqual(['Toutes les catégories', 'Courses', 'Courses › Alimentation', 'Virement']);
+    expect(options('f-category')).toEqual(['Toutes les catégories', 'Sans catégorie', 'Courses', 'Courses › Alimentaire', 'Virement']);
     expect(options('f-tag')).toEqual(['Tous les tags', 'Vacances']);
   });
 });

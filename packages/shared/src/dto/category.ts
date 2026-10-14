@@ -9,6 +9,9 @@ export interface CategoryDto {
   color: string | null;
 }
 
+/** Valeur du filtre `categoryId` de GET /transactions : transactions sans catégorie. */
+export const UNCATEGORIZED = 'none';
+
 // POST /categories. `parentId` : catégorie racine (système ou perso) ; 2 niveaux max ⇒ sinon 422.
 export interface CreateCategoryInput {
   name: string;

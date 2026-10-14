@@ -60,9 +60,9 @@ export class RecurrencesService {
   }
 
   async create(userId: string, { accountId, interval, unit, startDate, endDate = null, template }: CreateRecurrenceDto, today: LocalDate): Promise<RecurrenceRow> {
-    const { categoryId, amountCents, type = TransactionType.DEBIT, name = '', details, tagIds = [] } = template;
+    const { amountCents, type = TransactionType.DEBIT, name = '', details, tagIds = [] } = template;
     await this.transactions.checkAccount(userId, accountId, type);
-    await this.transactions.checkCategory(userId, categoryId);
+    const categoryId = await this.transactions.resolveCategory(userId, template.categoryId, template.subcategoryId);
     await this.transactions.checkTags(userId, tagIds);
     if (endDate && endDate < startDate) throw new UnprocessableEntityException('endDate antérieure à startDate');
     const { id } = await this.prisma.recurrence.create({
@@ -85,9 +85,9 @@ export class RecurrencesService {
   // puis le modèle change. Aucune transaction existante n'est réécrite.
   async update(userId: string, id: string, { version, endDate, template = {} }: UpdateRecurrenceDto, today: LocalDate): Promise<RecurrenceRow> {
     const current = await this.get(userId, id);
-    const { tagIds, amountCents, ...rest } = template;
+    const { tagIds, amountCents, categoryId, subcategoryId, ...rest } = template;
     await this.transactions.checkAccount(userId, current.accountId, rest.type ?? (current.template!.type as TransactionType));
-    if (rest.categoryId) await this.transactions.checkCategory(userId, rest.categoryId);
+    const category = categoryId === undefined && !subcategoryId ? undefined : await this.transactions.resolveCategory(userId, categoryId, subcategoryId);
     if (tagIds) await this.transactions.checkTags(userId, tagIds);
     if (endDate && endDate < toLocalDate(current.startDate)) throw new UnprocessableEntityException('endDate antérieure à startDate');
     await this.prisma.$transaction(async (tx) => {
@@ -102,6 +102,7 @@ export class RecurrencesService {
         where: { recurrenceId: id, recurrence: { userId } },
         data: {
           ...rest,
+          categoryId: category,
           amountCents: amountCents === undefined ? undefined : BigInt(amountCents),
           tags: tagIds && { deleteMany: {}, create: tagIds.map((tagId) => ({ tagId })) },
         },

@@ -24,6 +24,7 @@ const MONTHLY: MonthlyStatDto[] = [
 const BY_CATEGORY: CategoryStatDto[] = [
   { categoryId: 'c2', incomeCents: 0, expenseCents: 7600 },
   { categoryId: 'c3', incomeCents: 500000, expenseCents: 0 },
+  { categoryId: null, incomeCents: 0, expenseCents: 1234 },
 ];
 const BY_TAG: TagStatDto[] = [{ tagId: 'g1', incomeCents: 0, expenseCents: 5800 }];
 const YEAR = today().slice(0, 4);
@@ -85,7 +86,11 @@ describe('Statistiques', () => {
   it('affiche mois, catégories « Parent › Enfant », tags et montants en euros', async () => {
     await open();
     expect(rows('Évolution mensuelle')).toEqual(['janvier 2026 | 2 500,00 € | 845,67 €', 'février 2026 | 0,00 € | 1 250,00 €']);
-    expect(rows('Par catégorie')).toEqual(['Courses › Alimentation | 0,00 € | 76,00 €', 'Salaire | 5 000,00 € | 0,00 €']);
+    expect(rows('Par catégorie')).toEqual([
+      'Courses › Alimentaire | 0,00 € | 76,00 €',
+      'Salaire | 5 000,00 € | 0,00 €',
+      'Sans catégorie | 0,00 € | 12,34 €',
+    ]);
     expect(rows('Par tag')).toEqual(['Vacances | 0,00 € | 58,00 €']);
   });
 

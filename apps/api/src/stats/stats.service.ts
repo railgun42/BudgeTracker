@@ -3,12 +3,13 @@ import { CategoryStatDto, MonthlyStatDto, StatsQuery, StatTotals, TagStatDto } f
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-type Row = { key: string; income: bigint; expense: bigint };
+type Row = { key: string | null; income: bigint; expense: bigint };
 
 // Agrégat SQL paramétré (SPEC §6) : jamais de chargement des lignes. Périmètre commun (SPEC §3.4, PLAN E24) :
 // - transactions et comptes non supprimés, de l'utilisateur ;
 // - jambes de virement exclues ; le virement vers un portefeuille, sans transferId, reste une dépense « Espèces » ;
-// - « Solde de départ » exclu : ni revenu ni dépense (NOT IN : sûr même si la catégorie manque) ;
+// - « Solde de départ » exclu : ni revenu ni dépense (NOT EXISTS : garde les transactions sans catégorie,
+//   qu'un NOT IN écarterait puisque NULL NOT IN (…) n'est pas vrai) ;
 // - compte NOT_TRACKED : dépenses seulement (un compte peut l'être devenu après avoir reçu des CREDIT).
 // SUM(bigint) est un numeric : recasté en bigint, puis number (centimes ≤ 9·10¹⁵).
 export const statsSql = (userId: string, { from, to, accountId }: StatsQuery, key: Prisma.Sql, join: Prisma.Sql, orderBy: Prisma.Sql) => Prisma.sql`
@@ -21,7 +22,7 @@ export const statsSql = (userId: string, { from, to, accountId }: StatsQuery, ke
   WHERE t."userId" = ${userId}::uuid AND a."userId" = ${userId}::uuid
     AND t."deletedAt" IS NULL AND a."deletedAt" IS NULL
     AND t."transferId" IS NULL
-    AND t."categoryId" NOT IN (SELECT "id" FROM "Category" WHERE "nameKey" = 'opening_balance')
+    AND NOT EXISTS (SELECT 1 FROM "Category" c WHERE c."id" = t."categoryId" AND c."nameKey" = 'opening_balance')
     AND (t."type" = 'DEBIT' OR a."trackingType" <> 'NOT_TRACKED')
     ${from ? Prisma.sql`AND t."date" >= ${from}::date` : Prisma.empty}
     ${to ? Prisma.sql`AND t."date" <= ${to}::date` : Prisma.empty}
@@ -43,6 +44,7 @@ export class StatsService {
     return rows.map(({ key, income, expense }) => ({ key, totals: { incomeCents: Number(income), expenseCents: Number(expense) } satisfies StatTotals }));
   }
 
+  // Les transactions sans catégorie forment un seul groupe (GROUP BY regroupe les NULL) : « Sans catégorie ».
   async byCategory(userId: string, query: StatsQuery): Promise<CategoryStatDto[]> {
     const rows = await this.aggregate(userId, query, Prisma.sql`t."categoryId"`, Prisma.empty, byAmount);
     return rows.map(({ key, totals }) => ({ categoryId: key, ...totals }));
@@ -51,11 +53,11 @@ export class StatsService {
   async byTag(userId: string, query: StatsQuery): Promise<TagStatDto[]> {
     const join = Prisma.sql`JOIN "TransactionTag" tt ON tt."transactionId" = t."id"`;
     const rows = await this.aggregate(userId, query, Prisma.sql`tt."tagId"`, join, byAmount);
-    return rows.map(({ key, totals }) => ({ tagId: key, ...totals }));
+    return rows.map(({ key, totals }) => ({ tagId: key!, ...totals }));
   }
 
   async monthly(userId: string, query: StatsQuery): Promise<MonthlyStatDto[]> {
     const rows = await this.aggregate(userId, query, Prisma.sql`to_char(t."date", 'YYYY-MM')`, Prisma.empty, Prisma.sql`1`);
-    return rows.map(({ key, totals }) => ({ month: key, ...totals }));
+    return rows.map(({ key, totals }) => ({ month: key!, ...totals }));
   }
 }

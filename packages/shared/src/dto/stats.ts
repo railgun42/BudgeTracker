@@ -16,9 +16,9 @@ export interface StatTotals {
   expenseCents: number;
 }
 
-/** Par catégorie exacte (enfant ou racine), dépenses décroissantes. */
+/** Par catégorie exacte (enfant ou racine), dépenses décroissantes ; une seule ligne `null` = « Sans catégorie ». */
 export interface CategoryStatDto extends StatTotals {
-  categoryId: string;
+  categoryId: string | null;
 }
 
 /** Par tag : une transaction à plusieurs tags compte pour chacun ; sans tag ⇒ absente. */

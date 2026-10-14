@@ -14,13 +14,11 @@ import { forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api-client';
 import { amountValidator } from '../../core/money';
 import { today } from '../../core/today';
-import { categoryLabel } from '../../shared-ui/labels';
+import { categoryOptions } from '../../shared-ui/labels';
 import { errorMessage } from '../auth/auth-form';
 
-// Catégories système posées par le serveur (intérêts, solde de départ, jambes de virement) : pas de saisie manuelle.
-const RESERVED = new Set(['interest', 'opening_balance', 'transfer']);
-
 // Saisie en 3 champs (SPEC §7) : montant, catégorie, compte. Date = aujourd'hui, le reste est replié.
+// Catégorie puis sous-catégorie : deux listes liées, toutes deux facultatives (SPEC §3.2).
 @Component({
   selector: 'app-transaction-form-page',
   imports: [ReactiveFormsModule, RouterLink],
@@ -50,22 +48,26 @@ const RESERVED = new Set(['interest', 'opening_balance', 'transfer']);
       </div>
 
       <div class="field">
-        <label for="tx-category">Catégorie</label>
-        <select
-          id="tx-category"
-          formControlName="categoryId"
-          [attr.aria-invalid]="invalid('categoryId')"
-          aria-describedby="tx-category-error"
-        >
-          <option value="">Choisir une catégorie</option>
+        <label for="tx-category">Catégorie (facultatif)</label>
+        <select id="tx-category" formControlName="categoryId" (change)="form.controls.subcategoryId.setValue('')">
+          <option value="">Sans catégorie</option>
           @for (c of categories(); track c.id) {
             <option [value]="c.id">{{ c.label }}</option>
           }
         </select>
-        @if (invalid('categoryId')) {
-          <p id="tx-category-error" class="field-error">Choisissez une catégorie.</p>
-        }
       </div>
+
+      @if (subcategories().length) {
+        <div class="field">
+          <label for="tx-subcategory">Sous-catégorie (facultatif)</label>
+          <select id="tx-subcategory" formControlName="subcategoryId">
+            <option value="">Aucune</option>
+            @for (c of subcategories(); track c.id) {
+              <option [value]="c.id">{{ c.label }}</option>
+            }
+          </select>
+        </div>
+      }
 
       <div class="field">
         <label for="tx-account">Compte</label>
@@ -144,24 +146,14 @@ export class TransactionFormPage {
 
   protected readonly accounts = signal<AccountDto[]>([]);
   private readonly allCategories = signal<CategoryDto[]>([]);
-  /** Libellé « Parent › Enfant », trié. */
-  protected readonly categories = computed(() => {
-    const all = this.allCategories();
-    const byId = new Map(all.map((c) => [c.id, c]));
-    return all
-      .filter((c) => !RESERVED.has(c.nameKey ?? ''))
-      .map((c) => {
-        const parent = c.parentId ? byId.get(c.parentId) : undefined;
-        return { id: c.id, label: parent ? `${categoryLabel(parent)} › ${categoryLabel(c)}` : categoryLabel(c) };
-      })
-      .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
-  });
+  protected readonly categories = computed(() => categoryOptions(this.allCategories(), null));
   protected readonly pending = signal(false);
   protected readonly error = signal<string | null>(null);
 
   protected readonly form = inject(NonNullableFormBuilder).group({
     amount: ['', [Validators.required, amountValidator]],
-    categoryId: ['', Validators.required],
+    categoryId: [''],
+    subcategoryId: [''],
     accountId: ['', Validators.required],
     type: [TransactionType.DEBIT],
     date: [today(), Validators.required],
@@ -170,6 +162,11 @@ export class TransactionFormPage {
     countInBalance: [''],
   });
   private readonly value = toSignal(this.form.valueChanges, { initialValue: this.form.value });
+  /** Sous-catégories de la catégorie choisie ; aucune catégorie ⇒ liste masquée. */
+  protected readonly subcategories = computed(() => {
+    const parentId = this.value().categoryId;
+    return parentId ? categoryOptions(this.allCategories(), parentId) : [];
+  });
   // Solde de départ du compte choisi (SPEC §3.3) : avant, hors solde ; le jour même, l'API exige un choix.
   private readonly openingDate = computed(() => this.accounts().find((a) => a.id === this.value().accountId)?.openingDate ?? null);
   protected readonly onOpening = computed(() => this.openingDate() !== null && this.value().date === this.openingDate());
@@ -189,7 +186,7 @@ export class TransactionFormPage {
     });
   }
 
-  protected invalid(name: 'amount' | 'categoryId' | 'accountId'): boolean {
+  protected invalid(name: 'amount' | 'accountId'): boolean {
     const c = this.form.controls[name];
     return c.invalid && c.touched;
   }
@@ -200,10 +197,11 @@ export class TransactionFormPage {
       this.form.markAllAsTouched();
       return;
     }
-    const { amount, categoryId, accountId, type, date, name, details, countInBalance } = this.form.getRawValue();
+    const { amount, categoryId, subcategoryId, accountId, type, date, name, details, countInBalance } = this.form.getRawValue();
     const body: CreateTransactionInput = {
       accountId,
-      categoryId,
+      ...(categoryId ? { categoryId } : {}),
+      ...(categoryId && subcategoryId ? { subcategoryId } : {}),
       amountCents: eurosToCents(amount)!,
       date,
       type,

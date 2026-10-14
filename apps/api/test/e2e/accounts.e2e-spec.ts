@@ -51,7 +51,7 @@ describe('Comptes (e2e)', () => {
       include: { category: true },
       orderBy: { date: 'asc' },
     });
-    expect(txs.map((t) => [t.accountId, t.userId, t.name, t.type, t.amountCents, t.date.toISOString().slice(0, 10), t.category.nameKey])).toEqual([
+    expect(txs.map((t) => [t.accountId, t.userId, t.name, t.type, t.amountCents, t.date.toISOString().slice(0, 10), t.category?.nameKey])).toEqual([
       [credit.body.id, a.id, 'Solde de départ', 'CREDIT', 123456n, '2026-01-31', 'opening_balance'],
       [debit.body.id, a.id, 'Solde de départ', 'DEBIT', 500n, '2026-02-01', 'opening_balance'],
     ]);

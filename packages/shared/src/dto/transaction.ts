@@ -28,7 +28,8 @@ export interface TransactionDto {
   amountCents: number;
   type: TransactionType;
   details: string | null;
-  categoryId: string;
+  /** La plus précise des deux (sous-catégorie, sinon catégorie) ; `null` = sans catégorie. */
+  categoryId: string | null;
   tagIds: string[];
   /** Non nul pour une jambe de virement. */
   transferId: string | null;
@@ -41,11 +42,13 @@ export interface TransactionDto {
 
 // POST /transactions. Saisie en 3 champs (montant, catégorie, compte) ; la date (aujourd'hui
 // par défaut) est fournie par le client et validée par le serveur. `type` : DEBIT par défaut.
+// Catégorie et sous-catégorie facultatives : la sous-catégorie doit être un enfant de `categoryId` (sinon 422).
 // Compte, catégorie ou tag d'un autre utilisateur ⇒ 404 ; CREDIT sur un compte NOT_TRACKED ⇒ 422.
 // Datée du jour du solde de départ du compte (`AccountDto.openingDate`) : `countInBalance` obligatoire (400).
 export interface CreateTransactionInput {
   accountId: string;
-  categoryId: string;
+  categoryId?: string | null;
+  subcategoryId?: string | null;
   /** Entier > 0. */
   amountCents: number;
   date: LocalDate;
@@ -58,6 +61,7 @@ export interface CreateTransactionInput {
 }
 
 // PATCH /transactions/:id. `version` périmée ⇒ 409 ; `tagIds` remplace l'ensemble des tags.
+// `categoryId` (avec `subcategoryId` éventuelle) remplace la catégorie ; `categoryId: null` l'efface.
 export interface UpdateTransactionInput extends Partial<CreateTransactionInput> {
   version: number;
 }
@@ -70,6 +74,7 @@ export interface TransactionListQuery {
   from?: LocalDate;
   to?: LocalDate;
   accountId?: string;
+  /** Exacte (sous-catégories exclues) ; `UNCATEGORIZED` ⇒ transactions sans catégorie. */
   categoryId?: string;
   tagId?: string;
 }
