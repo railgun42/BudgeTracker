@@ -270,6 +270,17 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Fichiers : `apps/web/src/app/features/legal/*`, `docs/privacy/*`.
 - Vérif : trois routes publiques accessibles sans connexion ; case de consentement CGU requise à l'inscription ; **contenu à fournir/valider par l'éditeur** (identité, adresse, contact).
 
+**E29b — Consentement CGU côté serveur (inscription e-mail)**
+- Objectif : preuve et contrôle serveur du consentement, aujourd'hui vérifié seulement dans le navigateur (E29). `SignupDto.acceptTerms` obligatoire (`true`), colonne `User.termsAcceptedAt` (+ `termsVersion`) via migration Prisma versionnée, le front envoie le champ.
+- Fichiers : `apps/api/src/auth/{auth.dto.ts,auth.service.ts}`, `apps/api/prisma/migrations/*`, `apps/web/src/app/features/auth/signup-page.ts`, tests e2e et front adaptés.
+- Vérif : e2e — signup sans `acceptTerms` ou avec `false` ⇒ 400 et aucun compte créé ; avec `true` ⇒ `termsAcceptedAt` renseigné ; l'export (E28) et la suppression de compte couvrent la nouvelle colonne ; test front : le corps envoyé contient `acceptTerms: true`.
+
+**E29c — Consentement CGU pour l'inscription Google**
+- Objectif : plus de création de compte Google sans consentement. Défaut retenu : **option B**, cookie court posé par le front quand la case est cochée, exigé par le callback Google pour tout *nouveau* compte (la connexion d'un compte existant n'est pas concernée) et enregistré dans `termsAcceptedAt`. Repli plus lourd : option C (compte « en attente » + page de consentement).
+- Fichiers : `apps/api/src/auth/google.controller.ts` (et la création de compte associée), `common/cookies.ts`, `apps/web/src/app/features/auth/signup-page.ts`, tests.
+- Vérif : e2e/unitaires avec profil Google simulé — nouveau compte sans cookie de consentement ⇒ refus (redirection `/login?error=…`, aucun compte créé) ; avec cookie ⇒ compte créé et `termsAcceptedAt` renseigné ; compte existant ⇒ connexion sans cookie ; cookie `httpOnly`/`Secure`/`SameSite=Lax`, durée ≤ 10 min.
+- Prérequis : E29b (colonne `termsAcceptedAt`). Les deux étapes sont à terminer avant l'ouverture publique (cochées dans la check-list E32).
+
 **E30 — Conteneurs et déploiement**
 - Objectif : Dockerfiles (api, web), `docker-compose.yml` de prod, Caddy (TLS Let's Encrypt, HSTS, CSP), BDD non publiée, secrets par variables d'environnement, migrations au déploiement ; ajout du build d'images à la CI.
 - Fichiers : `apps/*/Dockerfile`, `docker-compose.yml`, `deploy/Caddyfile`, `ci.yml`.
@@ -283,7 +294,7 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 **E32 — Supervision et check-list de lancement**
 - Objectif : sonde de disponibilité externe, alerte disque/erreurs, test automatisé de non-fuite dans les logs, `npm audit`, revue OWASP ciblée (auth, upload, isolation).
 - Fichiers : `docs/launch-checklist.md`, config de sonde.
-- Vérif : check-list entièrement cochée (E31 restauration testée, E29 pages en ligne, aucune vulnérabilité haute non traitée, test de log vert).
+- Vérif : check-list entièrement cochée (E31 restauration testée, E29 pages en ligne, E29b/E29c consentement CGU serveur,  aucune vulnérabilité haute non traitée, test de log vert).
 
 ## 5. Hypothèses (à contredire si fausses)
 

@@ -207,9 +207,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Front : page `/me` « Mon compte » : export JSON/CSV, suppression confirmée par la saisie de `SUPPRIMER`.
 - Tests : `test/e2e/gdpr.e2e-spec.ts` (toutes les tables exportées, rien d'un autre ; après suppression, comptage SQL à 0 sur toutes les tables portant `userId`, objets S3 absents, cookies invalides), registre d'isolation, `features/my-account/my-account-page.spec.ts`.
 
+## Pages légales (E29)
+
+- Routes publiques `/mentions-legales`, `/confidentialite`, `/cgu` ([legal-pages.ts](apps/web/src/app/features/legal/legal-pages.ts)), liées dans le pied de page et à l'inscription. Identité de l'éditeur centralisée dans la constante `EDITOR` : **valeurs `[À compléter …]` à fournir et faire relire avant l'ouverture publique** (liste et registre des traitements : [docs/privacy/README.md](docs/privacy/README.md)).
+- Inscription : case « J'accepte les CGU » obligatoire (aussi pour le bouton Google), non transmise à l'API. Limite connue : contrôle côté navigateur seulement, traité par E29b (inscription e-mail) et E29c (Google) dans le [PLAN](PLAN.md).
+- Tests : `features/legal/legal-pages.spec.ts`, `app.spec.ts` (pied de page, routes publiques), `features/auth/auth-pages.spec.ts` (consentement).
+
 ## État actuel
 
-Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
+Avancement selon [PLAN.md](PLAN.md) (E0 à E32, plus E29b/E29c) :
 
 | Étape | Statut |
 |---|---|
@@ -242,6 +248,8 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E26 — Projection du solde et objectifs d'épargne (purs) | ✅ |
 | E27 — Scénarios « et si » et comparaison | ✅ |
 | E28 — Export (JSON/CSV) et suppression réelle du compte | ✅ |
-| E29 → E32 | ⏳ Pages légales, déploiement |
+| E29 — Pages légales (mentions, confidentialité, CGU, pied de page, case CGU à l'inscription) | ✅ (contenu éditeur à compléter) |
+| E29b → E29c | ⏳ Consentement CGU côté serveur (e-mail, Google) |
+| E30 → E32 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

@@ -81,6 +81,21 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/reset-password-page').then((m) => m.ResetPasswordPage),
   },
   {
+    path: 'mentions-legales',
+    title: 'Mentions légales',
+    loadComponent: () => import('./features/legal/legal-pages').then((m) => m.LegalNoticePage),
+  },
+  {
+    path: 'confidentialite',
+    title: 'Politique de confidentialité',
+    loadComponent: () => import('./features/legal/legal-pages').then((m) => m.PrivacyPage),
+  },
+  {
+    path: 'cgu',
+    title: 'Conditions générales d’utilisation',
+    loadComponent: () => import('./features/legal/legal-pages').then((m) => m.TermsPage),
+  },
+  {
     path: '**',
     title: 'Page introuvable',
     loadComponent: () => import('./shared-ui/not-found-page').then((m) => m.NotFoundPage),

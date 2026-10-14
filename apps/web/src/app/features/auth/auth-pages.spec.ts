@@ -113,6 +113,7 @@ describe('Inscription', () => {
     type(el, 'signup-email', 'bob@example.com');
     type(el, 'signup-name', 'Bob');
     type(el, 'signup-password', 'motdepasse-solide');
+    el.querySelector<HTMLInputElement>('#signup-terms')!.click();
     await submit(el);
 
     const req = http.expectOne('/api/v1/auth/signup');
@@ -122,6 +123,47 @@ describe('Inscription', () => {
 
     expect(text(el, '[role="status"]')).toContain('lien de confirmation');
     expect(el.querySelector('form')).toBeNull();
+  });
+});
+
+describe('Inscription : consentement CGU', () => {
+  it('case non cochée ⇒ aucune requête, erreur reliée à la case', async () => {
+    const el = await open('/signup');
+    type(el, 'signup-email', 'bob@example.com');
+    type(el, 'signup-name', 'Bob');
+    type(el, 'signup-password', 'motdepasse-solide');
+    await submit(el);
+
+    http.expectNone('/api/v1/auth/signup');
+    const box = el.querySelector('#signup-terms')!;
+    expect(box.getAttribute('aria-invalid')).toBe('true');
+    expect(text(el, `#${box.getAttribute('aria-describedby')}`)).toBe('Vous devez accepter les CGU pour créer un compte.');
+  });
+
+  it('la case renvoie vers les CGU et la politique de confidentialité', async () => {
+    const el = await open('/signup');
+    const label = el.querySelector('#signup-terms')!.closest('label')!;
+    const hrefs = [...label.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    expect(hrefs).toEqual(['/cgu', '/confidentialite']);
+  });
+
+  it('Google sans la case ⇒ navigation bloquée ; avec la case ⇒ autorisée', async () => {
+    const el = await open('/signup');
+    const google = [...el.querySelectorAll('a')].find((a) => a.textContent?.includes('Google'))!;
+    // Relève la décision du composant, puis annule la navigation pleine page (non gérée par jsdom).
+    const click = () => {
+      let prevented = false;
+      google.addEventListener('click', (e) => ((prevented = e.defaultPrevented), e.preventDefault()), { once: true });
+      google.dispatchEvent(new MouseEvent('click', { cancelable: true }));
+      return prevented;
+    };
+
+    expect(click()).toBe(true);
+    await harness.fixture.whenStable();
+    expect(el.querySelector('#signup-terms')!.getAttribute('aria-invalid')).toBe('true');
+
+    el.querySelector<HTMLInputElement>('#signup-terms')!.click();
+    expect(click()).toBe(false);
   });
 });
 

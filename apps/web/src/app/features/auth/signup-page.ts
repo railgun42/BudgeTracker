@@ -68,11 +68,31 @@ import { emailValidators, errorMessage, passwordValidators } from './auth-form';
           </p>
         </div>
 
+        <div class="field">
+          <label class="checkbox">
+            <input
+              id="signup-terms"
+              type="checkbox"
+              formControlName="acceptTerms"
+              [attr.aria-invalid]="invalid('acceptTerms')"
+              aria-describedby="signup-terms-error"
+            />
+            <span>
+              J'accepte les <a routerLink="/cgu" target="_blank">conditions générales d'utilisation<span class="visually-hidden"> (nouvel onglet)</span></a> et j'ai lu la
+              <a routerLink="/confidentialite" target="_blank">politique de confidentialité<span class="visually-hidden"> (nouvel onglet)</span></a>.
+            </span>
+          </label>
+          @if (invalid('acceptTerms')) {
+            <p id="signup-terms-error" class="field-error">Vous devez accepter les CGU pour créer un compte.</p>
+          }
+        </div>
+
         <button class="button" type="submit" [disabled]="pending()">Créer mon compte</button>
       </form>
 
       <p class="separator">ou</p>
-      <a class="button button-secondary" href="/api/v1/auth/google">S'inscrire avec Google</a>
+      <!-- Même consentement exigé pour l'inscription Google. -->
+      <a class="button button-secondary" href="/api/v1/auth/google" (click)="checkTerms($event)">S'inscrire avec Google</a>
 
       <p>Déjà un compte ? <a routerLink="/login">Se connecter</a></p>
     }
@@ -85,14 +105,23 @@ export class SignupPage {
     email: ['', emailValidators],
     name: ['', [Validators.required, Validators.maxLength(100), Validators.pattern(/\S/)]],
     password: ['', passwordValidators],
+    // Consentement CGU : exigé ici, non transmis (l'API refuse les champs inconnus).
+    acceptTerms: [false, Validators.requiredTrue],
   });
   protected readonly pending = signal(false);
   protected readonly sent = signal(false);
   protected readonly error = signal<string | null>(null);
 
-  protected invalid(name: 'email' | 'name' | 'password'): boolean {
+  protected invalid(name: 'email' | 'name' | 'password' | 'acceptTerms'): boolean {
     const c = this.form.controls[name];
     return c.invalid && c.touched;
+  }
+
+  protected checkTerms(event: Event): void {
+    const terms = this.form.controls.acceptTerms;
+    if (terms.value) return;
+    event.preventDefault();
+    terms.markAsTouched();
   }
 
   protected submit(): void {
@@ -102,7 +131,8 @@ export class SignupPage {
     }
     this.pending.set(true);
     this.error.set(null);
-    this.api.post<void>('/auth/signup', this.form.getRawValue()).subscribe({
+    const { email, name, password } = this.form.getRawValue();
+    this.api.post<void>('/auth/signup', { email, name, password }).subscribe({
       next: () => this.sent.set(true),
       error: (e) => {
         this.pending.set(false);

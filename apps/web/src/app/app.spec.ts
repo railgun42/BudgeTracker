@@ -53,8 +53,21 @@ describe('Shell', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('nav')).toBeNull();
+    expect(el.querySelector('nav[aria-label="Navigation principale"]')).toBeNull();
     expect(el.querySelector('header button')).toBeNull();
+  });
+
+  it.each([true, false])('pied de page légal pour tous (connecté : %s)', async (loggedIn) => {
+    await restore(loggedIn ? USER : null);
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const footer = (fixture.nativeElement as HTMLElement).querySelector('footer nav[aria-label="Informations légales"]');
+    const links = [...footer!.querySelectorAll('a')].map((a) => [a.textContent?.trim(), a.getAttribute('href')]);
+    expect(links).toEqual([
+      ['Mentions légales', '/mentions-legales'],
+      ['Confidentialité', '/confidentialite'],
+      ['CGU', '/cgu'],
+    ]);
   });
 
   it('marque le lien actif avec aria-current', async () => {
@@ -79,7 +92,7 @@ describe('Shell', () => {
 
     expect(TestBed.inject(Session).user()).toBeNull();
     expect(TestBed.inject(Router).url).toBe('/login');
-    expect((fixture.nativeElement as HTMLElement).querySelector('nav')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('nav[aria-label="Navigation principale"]')).toBeNull();
   });
 });
 
@@ -97,6 +110,9 @@ describe('Routes', () => {
     ['/signup', 'Créer un compte'],
     ['/forgot-password', 'Mot de passe oublié'],
     ['/reset-password', 'Nouveau mot de passe'],
+    ['/mentions-legales', 'Mentions légales'],
+    ['/confidentialite', 'Politique de confidentialité'],
+    ['/cgu', 'Conditions générales d’utilisation'],
     ['/nimporte/quoi', 'Page introuvable'],
   ])('%s charge son écran en lazy et fixe le titre « %s »', async (url, title) => {
     await restore(USER);
@@ -109,9 +125,19 @@ describe('Routes', () => {
     expect(routes.every((r) => r.loadComponent && !r.component)).toBe(true);
   });
 
-  it('seuls les écrans d’auth et la 404 sont publics', () => {
+  it('seuls les écrans d’auth, les pages légales et la 404 sont publics', () => {
     const publicPaths = routes.filter((r) => !r.canActivate).map((r) => r.path);
-    expect(publicPaths).toEqual(['login', 'signup', 'verify-email', 'forgot-password', 'reset-password', '**']);
+    expect(publicPaths).toEqual([
+      'login',
+      'signup',
+      'verify-email',
+      'forgot-password',
+      'reset-password',
+      'mentions-legales',
+      'confidentialite',
+      'cgu',
+      '**',
+    ]);
   });
 });
 

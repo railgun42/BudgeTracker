@@ -125,6 +125,14 @@ a {
   }
 }
 
+// Case à cocher avec son texte à droite (le libellé .field est en gras par défaut).
+.field .checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-weight: normal;
+}
+
 .field-hint,
 .field-error {
   margin: 0;
