@@ -17,6 +17,7 @@ import { balanceSql } from '../balance/balance.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { todayUtc } from '../recurrences/recurrences.service';
 import { toDate, toLocalDate } from '../transactions/transactions.service';
+import { allowance } from './engine/allowance';
 import { cashflow, type CashflowLine } from './engine/cashflow';
 import { projection, type ProjectionInput } from './engine/projection';
 import { savingsGoal } from './engine/savings-goal';
@@ -79,12 +80,15 @@ export class SimulationsService {
   }
 
   // Simulation de trésorerie (SPEC §6.2) : comptes de l'utilisateur seulement ; rien n'est écrit.
+  // Avec un plancher, enveloppe dépensable (E34) ; `periodStart` ancre ses périodes (simulation sauvegardée déjà commencée).
   async cashflow(
     userId: string,
-    { accountIds, endDate, excludedRecurrenceIds = [], extraRecurrences = [], oneOffs = [], today = todayUtc(), startDate = today }: CashflowInput,
+    { accountIds, endDate, excludedRecurrenceIds = [], extraRecurrences = [], oneOffs = [], floor, today = todayUtc(), startDate = today }: CashflowInput,
+    periodStart = startDate,
   ): Promise<CashflowDto> {
     if (startDate < today) throw new BadRequestException('La date de début ne peut pas précéder aujourd’hui');
     if (endDate < startDate) throw new BadRequestException('La date de fin précède la date de début');
+    if (floor && endDate <= periodStart) throw new BadRequestException('Un plancher exige une date de fin postérieure au début');
     if (endDate > addMonths(today, SIMULATION_LIMITS.maxMonths)) throw new BadRequestException('Période trop longue');
     const balances = await Promise.all(accountIds.map((id) => this.currentBalance(userId, id, today)));
     const own = { userId, accountId: { in: accountIds }, deletedAt: null };
@@ -135,7 +139,32 @@ export class SimulationsService {
           date: toLocalDate(t.date),
         })),
     ];
-    return cashflow({ today, startDate, endDate, balanceCents: balances.reduce((sum, b) => sum + b, 0), lines });
+    const result = cashflow({ today, startDate, endDate, balanceCents: balances.reduce((sum, b) => sum + b, 0), lines });
+    if (!floor) return result;
+    // Dépenses ponctuelles réelles de la simulation : débits saisis, hors récurrences, virements et solde de départ.
+    const spending = await this.prisma.transaction.groupBy({
+      by: ['date'],
+      _sum: { amountCents: true },
+      where: {
+        ...own,
+        type: TransactionType.DEBIT,
+        recurrenceId: null,
+        transferId: null,
+        NOT: { category: { nameKey: 'opening_balance' } },
+        date: { gt: toDate(periodStart), lte: toDate(endDate) },
+      },
+    });
+    return {
+      ...result,
+      allowance: allowance({
+        today,
+        startDate: periodStart,
+        endDate,
+        ...floor,
+        endBalanceCents: result.endBalanceCents,
+        spending: spending.map((s) => ({ date: toLocalDate(s.date), amountCents: Number(s._sum.amountCents ?? 0) })),
+      }),
+    };
   }
 
   async savingsGoal(userId: string, { targetCents, months, accountId, today = todayUtc() }: SavingsGoalQuery): Promise<SavingsGoalDto> {

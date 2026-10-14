@@ -131,6 +131,8 @@ export interface CashflowInput {
   excludedRecurrenceIds?: string[];
   extraRecurrences?: CashflowRecurrenceInput[];
   oneOffs?: CashflowOneOffInput[];
+  /** Plancher : la réponse porte alors `allowance` (endDate > startDate exigé). */
+  floor?: CashflowFloorInput;
   /** Jour du client ; absent ⇒ jour du serveur (UTC). */
   today?: LocalDate;
 }
@@ -168,4 +170,63 @@ export interface CashflowDto {
   items: CashflowItemDto[];
   /** startDate, chaque jour portant un mouvement, puis endDate. */
   points: ProjectionPointDto[];
+  /** Présente si un plancher est fixé. */
+  allowance?: AllowanceDto;
+}
+
+// Plancher et enveloppe dépensable (SPEC §6.2, PLAN E34). Périodes glissantes depuis startDate :
+// ]startDate + k périodes, startDate + (k+1) périodes] ; la dernière, coupée par endDate, est proratisée en jours.
+export type AllowancePeriod = 'MONTH' | 'WEEK';
+
+export interface CashflowFloorInput {
+  /** Solde plancher, entier de −10¹¹ à 10¹¹ (négatif : découvert accepté). */
+  floorCents: number;
+  period: AllowancePeriod;
+}
+
+export interface AllowanceDto {
+  floorCents: number;
+  period: AllowancePeriod;
+  /** Nombre de périodes de ]startDate, endDate], la dernière éventuellement partielle. */
+  periods: number;
+  /** Période en cours (index à partir de 0, jours from à to inclus) : celle qui contient today, ou la première si la simulation n'a pas commencé. */
+  current: { index: number; from: LocalDate; to: LocalDate };
+  /**
+   * Enveloppe de la période en cours, ≥ 0, arrondie au centime inférieur :
+   * (solde projeté en fin − plancher + dépenses de la période en cours) réparti sur les périodes restantes.
+   * Le reliquat (ou le dépassement) des périodes écoulées est ainsi réparti sur les suivantes.
+   */
+  periodCents: number;
+  /** Dépenses ponctuelles réelles de la période en cours (débits saisis, hors récurrences, virements et solde de départ). */
+  spentCents: number;
+  /** periodCents − spentCents ; négatif en cas de dépassement. */
+  remainingCents: number;
+  /** Alerte : le solde projeté en fin de simulation est sous le plancher. */
+  belowFloor: boolean;
+}
+
+// Simulation sauvegardée (suivie dans le temps). `startDate` est figée à l'enregistrement : elle ancre les périodes.
+export type CashflowSimulationParams = Omit<CashflowInput, 'today' | 'startDate'> & { startDate: LocalDate };
+
+export interface CashflowSimulationDto {
+  id: string;
+  name: string;
+  params: CashflowSimulationParams;
+  version: number;
+}
+
+// POST /cashflow-simulations. Mêmes validations que POST /simulations/cashflow ; startDate absente ⇒ today.
+export interface CreateCashflowSimulationInput {
+  /** 1 à CASHFLOW_LIMITS.maxNameLength caractères. */
+  name: string;
+  params: Omit<CashflowInput, 'today'>;
+  today?: LocalDate;
+}
+
+// PATCH /cashflow-simulations/:id. `version` périmée ⇒ 409.
+export interface UpdateCashflowSimulationInput {
+  version: number;
+  name?: string;
+  params?: Omit<CashflowInput, 'today'>;
+  today?: LocalDate;
 }

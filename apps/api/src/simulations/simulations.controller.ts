@@ -1,7 +1,9 @@
 import { Body, Controller, Get, HttpCode, Post, Query, UseGuards } from '@nestjs/common';
 import {
+  AllowancePeriod,
   CASHFLOW_LIMITS,
   CashflowDto,
+  CashflowFloorInput,
   CashflowInput,
   CashflowOneOffInput,
   CashflowRecurrenceInput,
@@ -25,6 +27,7 @@ import {
   ArrayUnique,
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -190,7 +193,18 @@ class CashflowRecurrenceDto implements CashflowRecurrenceInput {
   endDate?: LocalDate | null;
 }
 
-export class CashflowBodyDto implements CashflowInput {
+class CashflowFloorDto implements CashflowFloorInput {
+  @IsInt()
+  @Min(-maxAmountCents)
+  @Max(maxAmountCents)
+  floorCents!: number;
+
+  @IsIn(['MONTH', 'WEEK'])
+  period!: AllowancePeriod;
+}
+
+// Paramètres d'une simulation de trésorerie, partagés par l'appel direct et la sauvegarde (E34).
+export class CashflowParamsDto implements Omit<CashflowInput, 'today'> {
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(maxAccounts)
@@ -225,6 +239,13 @@ export class CashflowBodyDto implements CashflowInput {
   @Type(() => CashflowOneOffDto)
   oneOffs?: CashflowOneOffDto[];
 
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CashflowFloorDto)
+  floor?: CashflowFloorDto;
+}
+
+export class CashflowBodyDto extends CashflowParamsDto implements CashflowInput {
   @IsOptional()
   @IsLocalDate()
   today?: LocalDate;

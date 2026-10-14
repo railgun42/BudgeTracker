@@ -22,7 +22,7 @@ Tout est centralisé dans la constante `EDITOR` de `legal-pages.ts` (valeurs `[�
 | Traitement | Données | Base légale | Conservation | Source dans le code |
 |---|---|---|---|---|
 | Compte utilisateur | e-mail, nom, dernière connexion, hash Argon2id ou identifiant Google | Contrat | Durée du compte | `prisma/schema.prisma` (User, Credential, OAuthIdentity) |
-| Suivi financier | comptes, transactions, catégories, tags, récurrences, taux, scénarios | Contrat | Durée du compte ; éléments supprimés purgés après 30 j | `jobs/purge.job.ts` (`PURGE_AFTER_DAYS`) |
+| Suivi financier | comptes, transactions, catégories, tags, récurrences, taux, scénarios et simulations sauvegardées | Contrat | Durée du compte ; éléments supprimés purgés après 30 j | `jobs/purge.job.ts` (`PURGE_AFTER_DAYS`) |
 | Pièces jointes | images / PDF (5 Mo, quota 200 Mo) | Contrat | Avec la transaction ; purge S3 | `attachments/`, `storage/` |
 | E-mails de service | e-mail, jeton haché | Contrat | Vérification 24 h, reset 30 min | `auth/auth.service.ts`, `auth/password-reset.service.ts` |
 | Session | cookies `access_token` (15 min), `refresh_token` (30 j), `csrf_token`, `oauth_state` (10 min) | Strictement nécessaire | Voir durées | `common/cookies.ts` |

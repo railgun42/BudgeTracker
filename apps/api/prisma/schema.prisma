@@ -50,22 +50,23 @@ model User {
   // Preuve du consentement aux CGU (date + version acceptée). Nul : comptes antérieurs à E29b.
   termsAcceptedAt   DateTime? @db.Timestamptz(3)
   termsVersion      String?
-  createdAt        DateTime  @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
 
-  credential      Credential?
-  oauthIdentities OAuthIdentity[]
-  emailTokens     EmailToken[]
-  refreshTokens   RefreshToken[]
-  accounts        Account[]
-  transfers       Transfer[]
-  transactions    Transaction[]
-  categories      Category[]
-  tags            Tag[]
-  attachments     Attachment[]
-  recurrences     Recurrence[]
-  interestRates   InterestRate[]
-  scenarios       Scenario[]
+  credential          Credential?
+  oauthIdentities     OAuthIdentity[]
+  emailTokens         EmailToken[]
+  refreshTokens       RefreshToken[]
+  accounts            Account[]
+  transfers           Transfer[]
+  transactions        Transaction[]
+  categories          Category[]
+  tags                Tag[]
+  attachments         Attachment[]
+  recurrences         Recurrence[]
+  interestRates       InterestRate[]
+  scenarios           Scenario[]
+  cashflowSimulations CashflowSimulation[]
 }
 
 model Credential {
@@ -340,7 +341,7 @@ model InterestCredit {
   transactionId String?  @unique @db.Uuid
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
 
-  account     Account     @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account     Account      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   @@unique([accountId, year])
@@ -351,6 +352,22 @@ model Scenario {
   userId    String   @db.Uuid
   name      String
   // Validé par un DTO à union discriminée (E27), jamais du JSON libre.
+  params    Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Simulation de trésorerie sauvegardée (E34), relue avec les dépenses réelles.
+model CashflowSimulation {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  name      String
+  // Validé par CashflowSimulationParamsDto à l'écriture, jamais du JSON libre.
   params    Json
   version   Int      @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(3)

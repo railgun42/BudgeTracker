@@ -156,6 +156,18 @@ const scenarioOfB = async ({ b }: TwoUsers) => {
   };
 };
 
+// Simulation de trésorerie sauvegardée par B sur son compte ; intacte = relue telle quelle par B.
+const cashflowSimulationOfB = async (users: TwoUsers) => {
+  const { id: accountId } = await accountOfB(users);
+  const params = { accountIds: [accountId], startDate: '2026-03-31', endDate: '2030-03-31', floor: { floorCents: 0, period: 'MONTH' } };
+  const { body } = await users.b.call('post', '/api/v1/cashflow-simulations').send({ name: 'Simulation de B', params, today: '2026-03-31' }).expect(201);
+  return {
+    id: body.id as string,
+    accountId,
+    intact: async () => expect((await users.b.call('get', `/api/v1/cashflow-simulations/${body.id}`).expect(200)).body).toEqual(body),
+  };
+};
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -478,6 +490,56 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await users.a.call('get', path(ownAccount, `${own.id},${id}`)).expect(404);
     await users.a.call('get', path(accountOfBId, own.id)).expect(404);
     await users.a.call('get', path(ownAccount, own.id)).expect(200);
+    await intact();
+  },
+  'GET /api/v1/cashflow-simulations': async (users) => {
+    const { id } = await cashflowSimulationOfB(users);
+    const { body } = await users.a.call('get', '/api/v1/cashflow-simulations').expect(200);
+    expect(body.map((s: { id: string }) => s.id)).not.toContain(id);
+  },
+  // Compte de B, ou récurrence de B décochée sur le compte de A ⇒ 404 ; rien n'est créé.
+  'POST /api/v1/cashflow-simulations': async (users) => {
+    const { id, accountId, intact } = await recurrenceOfB(users);
+    const ownAccount = await accountOfA(users);
+    const send = (params: object) =>
+      users.a.call('post', '/api/v1/cashflow-simulations').send({ name: 'A', params: { endDate: '2030-03-31', ...params }, today: '2026-03-31' });
+    const list = async () => (await users.a.call('get', '/api/v1/cashflow-simulations').expect(200)).body;
+    const before = await list();
+    await send({ accountIds: [accountId] }).expect(404);
+    await send({ accountIds: [ownAccount], excludedRecurrenceIds: [id] }).expect(404);
+    expect(await list()).toEqual(before);
+    const { body } = await send({ accountIds: [ownAccount] }).expect(201);
+    await users.b.call('get', `/api/v1/cashflow-simulations/${body.id}`).expect(404);
+    await intact();
+  },
+  'GET /api/v1/cashflow-simulations/:id': async (users) => {
+    const { id, intact } = await cashflowSimulationOfB(users);
+    await users.a.call('get', `/api/v1/cashflow-simulations/${id}`).expect(404);
+    await intact();
+  },
+  'GET /api/v1/cashflow-simulations/:id/result': async (users) => {
+    const { id, intact } = await cashflowSimulationOfB(users);
+    await users.a.call('get', `/api/v1/cashflow-simulations/${id}/result?today=2026-04-01`).expect(404);
+    expect((await users.b.call('get', `/api/v1/cashflow-simulations/${id}/result?today=2026-04-01`).expect(200)).body.allowance).toMatchObject({ periodCents: 0 });
+    await intact();
+  },
+  'PATCH /api/v1/cashflow-simulations/:id': async (users) => {
+    const { id, accountId, intact } = await cashflowSimulationOfB(users);
+    await users.a.call('patch', `/api/v1/cashflow-simulations/${id}`).send({ version: 1, name: 'Piraté' }).expect(404);
+    // Sa propre simulation, pointée vers le compte de B ⇒ 404.
+    const ownAccount = await accountOfA(users);
+    const params = { accountIds: [ownAccount], endDate: '2030-03-31' };
+    const { body: own } = await users.a.call('post', '/api/v1/cashflow-simulations').send({ name: 'A', params, today: '2026-03-31' }).expect(201);
+    await users.a
+      .call('patch', `/api/v1/cashflow-simulations/${own.id}`)
+      .send({ version: 1, params: { ...params, accountIds: [accountId] }, today: '2026-03-31' })
+      .expect(404);
+    expect((await users.a.call('get', `/api/v1/cashflow-simulations/${own.id}`).expect(200)).body).toEqual(own);
+    await intact();
+  },
+  'DELETE /api/v1/cashflow-simulations/:id': async (users) => {
+    const { id, intact } = await cashflowSimulationOfB(users);
+    await users.a.call('delete', `/api/v1/cashflow-simulations/${id}`).expect(404);
     await intact();
   },
   // Export de A : aucune donnée de B ; celui de B la contient.

@@ -237,6 +237,13 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Coexiste avec les scénarios « et si » (E27) ; leur retrait éventuel n'interviendra qu'une fois l'interface migrée (E35).
 - Tests : `src/simulations/engine/cashflow.spec.ts`, `test/e2e/cashflow.e2e-spec.ts` (dont comptage des lignes de toutes les tables avant/après, helper `test/helpers/row-counts.ts`), registre d'isolation.
 
+## Plancher et enveloppe dépensable (E34)
+
+- `POST /api/v1/simulations/cashflow` accepte `floor: { floorCents, period: 'MONTH' | 'WEEK' }` (plancher négatif = découvert accepté ; fin > début exigée) ; la réponse porte alors `allowance` : enveloppe de la période en cours = (solde projeté en fin − plancher + dépenses de la période en cours) / périodes restantes, arrondie au centime inférieur, `spentCents`, `remainingCents` (négatif = dépassement), `belowFloor` (solde projeté sous le plancher ⇒ enveloppe 0).
+- Périodes glissantes depuis la date de début (]début + k, début + k + 1]) ; la dernière, coupée par la fin, est proratisée en jours. Dépenses = débits saisis sur les comptes simulés, hors récurrences, virements et solde de départ, datés dans la période en cours (déjà passés ou à venir).
+- Simulations sauvegardées : `GET|POST /api/v1/cashflow-simulations`, `GET|PATCH|DELETE /api/v1/cashflow-simulations/:id` (paramètres validés comme l'appel direct, date de début figée à l'enregistrement, `version` périmée ⇒ 409, table `CashflowSimulation`, export RGPD). `GET /api/v1/cashflow-simulations/:id/result?today` relit la simulation avec le solde réel : les dépenses passées ont diminué le solde projeté, le reliquat d'une période écoulée se répartit donc sur les suivantes (100 €/mois, 50 € dépensés en février ⇒ 125 €/mois ensuite). Simulation terminée ⇒ 422 ; récurrence décochée puis supprimée ignorée.
+- Moteur pur [allowance.ts](apps/api/src/simulations/engine/allowance.ts). Tests : `src/simulations/engine/allowance.spec.ts`, `test/e2e/allowance.e2e-spec.ts`, registre d'isolation, export RGPD.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -279,7 +286,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E31 — Catégorie puis sous-catégorie, facultatives | ✅ |
 | E32 — Page 404 : libellé du bouton de retour | ✅ |
 | E33 — Simulation de trésorerie : moteur et API | ✅ |
-| E34 → E43 | ⏳ Évolutions après essai local (simulation), administration et communication, tableau de bord, style |
+| E34 — Plafond minimum et enveloppe dépensable | ✅ |
+| E35 → E43 | ⏳ Évolutions après essai local (simulation), administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

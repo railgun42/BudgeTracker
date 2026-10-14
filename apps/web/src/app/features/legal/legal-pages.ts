@@ -70,7 +70,7 @@ export class LegalNoticePage {
       <h2>Données collectées</h2>
       <ul>
         <li>Compte : adresse e-mail, nom, date de dernière connexion, mot de passe (stocké uniquement sous forme d’empreinte Argon2id) ou identifiant Google si vous vous connectez avec Google.</li>
-        <li>Données que vous saisissez : comptes, transactions, catégories, tags, récurrences, taux d’intérêt, scénarios de simulation.</li>
+        <li>Données que vous saisissez : comptes, transactions, catégories, tags, récurrences, taux d’intérêt, scénarios et simulations sauvegardées.</li>
         <li>Pièces jointes : justificatifs (images ou PDF) que vous choisissez d’ajouter.</li>
         <li>Données techniques : cookies de session et adresse IP utilisée pour limiter les tentatives de connexion. Les journaux techniques ne contiennent ni adresse e-mail ni montant.</li>
       </ul>

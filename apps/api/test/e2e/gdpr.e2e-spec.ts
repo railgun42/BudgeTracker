@@ -60,6 +60,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
         .expect(201)
     ).body;
     await user.call('post', '/api/v1/scenarios').send({ name: 'Netflix', params: { changes: [{ kind: 'SUBSCRIPTION', monthlyCents: 999 }] } }).expect(201);
+    await user.call('post', '/api/v1/cashflow-simulations').send({ name: 'Été', params: { accountIds: [account.id], endDate: '2030-08-31' } }).expect(201);
     // Sans endpoint de création directe : identité Google et crédit d'intérêts.
     await prisma.oAuthIdentity.create({ data: { userId: user.id, provider: 'google', providerId: randomUUID() } });
     await prisma.interestCredit.create({ data: { accountId: savings.id, year: 2025 } });
