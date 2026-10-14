@@ -224,6 +224,11 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Front : deux listes liées (catégorie, puis sous-catégorie filtrée) dans la saisie de transaction et de récurrence ; les catégories techniques (Intérêts, Espèces, Solde de départ, Virement) n'y sont pas proposées ([labels.ts](apps/web/src/app/shared-ui/labels.ts), `categoryOptions`).
 - Tests : `npm test -w api` (`test/e2e/optional-category.e2e-spec.ts`), `npm test -w web` (formulaires, historique, stats).
 
+## Page 404 (E32)
+
+- [not-found-page.ts](apps/web/src/app/shared-ui/not-found-page.ts) : le bouton de retour suit la session. Connecté ⇒ « Retour au tableau de bord » (`/`) ; non connecté ⇒ « Se connecter » (`/login`), car `/` y redirigerait de toute façon.
+- Tests : `npm test -w web` (`shared-ui/not-found-page.spec.ts`).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -264,7 +269,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E29c — Consentement CGU côté serveur (Google) | ✅ |
 | E30 — Transactions antérieures au solde de départ | ✅ |
 | E31 — Catégorie puis sous-catégorie, facultatives | ✅ |
-| E32 → E43 | ⏳ Évolutions après essai local (catégories, simulation), administration et communication, tableau de bord, style |
+| E32 — Page 404 : libellé du bouton de retour | ✅ |
+| E33 → E43 | ⏳ Évolutions après essai local (simulation), administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.
