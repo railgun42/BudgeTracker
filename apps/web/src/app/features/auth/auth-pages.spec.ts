@@ -89,6 +89,11 @@ describe('Connexion', () => {
     expect(google?.getAttribute('href')).toBe('/api/v1/auth/google');
   });
 
+  it('nouveau compte Google sans CGU (?error=google_terms) ⇒ renvoi vers l’inscription', async () => {
+    const el = await open('/login?error=google_terms');
+    expect(text(el, '[role="alert"]')).toContain('acceptez les CGU');
+  });
+
   it('retour Google refusé (?error=google_link_refused) ⇒ explication', async () => {
     const el = await open('/login?error=google_link_refused');
     expect(text(el, '[role="alert"]')).toContain('adresse Google doit être vérifiée');
@@ -164,6 +169,8 @@ describe('Inscription : consentement CGU', () => {
 
     el.querySelector<HTMLInputElement>('#signup-terms')!.click();
     expect(click()).toBe(false);
+    // L'API pose alors le cookie de consentement exigé pour créer le compte Google (E29c).
+    expect(google.getAttribute('href')).toBe('/api/v1/auth/google?terms=accepted');
   });
 });
 

@@ -1,7 +1,7 @@
-import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException, PreconditionFailedException, UnauthorizedException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { appUrl } from './auth.service';
+import { appUrl, TERMS_VERSION } from './auth.service';
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -78,7 +78,8 @@ export class GoogleService {
 
   // Liaison par e-mail uniquement s'il est vérifié des deux côtés (SPEC §5) : sinon un tiers ayant
   // pré-inscrit l'adresse d'une victime, ou un e-mail Google non prouvé, donnerait accès au compte d'autrui.
-  async resolveUser(profile: GoogleProfile): Promise<string> {
+  // Un nouveau compte exige le consentement CGU (E29c) ; un compte existant se connecte ou se lie sans.
+  async resolveUser(profile: GoogleProfile, termsAccepted = false): Promise<string> {
     const identity = { provider: PROVIDER, providerId: profile.sub };
     const linked = await this.prisma.oAuthIdentity.findUnique({ where: { provider_providerId: identity } });
     if (linked) return linked.userId;
@@ -90,9 +91,17 @@ export class GoogleService {
       await this.prisma.oAuthIdentity.create({ data: { userId: existing.id, ...identity } });
       return existing.id;
     }
+    if (!termsAccepted) throw new PreconditionFailedException('CGU non acceptées');
     const name = (profile.name?.trim() || profile.email.split('@')[0]).slice(0, 100);
     const user = await this.prisma.user.create({
-      data: { email: profile.email, name, emailVerifiedAt: new Date(), oauthIdentities: { create: identity } },
+      data: {
+        email: profile.email,
+        name,
+        emailVerifiedAt: new Date(),
+        termsAcceptedAt: new Date(),
+        termsVersion: TERMS_VERSION,
+        oauthIdentities: { create: identity },
+      },
     });
     return user.id;
   }

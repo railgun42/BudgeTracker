@@ -5,6 +5,8 @@ export const ACCESS_COOKIE = 'access_token';
 export const REFRESH_COOKIE = 'refresh_token';
 export const CSRF_COOKIE = 'csrf_token';
 export const OAUTH_COOKIE = 'oauth_state';
+// Consentement CGU donné sur la page d'inscription, exigé pour créer un compte via Google (mêmes options que oauth_state).
+export const TERMS_COOKIE = 'terms_consent';
 
 export const ACCESS_TTL_MS = 15 * 60_000;
 export const REFRESH_TTL_MS = 30 * 24 * 3600_000;

@@ -1,4 +1,5 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { PreconditionFailedException, UnauthorizedException } from '@nestjs/common';
+import { TERMS_VERSION } from './auth.service';
 import { GoogleProfile, GoogleService, profileFromIdToken } from './google.service';
 
 const NOW = Date.UTC(2026, 0, 1);
@@ -69,11 +70,29 @@ describe('GoogleService.resolveUser', () => {
     await expect(service.resolveUser(profile({ email: 'autre@example.com', emailVerified: false }))).resolves.toBe('u1');
   });
 
-  it('e-mail inconnu et vérifié ⇒ création d’un compte vérifié, sans mot de passe', async () => {
+  it('e-mail inconnu et vérifié, CGU acceptées ⇒ création d’un compte vérifié, sans mot de passe, consentement horodaté', async () => {
     const { prisma, service } = setup([]);
-    await expect(service.resolveUser(profile({ name: '  ' }))).resolves.toBe('new');
+    await expect(service.resolveUser(profile({ name: '  ' }), true)).resolves.toBe('new');
     expect(prisma.user.create).toHaveBeenCalledWith({
-      data: { email: 'ann@example.com', name: 'ann', emailVerifiedAt: expect.any(Date), oauthIdentities: { create: { provider: 'google', providerId: 'g1' } } },
+      data: {
+        email: 'ann@example.com',
+        name: 'ann',
+        emailVerifiedAt: expect.any(Date),
+        termsAcceptedAt: expect.any(Date),
+        termsVersion: TERMS_VERSION,
+        oauthIdentities: { create: { provider: 'google', providerId: 'g1' } },
+      },
     });
+  });
+
+  it('e-mail inconnu sans consentement CGU ⇒ refus, rien créé', async () => {
+    const { prisma, service } = setup([]);
+    await expect(service.resolveUser(profile())).rejects.toThrow(PreconditionFailedException);
+    expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it('compte existant ⇒ connexion ou liaison sans consentement CGU', async () => {
+    await expect(setup([verified]).service.resolveUser(profile())).resolves.toBe('u1');
+    await expect(setup([verified], [{ userId: 'u1', providerId: 'g1' }]).service.resolveUser(profile())).resolves.toBe('u1');
   });
 });

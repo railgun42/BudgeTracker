@@ -210,7 +210,8 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 ## Pages légales (E29)
 
 - Routes publiques `/mentions-legales`, `/confidentialite`, `/cgu` ([legal-pages.ts](apps/web/src/app/features/legal/legal-pages.ts)), liées dans le pied de page et à l'inscription. Identité de l'éditeur centralisée dans la constante `EDITOR` : **valeurs `[À compléter …]` à fournir et faire relire avant l'ouverture publique** (liste et registre des traitements : [docs/privacy/README.md](docs/privacy/README.md)).
-- Inscription par e-mail (E29b) : case « J'accepte les CGU » obligatoire, transmise à l'API (`acceptTerms: true` exigé, sinon 400) ; l'API enregistre `User.termsAcceptedAt` et `User.termsVersion` (constante `TERMS_VERSION` de `auth.service.ts`, à changer à chaque révision des CGU). Limite connue : l'inscription Google n'est pas encore contrôlée côté serveur (E29c, [PLAN](PLAN.md)).
+- Inscription par e-mail (E29b) : case « J'accepte les CGU » obligatoire, transmise à l'API (`acceptTerms: true` exigé, sinon 400) ; l'API enregistre `User.termsAcceptedAt` et `User.termsVersion` (constante `TERMS_VERSION` de `auth.service.ts`, à changer à chaque révision des CGU).
+- Inscription Google (E29c) : le bouton « S'inscrire avec Google » (case cochée) appelle `/api/v1/auth/google?terms=accepted`, l'API pose le cookie httpOnly/Secure/Lax `terms_consent` (10 min, valeur = `TERMS_VERSION`). Le callback l'exige pour tout *nouveau* compte (sinon redirection `/login?error=google_terms`, aucun compte créé) et renseigne `termsAcceptedAt`/`termsVersion` ; la connexion d'un compte existant n'en a pas besoin.
 - Tests : `features/legal/legal-pages.spec.ts`, `app.spec.ts` (pied de page, routes publiques), `features/auth/auth-pages.spec.ts` (consentement).
 
 ## État actuel
@@ -250,7 +251,7 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E32, plus E29b/E29c) :
 | E28 — Export (JSON/CSV) et suppression réelle du compte | ✅ |
 | E29 — Pages légales (mentions, confidentialité, CGU, pied de page, case CGU à l'inscription) | ✅ (contenu éditeur à compléter) |
 | E29b — Consentement CGU côté serveur (inscription e-mail) | ✅ |
-| E29c — Consentement CGU côté serveur (Google) | ⏳ |
+| E29c — Consentement CGU côté serveur (Google) | ✅ |
 | E30 → E32 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

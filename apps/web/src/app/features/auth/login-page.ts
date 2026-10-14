@@ -9,6 +9,8 @@ const GOOGLE_ERRORS: Record<string, string> = {
   google: 'La connexion avec Google a échoué. Réessayez.',
   google_link_refused:
     'Connexion Google refusée : votre adresse Google doit être vérifiée pour être liée à un compte existant.',
+  google_terms:
+    'Aucun compte n’est associé à cette adresse Google. Pour en créer un, passez par « Créer un compte » et acceptez les CGU.',
 };
 
 @Component({

@@ -91,8 +91,8 @@ import { emailValidators, errorMessage, passwordValidators } from './auth-form';
       </form>
 
       <p class="separator">ou</p>
-      <!-- Même consentement exigé pour l'inscription Google. -->
-      <a class="button button-secondary" href="/api/v1/auth/google" (click)="checkTerms($event)">S'inscrire avec Google</a>
+      <!-- Même consentement exigé pour l'inscription Google : l'API le mémorise en cookie httpOnly jusqu'au retour de Google. -->
+      <a class="button button-secondary" href="/api/v1/auth/google?terms=accepted" (click)="checkTerms($event)">S'inscrire avec Google</a>
 
       <p>Déjà un compte ? <a routerLink="/login">Se connecter</a></p>
     }

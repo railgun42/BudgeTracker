@@ -294,14 +294,15 @@ describe('Auth (e2e)', () => {
     });
 
     // Parcours navigateur : /auth/google → (Google) → /auth/google/callback, échange de code simulé.
-    const googleLogin = async (claims: object, tamper?: { state?: string; noCookie?: boolean }) => {
-      const start = await call('get', '/auth/google', { ip: newIp(), csrf: false }).expect(302);
+    // `terms` : bouton « S'inscrire avec Google » case CGU cochée (E29c).
+    const googleLogin = async (claims: object, tamper?: { state?: string; noCookie?: boolean; terms?: boolean }) => {
+      const start = await call('get', `/auth/google${tamper?.terms ? '?terms=accepted' : ''}`, { ip: newIp(), csrf: false }).expect(302);
       const authorize = new URL(start.headers.location);
-      const oauthState = jarOf(start).oauth_state;
+      const { oauth_state: oauthState, terms_consent: termsConsent } = jarOf(start);
       const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ id_token: idToken(claims) })));
       try {
         const state = tamper?.state ?? authorize.searchParams.get('state');
-        const cookies: Jar = tamper?.noCookie ? {} : { oauth_state: oauthState };
+        const cookies: Jar = tamper?.noCookie ? {} : { oauth_state: oauthState, ...(termsConsent && { terms_consent: termsConsent }) };
         const res = await call('get', `/auth/google/callback?code=abc&state=${state}`, { ip: newIp(), cookies, csrf: false }).expect(302);
         return { start, authorize, oauthState, res, fetchCalls: [...fetchSpy.mock.calls] };
       } finally {
@@ -312,7 +313,7 @@ describe('Auth (e2e)', () => {
     it('nouvel utilisateur : redirection avec state + PKCE, compte vérifié créé, session ouverte', async () => {
       const email = uniqueEmail();
       emails.push(email);
-      const { start, authorize, oauthState, res, fetchCalls } = await googleLogin(googleClaims(email));
+      const { start, authorize, oauthState, res, fetchCalls } = await googleLogin(googleClaims(email), { terms: true });
 
       expect(authorize.origin + authorize.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
       expect(authorize.searchParams.get('client_id')).toBe('test-client');
@@ -338,10 +339,51 @@ describe('Auth (e2e)', () => {
       expect(user.emailVerifiedAt).not.toBeNull();
       expect(user.credential).toBeNull();
       expect(user.oauthIdentities).toEqual([expect.objectContaining({ provider: 'google', providerId: `g-${email}` })]);
+      expect(user.termsAcceptedAt).not.toBeNull();
+      expect(user.termsVersion).toBe(TERMS_VERSION);
 
-      // Deuxième connexion : même compte, pas de doublon.
-      await googleLogin(googleClaims(email));
+      // Deuxième connexion (bouton « Continuer avec Google », sans consentement) : même compte, pas de doublon.
+      expect((await googleLogin(googleClaims(email))).res.headers.location).toBe(`${appUrl()}/`);
       expect(await prisma.oAuthIdentity.count({ where: { userId: user.id } })).toBe(1);
+    });
+
+    it('E29c — cookie de consentement : httpOnly, Secure, Lax, ≤ 10 min, à usage unique', async () => {
+      const email = uniqueEmail();
+      emails.push(email);
+      const { start, res } = await googleLogin(googleClaims(email), { terms: true });
+      const cookie = setCookies(start).find((c) => c.startsWith('terms_consent='))!;
+      expect(cookie).toMatch(/HttpOnly/);
+      expect(cookie).toMatch(/Secure/);
+      expect(cookie).toMatch(/SameSite=Lax/);
+      expect(Number(/Max-Age=(\d+)/.exec(cookie)![1])).toBeLessThanOrEqual(600);
+      // Effacé au retour de Google ; et effacé au départ d'un flux sans consentement.
+      expect(setCookies(res).find((c) => c.startsWith('terms_consent='))).toMatch(/Expires=Thu, 01 Jan 1970/);
+      const plain = await call('get', '/auth/google', { ip: newIp(), csrf: false }).expect(302);
+      expect(setCookies(plain).find((c) => c.startsWith('terms_consent='))).toMatch(/Expires=Thu, 01 Jan 1970/);
+    });
+
+    it('E29c — nouveau compte sans consentement CGU (ou cookie falsifié) ⇒ refus, aucun compte créé', async () => {
+      const email = uniqueEmail();
+      emails.push(email);
+      const { res } = await googleLogin(googleClaims(email));
+      expect(res.headers.location).toBe(`${appUrl()}/login?error=google_terms`);
+      expect(jarOf(res).access_token).toBeUndefined();
+
+      // Valeur autre que la version courante des CGU : pas une preuve de consentement.
+      const start = await call('get', '/auth/google', { ip: newIp(), csrf: false }).expect(302);
+      const state = new URL(start.headers.location).searchParams.get('state');
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({ id_token: idToken(googleClaims(email)) })));
+      try {
+        const forged = await call('get', `/auth/google/callback?code=abc&state=${state}`, {
+          ip: newIp(),
+          cookies: { oauth_state: jarOf(start).oauth_state, terms_consent: '1' },
+          csrf: false,
+        }).expect(302);
+        expect(forged.headers.location).toBe(`${appUrl()}/login?error=google_terms`);
+      } finally {
+        fetchSpy.mockRestore();
+      }
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
     });
 
     it('compte local vérifié + e-mail Google vérifié ⇒ liaison ; le mot de passe reste valable', async () => {
