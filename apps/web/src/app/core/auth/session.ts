@@ -24,6 +24,11 @@ export class Session {
     return this.api.post<UserDto>('/auth/login', credentials).pipe(tap((user) => this.current.set(user)));
   }
 
+  /** Suppression définitive du compte (RGPD) ; la session locale n'est vidée qu'en cas de succès. */
+  deleteAccount(): Observable<void> {
+    return this.api.delete('/me').pipe(tap(() => this.current.set(null)));
+  }
+
   logout(): Observable<void> {
     return this.api.post<void>('/auth/logout').pipe(finalize(() => this.current.set(null)));
   }

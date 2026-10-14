@@ -200,6 +200,13 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Front : page `/simulations` : liste, création et modification (version ⇒ 409 « rechargez »), comparaison côte à côte en courbes SVG (survol ou flèches du clavier ⇒ valeurs du mois) et en tableau.
 - Tests : `src/simulations/engine/scenario.spec.ts`, `test/e2e/scenarios.e2e-spec.ts` (dont comptage des lignes de toutes les tables avant/après), registre d'isolation, `features/simulations/simulations-page.spec.ts`.
 
+## Export et suppression de compte (E28)
+
+- `GET /api/v1/me/export?format=json|csv` : toutes les tables de l'utilisateur (lignes supprimées logiquement comprises), en un instantané cohérent ; exclus : secrets d'authentification (`Credential`, `EmailToken`, `RefreshToken`) et clés S3. CSV : une section par table (titre, en-tête, lignes), séparateur `;`, UTF-8 avec BOM ([gdpr.service.ts](apps/api/src/gdpr/gdpr.service.ts)).
+- `DELETE /api/v1/me` (CSRF exigé) : suppression réelle par cascade BDD (sessions comprises), puis de tout le préfixe S3 `attachments/<userId>/` (orphelins compris) ; cookies effacés. `JwtAuthGuard` refuse le jeton d'accès d'un utilisateur qui n'existe plus (401).
+- Front : page `/me` « Mon compte » : export JSON/CSV, suppression confirmée par la saisie de `SUPPRIMER`.
+- Tests : `test/e2e/gdpr.e2e-spec.ts` (toutes les tables exportées, rien d'un autre ; après suppression, comptage SQL à 0 sur toutes les tables portant `userId`, objets S3 absents, cookies invalides), registre d'isolation, `features/my-account/my-account-page.spec.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
@@ -234,6 +241,7 @@ Avancement selon [PLAN.md](PLAN.md) (32 étapes, E0 à E32) :
 | E25 — Calculateurs crédit et placement (purs, endpoints sans BDD) | ✅ |
 | E26 — Projection du solde et objectifs d'épargne (purs) | ✅ |
 | E27 — Scénarios « et si » et comparaison | ✅ |
-| E28 → E32 | ⏳ RGPD, déploiement |
+| E28 — Export (JSON/CSV) et suppression réelle du compte | ✅ |
+| E29 → E32 | ⏳ Pages légales, déploiement |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

@@ -50,6 +50,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/simulations/simulations-page').then((m) => m.SimulationsPage),
   },
   {
+    path: 'me',
+    title: 'Mon compte',
+    ...authed,
+    loadComponent: () => import('./features/my-account/my-account-page').then((m) => m.MyAccountPage),
+  },
+  {
     path: 'login',
     title: 'Connexion',
     loadComponent: () => import('./features/auth/login-page').then((m) => m.LoginPage),

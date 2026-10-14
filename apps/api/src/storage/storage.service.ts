@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { CreateBucketCommand, DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, HeadObjectCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // Durée de validité d'une URL signée (SPEC §4 : courte, objets jamais publics).
@@ -48,6 +48,16 @@ export class StorageService implements OnModuleInit {
 
   async delete(key: string): Promise<void> {
     await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  // Tous les objets sous un préfixe (suppression de compte : orphelins compris).
+  async deletePrefix(prefix: string): Promise<void> {
+    let token: string | undefined;
+    do {
+      const page = await this.s3.send(new ListObjectsV2Command({ Bucket: this.bucket, Prefix: prefix, ContinuationToken: token }));
+      await Promise.all((page.Contents ?? []).map((o) => this.delete(o.Key!)));
+      token = page.NextContinuationToken;
+    } while (token);
   }
 
   // Content-Type imposé par le serveur (détecté à l'upload), jamais celui annoncé par le client.

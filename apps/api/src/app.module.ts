@@ -7,6 +7,8 @@ import { AuthModule } from './auth/auth.module';
 import { BalanceModule } from './balance/balance.module';
 import { CategoriesModule } from './categories/categories.module';
 import { CsrfGuard } from './common/csrf.guard';
+import { GdprController } from './gdpr/gdpr.controller';
+import { GdprService } from './gdpr/gdpr.service';
 import { HealthController } from './health/health.controller';
 import { InterestModule } from './interest/interest.module';
 import { InterestJob } from './jobs/interest.job';
@@ -27,8 +29,8 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule, RecurrencesModule, InterestModule, StorageModule, AttachmentsModule, StatsModule],
-  controllers: [HealthController, UsersController, SimulationsController, ScenariosController],
+  controllers: [HealthController, UsersController, SimulationsController, ScenariosController, GdprController],
   // CSRF global : toute nouvelle route non sûre est protégée par défaut.
-  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, ScenariosService],
+  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, ScenariosService, GdprService],
 })
 export class AppModule {}

@@ -22,6 +22,7 @@ export class App {
     { path: '/recurrences', label: 'Récurrences', exact: false },
     { path: '/stats', label: 'Statistiques', exact: false },
     { path: '/simulations', label: 'Simulations', exact: false },
+    { path: '/me', label: 'Mon compte', exact: false },
   ];
 
   protected logout(): void {

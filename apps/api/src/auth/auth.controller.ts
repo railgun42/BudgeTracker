@@ -76,7 +76,7 @@ export function setSession(res: Response, { access, refresh }: Session): void {
   if (refresh) res.cookie(REFRESH_COOKIE, refresh, refreshCookie);
 }
 
-function clearSession(res: Response): void {
+export function clearSession(res: Response): void {
   // Express 5 ignore maxAge ici ; le path doit correspondre à celui du cookie posé.
   res.clearCookie(ACCESS_COOKIE, accessCookie).clearCookie(REFRESH_COOKIE, refreshCookie);
 }

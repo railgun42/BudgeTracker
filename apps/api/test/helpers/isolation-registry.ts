@@ -468,4 +468,22 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await users.a.call('get', path(ownAccount, own.id)).expect(200);
     await intact();
   },
+  // Export de A : aucune donnée de B ; celui de B la contient.
+  'GET /api/v1/me/export': async (users) => {
+    const { id, accountId, intact } = await transactionOfB(users);
+    for (const format of ['json', 'csv']) {
+      const text = (await users.a.call('get', `/api/v1/me/export?format=${format}`).expect(200)).text;
+      for (const other of [users.b.id, id, accountId]) expect(text).not.toContain(other);
+      expect((await users.b.call('get', `/api/v1/me/export?format=${format}`).expect(200)).text).toContain(id);
+    }
+    await intact();
+  },
+  // En dernier : A n'existe plus ensuite (toute entrée ajoutée après échouerait en 401).
+  'DELETE /api/v1/me': async (users) => {
+    const { intact } = await transactionOfB(users);
+    await users.a.call('delete', '/api/v1/me').expect(204);
+    await users.a.call('get', '/api/v1/me').expect(401);
+    expect((await users.b.call('get', '/api/v1/me').expect(200)).body.id).toBe(users.b.id);
+    await intact();
+  },
 };

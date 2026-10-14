@@ -41,6 +41,7 @@ describe('Shell', () => {
       ['Récurrences', '/recurrences'],
       ['Statistiques', '/stats'],
       ['Simulations', '/simulations'],
+      ['Mon compte', '/me'],
     ]);
     expect(el.querySelector('.skip-link')?.getAttribute('href')).toBe('#main');
     expect(el.querySelector('main#main router-outlet')).not.toBeNull();
@@ -91,6 +92,7 @@ describe('Routes', () => {
     ['/history', 'Historique des transactions'],
     ['/stats', 'Statistiques'],
     ['/simulations', 'Simulations'],
+    ['/me', 'Mon compte'],
     ['/login', 'Connexion'],
     ['/signup', 'Créer un compte'],
     ['/forgot-password', 'Mot de passe oublié'],
