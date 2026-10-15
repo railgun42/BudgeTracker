@@ -46,6 +46,7 @@ describe('Pages légales', () => {
     expect(text).toContain('sauvegardes chiffrées qui les contiennent expirent sous 30 jours');
     expect(text).toContain('L’administrateur du service peut donc techniquement y accéder');
     expect(text).toContain('Retours (« Donner mon avis ») : 30 jours après leur traitement, 90 jours au plus');
+    expect(text).toContain('Notifications et état de lecture des annonces : jusqu’à la suppression de votre compte');
     expect(text).toContain('OVH');
     expect(el.querySelector('a[href="/me"]')).not.toBeNull();
   });

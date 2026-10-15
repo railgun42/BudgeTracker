@@ -61,6 +61,7 @@ describe('AdminPage', () => {
     expect(v['Purge des suppressions']).toMatch(/en échec$/);
     expect(clean(el.querySelector('a[href="/admin/categories"]')?.textContent)).toBe('Catégories globales');
     expect(clean(el.querySelector('a[href="/admin/feedback"]')?.textContent)).toBe('Retours utilisateurs');
+    expect(clean(el.querySelector('a[href="/admin/notifications"]')?.textContent)).toBe('Notifications et annonces');
   });
 
   it('Actualiser relance la requête ; une erreur s’affiche dans une alerte', async () => {

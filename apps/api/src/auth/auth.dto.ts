@@ -2,7 +2,7 @@ import { Transform, TransformFnParams } from 'class-transformer';
 import { Equals, IsEmail, IsString, Length, MaxLength } from 'class-validator';
 
 // Même normalisation que le CHECK User_email_lowercase.
-const normalizeEmail = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
+export const normalizeEmail = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
 
 export class SignupDto {
   @Transform(normalizeEmail)

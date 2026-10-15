@@ -74,6 +74,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/feedback/feedback-page').then((m) => m.FeedbackPage),
   },
   {
+    path: 'notifications',
+    title: 'Notifications',
+    ...authed,
+    loadComponent: () => import('./features/notifications/notifications-page').then((m) => m.NotificationsPage),
+  },
+  {
     path: 'admin',
     title: 'Administration',
     canActivate: [authGuard, adminGuard],
@@ -90,6 +96,12 @@ export const routes: Routes = [
     title: 'Retours utilisateurs',
     canActivate: [authGuard, adminGuard],
     loadComponent: () => import('./features/admin/feedback/admin-feedback-page').then((m) => m.AdminFeedbackPage),
+  },
+  {
+    path: 'admin/notifications',
+    title: 'Notifications et annonces',
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () => import('./features/admin/notifications/admin-notifications-page').then((m) => m.AdminNotificationsPage),
   },
   {
     path: 'login',

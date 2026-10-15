@@ -14,3 +14,4 @@ export * from './dto/simulation';
 export * from './dto/scenario';
 export * from './dto/admin';
 export * from './dto/feedback';
+export * from './dto/notification';

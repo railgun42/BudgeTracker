@@ -29,6 +29,7 @@ Tout est centralisé dans la constante `EDITOR` de `legal-pages.ts` (valeurs `[�
 | Sécurité | IP (limitation de débit), compteur d'échecs par compte | Intérêt légitime | En mémoire, ≤ 1 h | `auth/auth.module.ts`, `auth/auth.service.ts` |
 | Administration | rôle (`USER`/`ADMIN`), journal des actions d'administration : auteur, action, cible, date (ni e-mail ni montant) ; statistiques en agrégats seulement | Intérêt légitime (sécurité, traçabilité) | Durée du compte de l'administrateur ; à sa suppression l'entrée reste sans auteur | `prisma/schema.prisma` (User.role, AdminAuditLog), `admin/` |
 | Retours utilisateurs | type, texte, dates d'envoi et de traitement ; l'administrateur les lit sans l'auteur ni son e-mail | Intérêt légitime (amélioration du service) | 30 j après traitement, 90 j au plus sinon (`FEEDBACK_RETENTION`, shared) ; avec le compte | `prisma/schema.prisma` (Feedback), `feedback/`, `jobs/purge.job.ts` |
+| Notifications | notifications personnelles (texte, dates d'envoi et de lecture), lecture des annonces (date) ; les annonces elles-mêmes sont communes à tous | Exécution du contrat (information des utilisateurs) | Durée du compte | `prisma/schema.prisma` (Notification, AnnouncementRead), `notifications/` |
 | Sauvegardes | copie chiffrée de la base | Intérêt légitime | 30 jours (SPEC §12) | E45 |
 
 Suppression de compte : effacement immédiat en base, des objets S3 et des sessions (`gdpr/`) ;

@@ -34,6 +34,8 @@ export const adminRoutes = [
   'PATCH /api/v1/admin/categories/:id',
   'GET /api/v1/admin/feedback',
   'POST /api/v1/admin/feedback/:id/treat',
+  'POST /api/v1/admin/announcements',
+  'POST /api/v1/admin/notifications',
 ];
 
 // Compte créé par B ; vérifie ensuite qu'il est resté intact pour B.
@@ -574,6 +576,21 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
   'POST /api/v1/feedback': async ({ a, b }) => {
     const { body } = await a.call('post', '/api/v1/feedback').send({ type: 'OPINION', message: 'Avis de A' }).expect(201);
     expect((await b.call('get', '/api/v1/feedback').expect(200)).body.map((f: { id: string }) => f.id)).not.toContain(body.id);
+  },
+  // Notifications : la notification personnelle de B n'apparaît que chez B, A ne peut pas la marquer lue.
+  'GET /api/v1/notifications': async ({ a, b, prisma }) => {
+    const { id } = await prisma.notification.create({ data: { userId: b.id, message: 'Pour B' } });
+    const ofA = (await a.call('get', '/api/v1/notifications').expect(200)).body;
+    expect(ofA.items.map((n: { id: string }) => n.id)).not.toContain(id);
+    // Même instantané : la pastille de A compte exactement ses non lues.
+    expect(ofA.unreadCount).toBe(ofA.items.filter((n: { read: boolean }) => !n.read).length);
+    expect((await b.call('get', '/api/v1/notifications').expect(200)).body.items).toContainEqual({ id, kind: 'PERSONAL', message: 'Pour B', createdAt: expect.any(String), read: false });
+  },
+  'POST /api/v1/notifications/:id/read': async ({ a, b, prisma }) => {
+    const { id } = await prisma.notification.create({ data: { userId: b.id, message: 'Pour B' } });
+    await a.call('post', `/api/v1/notifications/${id}/read`).expect(404);
+    expect(await prisma.notification.findUniqueOrThrow({ where: { id } })).toMatchObject({ userId: b.id, readAt: null });
+    await b.call('post', `/api/v1/notifications/${id}/read`).expect(204);
   },
   // Export de A : aucune donnée de B ; celui de B la contient.
   'GET /api/v1/me/export': async (users) => {

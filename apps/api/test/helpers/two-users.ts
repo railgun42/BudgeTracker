@@ -16,6 +16,8 @@ export interface TestUser {
 export interface TwoUsers {
   a: TestUser;
   b: TestUser;
+  // Données sans route de création utilisateur (ex. notification personnelle, envoyée par l'admin).
+  prisma: PrismaService;
   cleanup(): Promise<void>;
 }
 
@@ -31,5 +33,5 @@ export async function createTwoUsers(app: INestApplication): Promise<TwoUsers> {
   };
   const [a, b] = await Promise.all([make('A'), make('B')]);
   // Cascade : sessions et données métier partent avec l'utilisateur.
-  return { a, b, cleanup: async () => void (await prisma.user.deleteMany({ where: { id: { in: [a.id, b.id] } } })) };
+  return { a, b, prisma, cleanup: async () => void (await prisma.user.deleteMany({ where: { id: { in: [a.id, b.id] } } })) };
 }

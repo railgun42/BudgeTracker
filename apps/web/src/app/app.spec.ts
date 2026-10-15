@@ -49,6 +49,10 @@ describe('Shell', () => {
     expect(el.querySelector('.skip-link')?.getAttribute('href')).toBe('#main');
     expect(el.querySelector('main#main router-outlet')).not.toBeNull();
     expect(el.querySelector('header button')?.textContent).toContain('Se déconnecter');
+    // Cloche hors de la navigation principale, alimentée par GET /notifications.
+    TestBed.inject(HttpTestingController).match('/api/v1/notifications').forEach((r) => r.flush({ unreadCount: 2, items: [] }));
+    await fixture.whenStable();
+    expect(el.querySelector('header a[href="/notifications"]')?.getAttribute('aria-label')).toBe('Notifications (2 non lues)');
   });
 
   it('lien Administration : absent pour un utilisateur ordinaire, présent pour un admin', async () => {
@@ -123,6 +127,7 @@ describe('Routes', () => {
     ['/simulations', 'Simulations'],
     ['/me', 'Mon compte'],
     ['/feedback', 'Donner mon avis'],
+    ['/notifications', 'Notifications'],
     ['/login', 'Connexion'],
     ['/signup', 'Créer un compte'],
     ['/forgot-password', 'Mot de passe oublié'],

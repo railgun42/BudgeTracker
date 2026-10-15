@@ -3,11 +3,12 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { Role } from '@budgetracker/shared';
 import { finalize } from 'rxjs';
 import { Session } from './core/auth/session';
+import { NotificationBell } from './features/notifications/notification-bell';
 
 // Shell mobile-first : barre de navigation en bas sur mobile, dans l'en-tête dès 768px.
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NotificationBell],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './app.html',
   styleUrl: './app.scss',

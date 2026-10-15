@@ -15,7 +15,8 @@ import { createTwoUsers, TestUser, TwoUsers } from '../helpers/two-users';
 // E28 — export JSON/CSV et suppression réelle du compte (BDD + S3 + sessions), contre Postgres et MinIO.
 const PDF = Buffer.from('%PDF-1.4 %%EOF', 'latin1');
 // Exclues de l'export : secrets d'authentification (hashes).
-const NOT_EXPORTED = ['Credential', 'EmailToken', 'RefreshToken'];
+// Announcement : commune à tous, pas une donnée de l'utilisateur (ses lectures sont exportées).
+const NOT_EXPORTED = ['Credential', 'EmailToken', 'RefreshToken', 'Announcement'];
 
 describe('RGPD — export et suppression de compte (e2e)', () => {
   let app: INestApplication;
@@ -35,6 +36,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
 
   afterAll(async () => {
     await users?.cleanup();
+    await prisma.announcement.deleteMany({ where: { message: 'Annonce RGPD' } });
     await app.close();
   });
 
@@ -64,7 +66,11 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
     await user.call('post', '/api/v1/scenarios').send({ name: 'Netflix', params: { changes: [{ kind: 'SUBSCRIPTION', monthlyCents: 999 }] } }).expect(201);
     await user.call('post', '/api/v1/cashflow-simulations').send({ name: 'Été', params: { accountIds: [account.id], endDate: '2030-08-31' } }).expect(201);
     await user.call('post', '/api/v1/feedback').send({ type: 'IDEA', message: 'Un mode sombre' }).expect(201);
-    // Sans endpoint de création directe : identité Google et crédit d'intérêts.
+    // Annonce datée de 2000 : invisible pour tous les utilisateurs de test (inscrits après), lecture insérée directement.
+    const announcement = await prisma.announcement.create({ data: { message: 'Annonce RGPD', createdAt: new Date('2000-01-01T00:00:00Z') } });
+    await prisma.announcementRead.create({ data: { userId: user.id, announcementId: announcement.id } });
+    // Sans endpoint de création directe : identité Google, crédit d'intérêts, notification (envoyée par l'admin).
+    await prisma.notification.create({ data: { userId: user.id, message: 'Bienvenue' } });
     await prisma.oAuthIdentity.create({ data: { userId: user.id, provider: 'google', providerId: randomUUID() } });
     await prisma.interestCredit.create({ data: { accountId: savings.id, year: 2025 } });
     await prisma.adminAuditLog.create({ data: { adminId: user.id, action: 'TEST' } });
@@ -100,6 +106,8 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(data.InterestCredit).toEqual([expect.objectContaining({ accountId: a.savingsId, year: 2025 })]);
       expect(data.UserCategoryPreference).toEqual([expect.objectContaining({ hidden: true, customName: 'Épicerie' })]);
       expect(data.Attachment).toEqual([expect.objectContaining({ transactionId: a.txId, mime: 'application/pdf' })]);
+      expect(data.Notification).toEqual([expect.objectContaining({ userId: users.a.id, message: 'Bienvenue', readAt: null })]);
+      expect(data.AnnouncementRead).toEqual([expect.objectContaining({ userId: users.a.id, announcementId: expect.any(String) })]);
       expect(data.Feedback).toEqual([expect.objectContaining({ userId: users.a.id, type: 'IDEA', message: 'Un mode sombre', treatedAt: null })]);
 
       const text = JSON.stringify(data);

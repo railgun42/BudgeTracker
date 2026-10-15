@@ -7,6 +7,7 @@ import { AdminService } from './admin/admin.service';
 import { AdminCategoriesController } from './admin/categories.controller';
 import { AdminCategoriesService } from './admin/categories.service';
 import { AdminFeedbackController } from './admin/feedback.controller';
+import { AdminNotificationsController } from './admin/notifications.controller';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AuthModule } from './auth/auth.module';
 import { BalanceModule } from './balance/balance.module';
@@ -21,6 +22,8 @@ import { InterestModule } from './interest/interest.module';
 import { InterestJob } from './jobs/interest.job';
 import { PurgeJob } from './jobs/purge.job';
 import { RecurrenceJob } from './jobs/recurrence.job';
+import { NotificationsController } from './notifications/notifications.controller';
+import { NotificationsService } from './notifications/notifications.service';
 import { PrismaModule } from './prisma/prisma.module';
 import { RecurrencesModule } from './recurrences/recurrences.module';
 import { ScenariosController } from './scenarios/scenarios.controller';
@@ -38,8 +41,8 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule, RecurrencesModule, InterestModule, StorageModule, AttachmentsModule, StatsModule],
-  controllers: [HealthController, AdminController, AdminCategoriesController, AdminFeedbackController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, FeedbackController, GdprController],
+  controllers: [HealthController, AdminController, AdminCategoriesController, AdminFeedbackController, AdminNotificationsController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, FeedbackController, NotificationsController, GdprController],
   // CSRF global : toute nouvelle route non sûre est protégée par défaut.
-  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, AdminService, AdminCategoriesService, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, FeedbackService, GdprService],
+  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, AdminService, AdminCategoriesService, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, FeedbackService, NotificationsService, GdprService],
 })
 export class AppModule {}

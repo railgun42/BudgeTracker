@@ -84,6 +84,8 @@ model User {
   categoryPreferences UserCategoryPreference[]
   adminAuditLogs      AdminAuditLog[]
   feedbacks           Feedback[]
+  notifications       Notification[]
+  announcementReads   AnnouncementRead[]
 }
 
 // Journal des actions d'administration (SPEC §13.1) : qui, quoi, quand ; jamais de donnée financière ni d'e-mail.
@@ -444,4 +446,43 @@ model Feedback {
 
   @@index([userId, createdAt])
   @@index([createdAt])
+}
+
+// Annonce à tous (SPEC §13.6) : un seul enregistrement, l'état « lu » est suivi par utilisateur (AnnouncementRead).
+// Visible des seuls utilisateurs inscrits avant sa création. Ni auteur ni destinataire : l'auteur est au journal.
+model Announcement {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  // Texte brut, jamais interprété comme HTML.
+  message   String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  reads AnnouncementRead[]
+
+  @@index([createdAt])
+}
+
+model AnnouncementRead {
+  userId         String   @db.Uuid
+  announcementId String   @db.Uuid
+  readAt         DateTime @default(now()) @db.Timestamptz(3)
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@id([userId, announcementId])
+  @@index([announcementId])
+}
+
+// Notification personnelle (SPEC §13.6), envoyée par l'administrateur à un utilisateur précis.
+model Notification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @db.Uuid
+  // Texte brut, jamais interprété comme HTML.
+  message   String
+  readAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
