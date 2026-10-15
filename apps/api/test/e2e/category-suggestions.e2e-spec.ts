@@ -92,17 +92,22 @@ describe('Suggestions de catégorie (e2e)', () => {
     expect(JSON.stringify(await inbox())).not.toMatch(/@|userId/);
   });
 
-  it('acceptation : la globale existe chez tous, l’auteur reçoit la réponse ; journalisé ; non rejouable', async () => {
+  it('acceptation : la catégorie de l’auteur devient la globale (sans doublon, transactions gardées) ; l’auteur reçoit la réponse ; journalisé ; non rejouable', async () => {
     const name = unique('Escalade');
-    await suggest(b, { name, parentId: sportId, suggest: true }).expect(201);
+    const { body: own } = await suggest(b, { name, parentId: sportId, suggest: true, color: '#123456' }).expect(201);
+    const account = (await b.call('post', '/api/v1/accounts').send({ name: 'Courant', trackingType: 'NORMAL' }).expect(201)).body;
+    const tx = (await b.call('post', '/api/v1/transactions').send({ accountId: account.id, categoryId: sportId, subcategoryId: own.id, amountCents: 1500, date: '2026-10-01', name: 'Bloc' }).expect(201)).body;
     const [{ id }] = await mine(b);
     const reply = `J'ai vu ta suggestion de la catégorie ${name}, je l'ai ajoutée, merci !`;
 
     const { body } = await resolve(id, { decision: 'ACCEPTED', reply: `  ${reply} ` }).expect(200);
     expect(body).toMatchObject({ id, status: 'ACCEPTED', treatedAt: expect.stringMatching(/Z$/) });
-    const [global] = await globalsNamed(name);
-    expect(global).toMatchObject({ parentId: sportId, archivedAt: null });
-    for (const user of [a, b]) expect(await categories(user)).toContainEqual(expect.objectContaining({ id: global.id, name, system: true, parentId: sportId }));
+    // Même catégorie, devenue globale : une seule chez l'auteur, visible pour lui, couleur et transaction conservées.
+    expect(await globalsNamed(name)).toEqual([expect.objectContaining({ id: own.id, parentId: sportId, color: '#123456', archivedAt: null })]);
+    const ofB = (await categories(b)).filter((c) => c.name === name);
+    expect(ofB).toEqual([expect.objectContaining({ id: own.id, system: true, hidden: false, customName: null })]);
+    expect((await b.call('get', `/api/v1/transactions/${tx.id}`).expect(200)).body.categoryId).toBe(own.id);
+    await b.call('patch', `/api/v1/categories/${own.id}`).send({ name: 'Plus à moi' }).expect(403);
 
     const { items } = await notifications(b);
     expect(items).toContainEqual(expect.objectContaining({ kind: 'PERSONAL', message: reply, read: false }));
@@ -116,6 +121,49 @@ describe('Suggestions de catégorie (e2e)', () => {
     for (const decision of ['ACCEPTED', 'REJECTED', 'TREATED']) await resolve(id, { decision, reply: 'Encore' }).expect(409);
     expect(await globalsNamed(name)).toHaveLength(1);
     expect((await notifications(b)).items).toHaveLength(items.length);
+  });
+
+  it('autres utilisateurs : masquée par défaut s’ils étaient déjà inscrits (démasquable), visible pour les nouveaux inscrits', async () => {
+    const name = unique('Bénévolat');
+    const { body: own } = await suggest(b, { name, suggest: true }).expect(201);
+    const [{ id }] = await mine(b);
+    await resolve(id, { decision: 'ACCEPTED' }).expect(200);
+
+    const ofA = () => categories(a).then((list) => list.find((c) => c.id === own.id));
+    expect(await ofA()).toMatchObject({ name, system: true, hidden: true });
+    // Aucune ligne écrite pour les autres utilisateurs : seul l'auteur a une préférence.
+    expect(await prisma.userCategoryPreference.findMany({ where: { categoryId: own.id }, select: { userId: true, hidden: true } })).toEqual([{ userId: b.id, hidden: false }]);
+
+    expect((await a.call('put', `/api/v1/categories/${own.id}/preference`).send({ hidden: false }).expect(200)).body).toMatchObject({ hidden: false });
+    expect(await ofA()).toMatchObject({ hidden: false });
+    expect((await a.call('put', `/api/v1/categories/${own.id}/preference`).send({ hidden: true }).expect(200)).body).toMatchObject({ hidden: true });
+    expect(await prisma.userCategoryPreference.count({ where: { categoryId: own.id, userId: a.id } })).toBe(0); // retour au défaut
+
+    const later = await createTwoUsers(app);
+    try {
+      expect((await categories(later.a)).find((c) => c.id === own.id)).toMatchObject({ hidden: false });
+    } finally {
+      await later.cleanup();
+    }
+  });
+
+  it('auteur renommé ou ayant supprimé sa catégorie depuis : nom gardé pour lui seul, ou globale neuve', async () => {
+    const [renamed, deleted] = [unique('Avant'), unique('Supprimée')];
+    const { body: own } = await suggest(b, { name: renamed, suggest: true }).expect(201);
+    await b.call('patch', `/api/v1/categories/${own.id}`).send({ name: 'Mon nom à moi' }).expect(200);
+    const { body: gone } = await suggest(b, { name: deleted, suggest: true }).expect(201);
+    await b.call('delete', `/api/v1/categories/${gone.id}`).expect(204);
+    const byName = Object.fromEntries((await mine(b)).map((s) => [s.name, s.id]));
+
+    await resolve(byName[renamed], { decision: 'ACCEPTED' }).expect(200);
+    expect((await categories(b)).find((c) => c.id === own.id)).toMatchObject({ system: true, name: renamed, customName: 'Mon nom à moi', hidden: false });
+    expect((await categories(a)).find((c) => c.id === own.id)).toMatchObject({ name: renamed, customName: null, hidden: true });
+
+    await resolve(byName[deleted], { decision: 'ACCEPTED' }).expect(200);
+    const [fresh] = await globalsNamed(deleted);
+    expect(fresh.id).not.toBe(gone.id);
+    expect((await categories(b)).filter((c) => c.name === deleted)).toEqual([expect.objectContaining({ id: fresh.id, hidden: false })]);
+    expect((await categories(a)).find((c) => c.id === fresh.id)).toMatchObject({ hidden: true });
   });
 
   it('refus ⇒ aucune globale ; sans réponse ⇒ aucune notification ; traiter ⇒ statut seul', async () => {

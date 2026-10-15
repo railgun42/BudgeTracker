@@ -5,9 +5,9 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
   selector: 'app-undo-banner',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <p class="alert" role="status">
-      {{ message() }}
-      <button type="button" class="link-button" (click)="undo.emit()">Annuler</button>
+    <p class="alert undo-banner" role="status">
+      <span>{{ message() }}</span>
+      <button type="button" class="button button-secondary" (click)="undo.emit()">Annuler</button>
     </p>
   `,
 })

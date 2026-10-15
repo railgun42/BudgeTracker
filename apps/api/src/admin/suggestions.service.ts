@@ -1,6 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { CategorySuggestionStatus } from '@budgetracker/shared';
-import { CategorySuggestion } from '../generated/prisma/client';
+import { CategorySuggestion, Prisma } from '../generated/prisma/client';
 import { ResolveCategorySuggestionDto } from '../categories/categories.dto';
 import { notifyUser } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -30,10 +30,23 @@ export class AdminSuggestionsService {
       const suggestion = await tx.categorySuggestion.findUnique({ where: { id } });
       if (!suggestion) throw new NotFoundException();
       if (!count) throw new ConflictException('Suggestion déjà traitée');
-      if (decision === 'ACCEPTED') await this.categories.createIn(tx, adminId, { name: suggestion.name, parentId: suggestion.parentId });
+      if (decision === 'ACCEPTED') await this.accept(tx, adminId, suggestion);
       await tx.adminAuditLog.create({ data: { adminId, action: `CATEGORY_SUGGESTION_${decision}`, targetId: id } });
       if (reply) await notifyUser(tx, adminId, suggestion.userId, reply);
       return suggestion;
     });
+  }
+
+  // La catégorie perso de l'auteur devient la globale (pas de doublon chez lui) ; supprimée ou déplacée depuis ⇒
+  // globale neuve. Masquée par défaut pour les utilisateurs déjà inscrits (pas d'ajout inopiné dans leurs listes),
+  // visible pour l'auteur, qui garde pour lui seul le nom qu'il a pu lui donner depuis.
+  private async accept(tx: Prisma.TransactionClient, adminId: string, { userId, name, parentId, categoryId }: CategorySuggestion): Promise<void> {
+    const now = new Date();
+    const own = categoryId ? await tx.category.findFirst({ where: { id: categoryId, userId, parentId } }) : null;
+    const global = own
+      ? await this.categories.promoteIn(tx, adminId, own, name, now)
+      : await this.categories.createIn(tx, adminId, { name, parentId, hiddenForUsersBefore: now });
+    const customName = own && own.name !== name ? own.name : null;
+    await tx.userCategoryPreference.create({ data: { userId, categoryId: global.id, hidden: false, customName } });
   }
 }

@@ -35,6 +35,7 @@ describe('Administration : catégories globales (e2e)', () => {
 
   // Utilisateurs d'abord (leurs transactions partent en cascade), puis les globales créées et leur journal.
   afterEach(async () => {
+    await prisma.adminAuditLog.deleteMany({ where: { adminId: a.id } });
     await users.cleanup();
     await prisma.adminAuditLog.deleteMany({ where: { targetId: { in: [a.id, ...created] } } });
     await prisma.category.deleteMany({ where: { parentId: { in: created } } });
@@ -158,5 +159,63 @@ describe('Administration : catégories globales (e2e)', () => {
     await b.call('patch', `/api/v1/admin/categories/${root.id}`).send({ archived: true }).expect(403);
     expect(await prisma.category.count({ where: { name } })).toBe(0);
     expect(await logs(root.id)).toEqual([{ adminId: a.id, action: 'CATEGORY_CREATED' }]);
+  });
+
+  it('suppression : inutilisée ⇒ 204, disparaît pour tous, préférences emportées, journalisée', async () => {
+    const { body } = await create({ name: unique('Éphémère') }, 201);
+    await b.call('put', `/api/v1/categories/${body.id}/preference`).send({ hidden: true }).expect(200);
+    await a.call('delete', `/api/v1/admin/categories/${body.id}`).expect(204);
+    for (const user of [a, b]) expect((await list(user)).map((c) => c.id)).not.toContain(body.id);
+    expect(await prisma.userCategoryPreference.count({ where: { categoryId: body.id } })).toBe(0);
+    expect(await logs(body.id)).toEqual([
+      { adminId: a.id, action: 'CATEGORY_CREATED' },
+      { adminId: a.id, action: 'CATEGORY_DELETED' },
+    ]);
+    await a.call('delete', `/api/v1/admin/categories/${body.id}`).expect(404);
+  });
+
+  it('suppression refusée (409) si utilisée par une transaction (même supprimée), une récurrence ou une sous-catégorie, perso comprise', async () => {
+    const { body: account } = await b.call('post', '/api/v1/accounts').send({ name: 'Courant', trackingType: 'NORMAL' }).expect(201);
+    const { body: used } = await create({ name: unique('Utilisée') }, 201);
+    const { body: tx } = await b.call('post', '/api/v1/transactions').send({ accountId: account.id, categoryId: used.id, amountCents: 100, date: '2026-10-01', name: 'x' }).expect(201);
+    await b.call('delete', `/api/v1/transactions/${tx.id}`).expect(204);
+    await a.call('delete', `/api/v1/admin/categories/${used.id}`).expect(409);
+
+    const { body: templated } = await create({ name: unique('Récurrente') }, 201);
+    await b.call('post', '/api/v1/recurrences').send({ accountId: account.id, interval: 1, unit: 'MONTH', startDate: '2030-01-01', template: { categoryId: templated.id, amountCents: 900 } }).expect(201);
+    await a.call('delete', `/api/v1/admin/categories/${templated.id}`).expect(409);
+
+    const { body: parent } = await create({ name: unique('Parent') }, 201);
+    await b.call('post', '/api/v1/categories').send({ name: 'Sous perso', parentId: parent.id }).expect(201);
+    await a.call('delete', `/api/v1/admin/categories/${parent.id}`).expect(409);
+
+    expect(await prisma.category.count({ where: { id: { in: [used.id, templated.id, parent.id] } } })).toBe(3);
+  });
+
+  it('suppression : catégorie du seed ⇒ 422 (le seed la recréerait), technique ⇒ 422, perso ou inconnue ⇒ 404, non admin ⇒ 403', async () => {
+    const seeded = await prisma.category.findUniqueOrThrow({ where: { nameKey: 'sport' } });
+    const technical = await prisma.category.findUniqueOrThrow({ where: { nameKey: 'transfer' } });
+    await a.call('delete', `/api/v1/admin/categories/${seeded.id}`).expect(422);
+    await a.call('delete', `/api/v1/admin/categories/${technical.id}`).expect(422);
+    const { body: own } = await b.call('post', '/api/v1/categories').send({ name: 'Perso de B' }).expect(201);
+    await a.call('delete', `/api/v1/admin/categories/${own.id}`).expect(404);
+    await a.call('delete', '/api/v1/admin/categories/00000000-0000-4000-8000-000000000000').expect(404);
+    const { body } = await create({ name: unique('Protégée') }, 201);
+    await b.call('delete', `/api/v1/admin/categories/${body.id}`).expect(403);
+    expect(await prisma.category.count({ where: { id: { in: [seeded.id, own.id, body.id] } } })).toBe(3);
+  });
+
+  it('suppression : suggestion en attente dessous ⇒ 409 ; traitée ⇒ gardée sans parent', async () => {
+    const { body: parent } = await create({ name: unique('Parent sugg') }, 201);
+    const name = unique('Proposée');
+    await b.call('post', '/api/v1/categories').send({ name, parentId: parent.id, suggest: true }).expect(201);
+    const [s] = (await b.call('get', '/api/v1/categories/suggestions').expect(200)).body;
+    // La catégorie perso proposée est elle-même une sous-catégorie : la supprimer d'abord.
+    const own = (await list(b)).find((c) => c.name === name)!;
+    await b.call('delete', `/api/v1/categories/${own.id}`).expect(204);
+    await a.call('delete', `/api/v1/admin/categories/${parent.id}`).expect(409);
+    await a.call('post', `/api/v1/admin/category-suggestions/${s.id}/resolve`).send({ decision: 'REJECTED' }).expect(200);
+    await a.call('delete', `/api/v1/admin/categories/${parent.id}`).expect(204);
+    expect((await b.call('get', '/api/v1/categories/suggestions').expect(200)).body).toEqual([{ ...s, parentId: null, status: 'REJECTED', treatedAt: expect.any(String) }]);
   });
 });

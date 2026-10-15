@@ -4,8 +4,8 @@ import { Category, CategorySuggestion, UserCategoryPreference } from '../generat
 import { PrismaService } from '../prisma/prisma.service';
 import { CategoryPreferenceDto, CreateUserCategoryDto, UpdateCategoryDto } from './categories.dto';
 
-// `preferences` : celles de l'utilisateur courant seulement (0 ou 1 ligne).
-type WithPreferences = Category & { preferences?: UserCategoryPreference[] };
+// `preferences` : celles de l'utilisateur courant seulement (0 ou 1 ligne). `hiddenByDefault` : sans préférence.
+type WithPreferences = Category & { preferences?: UserCategoryPreference[]; hiddenByDefault?: boolean };
 
 export const toCategoryDto = ({ preferences: [pref] = [], ...c }: WithPreferences): CategoryDto => ({
   id: c.id,
@@ -14,7 +14,7 @@ export const toCategoryDto = ({ preferences: [pref] = [], ...c }: WithPreference
   nameKey: c.nameKey,
   name: c.name,
   color: c.color,
-  hidden: pref?.hidden ?? false,
+  hidden: pref?.hidden ?? c.hiddenByDefault ?? false,
   customName: pref?.customName ?? null,
   archived: c.archivedAt !== null,
 });
@@ -28,6 +28,9 @@ export const toSuggestionDto = ({ id, name, parentId, status, createdAt, treated
   treatedAt: treatedAt?.toISOString() ?? null,
 });
 
+// Globale issue d'une suggestion (E41) : masquée par défaut pour les utilisateurs inscrits avant son acceptation.
+const hiddenByDefault = ({ hiddenForUsersBefore }: Category, userCreatedAt: Date): boolean => hiddenForUsersBefore !== null && userCreatedAt < hiddenForUsersBefore;
+
 // Visibles : catégories système (userId NULL) + catégories perso de l'utilisateur.
 // Celle d'un autre utilisateur est indiscernable d'une catégorie absente (404).
 const visibleTo = (userId: string) => ({ OR: [{ userId: null }, { userId }] });
@@ -38,12 +41,16 @@ export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
   // Masquées comprises : l'historique et les stats en affichent encore le nom ; seules les listes de saisie les excluent (front).
-  list(userId: string): Promise<WithPreferences[]> {
-    return this.prisma.category.findMany({
-      where: visibleTo(userId),
-      include: { preferences: { where: { userId } } },
-      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-    });
+  async list(userId: string): Promise<WithPreferences[]> {
+    const [createdAt, categories] = await Promise.all([
+      this.signedUpAt(userId),
+      this.prisma.category.findMany({ where: visibleTo(userId), include: { preferences: { where: { userId } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
+    ]);
+    return categories.map((c) => ({ ...c, hiddenByDefault: hiddenByDefault(c, createdAt) }));
+  }
+
+  private async signedUpAt(userId: string): Promise<Date> {
+    return (await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { createdAt: true } })).createdAt;
   }
 
   private async visible(userId: string, id: string): Promise<Category> {
@@ -84,8 +91,9 @@ export class CategoriesService {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`suggestion:${userId}`}::text, 0))`;
       if ((await tx.categorySuggestion.count({ where: { userId, status: 'PENDING' } })) >= CATEGORY_SUGGESTION_MAX_PENDING)
         throw new HttpException(`${CATEGORY_SUGGESTION_MAX_PENDING} suggestions en attente au plus`, HttpStatus.TOO_MANY_REQUESTS);
-      await tx.categorySuggestion.create({ data: { userId, name, parentId } });
-      return tx.category.create({ data });
+      const category = await tx.category.create({ data });
+      await tx.categorySuggestion.create({ data: { userId, name, parentId, categoryId: category.id } });
+      return category;
     });
   }
 
@@ -103,14 +111,16 @@ export class CategoriesService {
     return this.prisma.category.update({ where: { id, userId }, data: { name, parentId, color } });
   }
 
-  // Masquer / renommer une catégorie système pour soi seul ; les valeurs par défaut suppriment la ligne.
+  // Masquer / renommer une catégorie système pour soi seul ; les valeurs par défaut suppriment la ligne
+  // (pour une globale masquée par défaut, « visible » est donc conservé en ligne).
   async setPreference(userId: string, categoryId: string, { hidden, customName = null }: CategoryPreferenceDto): Promise<WithPreferences> {
     const category = await this.visible(userId, categoryId);
     if (category.userId !== null) throw new UnprocessableEntityException('Catégorie personnelle : la modifier directement');
     const key = { userId_categoryId: { userId, categoryId } };
-    if (!hidden && customName === null) {
+    const byDefault = hiddenByDefault(category, await this.signedUpAt(userId));
+    if (hidden === byDefault && customName === null) {
       await this.prisma.userCategoryPreference.deleteMany({ where: { userId, categoryId } });
-      return category;
+      return { ...category, hiddenByDefault: byDefault };
     }
     const pref = await this.prisma.userCategoryPreference.upsert({ where: key, create: { userId, categoryId, hidden, customName }, update: { hidden, customName } });
     return { ...category, preferences: [pref] };

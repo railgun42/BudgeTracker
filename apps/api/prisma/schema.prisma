@@ -236,16 +236,19 @@ model Transaction {
 
 // userId NULL = catégorie système (nameKey traduisible) ; sinon perso (name).
 model Category {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String?   @db.Uuid
-  parentId   String?   @db.Uuid
-  nameKey    String?   @unique
-  name       String?
-  color      String?
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String?   @db.Uuid
+  parentId             String?   @db.Uuid
+  nameKey              String?   @unique
+  name                 String?
+  color                String?
   // Catégorie globale archivée par l'administrateur (SPEC §13.3) : hors des listes de saisie, reste sur les transactions.
-  archivedAt DateTime? @db.Timestamptz(3)
-  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  archivedAt           DateTime? @db.Timestamptz(3)
+  // Globale issue d'une suggestion acceptée (SPEC §13.5) : masquée par défaut pour les utilisateurs inscrits avant
+  // cette date (une préférence explicite l'emporte), visible pour ceux inscrits après.
+  hiddenForUsersBefore DateTime? @db.Timestamptz(3)
+  createdAt            DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
 
   user         User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent       Category?                @relation("CategoryTree", fields: [parentId], references: [id], onDelete: NoAction)
@@ -253,7 +256,8 @@ model Category {
   transactions Transaction[]
   templates    TransactionTemplate[]
   preferences  UserCategoryPreference[]
-  suggestions  CategorySuggestion[]
+  suggestions  CategorySuggestion[]     @relation("SuggestionParent")
+  suggestedAs  CategorySuggestion[]     @relation("SuggestionCategory")
 
   @@index([userId])
   @@index([parentId])
@@ -432,7 +436,6 @@ model CashflowSimulation {
   @@index([userId])
 }
 
-
 // Retour libre d'un utilisateur vers l'administrateur (SPEC §13.5). Statut dérivé de treatedAt (NULL = nouveau) :
 // une seule colonne, pas d'état incohérent possible. Purgé par jobs/purge.job.ts (FEEDBACK_RETENTION).
 model Feedback {
@@ -499,17 +502,21 @@ enum CategorySuggestionStatus {
 // Suggestion de catégorie globale (SPEC §13.5), posée à la création d'une catégorie perso. Parent : globale ou aucun.
 // L'administrateur la lit sans l'auteur ; sa réponse part en notification personnelle (Notification).
 model CategorySuggestion {
-  id        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String                   @db.Uuid
-  name      String
-  parentId  String?                  @db.Uuid
-  status    CategorySuggestionStatus @default(PENDING)
-  treatedAt DateTime?                @db.Timestamptz(3)
-  createdAt DateTime                 @default(now()) @db.Timestamptz(3)
+  id         String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String                   @db.Uuid
+  name       String
+  parentId   String?                  @db.Uuid
+  // Catégorie perso d'origine : promue globale à l'acceptation. NULL si l'auteur l'a supprimée depuis.
+  categoryId String?                  @db.Uuid
+  status     CategorySuggestionStatus @default(PENDING)
+  treatedAt  DateTime?                @db.Timestamptz(3)
+  createdAt  DateTime                 @default(now()) @db.Timestamptz(3)
 
-  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent Category? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   Category? @relation("SuggestionParent", fields: [parentId], references: [id], onDelete: SetNull)
+  category Category? @relation("SuggestionCategory", fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
+  @@index([categoryId])
 }

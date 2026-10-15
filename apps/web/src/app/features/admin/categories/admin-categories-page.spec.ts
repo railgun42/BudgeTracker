@@ -118,4 +118,31 @@ describe('Administration : catégories globales', () => {
     expect(await act(() => button('Restaurer Ancienne').click(), 'PATCH', `${URL}/a2`, { ...OLD, archived: false })).toEqual({ archived: false });
     expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('« Ancienne » restaurée.');
   });
+
+  it('supprimer : uniquement les catégories créées par l’admin, après confirmation ; utilisée (409) ⇒ invite à archiver', async () => {
+    expect(button('Supprimer Sport')).toBeUndefined(); // catégorie de base
+    button('Supprimer Aide sociale').click();
+    await stable();
+    expect(clean(el.querySelector('[role="group"] p')?.textContent)).toBe('Supprimer définitivement « Aide sociale » pour tous les utilisateurs ?');
+    button('Annuler').click();
+    await stable();
+    expect(el.querySelector('[role="group"]')).toBeNull();
+
+    button('Supprimer Aide sociale').click();
+    await stable();
+    button('Confirmer la suppression').click();
+    http.expectOne({ method: 'DELETE', url: `${URL}/a1` }).flush(null, { status: 409, statusText: 'Conflict' });
+    await stable();
+    expect(alertText()).toBe('« Aide sociale » est utilisée (transaction, récurrence, sous-catégorie ou suggestion en attente) : archivez-la plutôt.');
+
+    button('Supprimer Ancienne').click();
+    await stable();
+    button('Confirmer la suppression').click();
+    http.expectOne({ method: 'DELETE', url: `${URL}/a2` }).flush(null, { status: 204, statusText: 'No Content' });
+    http.expectOne(URL).flush([SPORT, LICENCE, TRANSFER, AIDE]);
+    await stable();
+    expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('« Ancienne » supprimée.');
+    expect(el.querySelector('.tree')?.textContent).not.toContain('Ancienne');
+    expect(alertText()).toBeUndefined();
+  });
 });

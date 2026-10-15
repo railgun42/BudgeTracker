@@ -43,12 +43,18 @@ describe('Shell', () => {
       ['Catégories', '/categories'],
       ['Statistiques', '/stats'],
       ['Simulations', '/simulations'],
+    ]);
+    // Menu du compte (popover) : compte, avis, déconnexion.
+    const menu = el.querySelector('header #account-menu[popover]');
+    expect([...menu!.querySelectorAll('a')].map((a) => [a.textContent?.trim(), a.getAttribute('href')])).toEqual([
       ['Mon compte', '/me'],
       ['Donner mon avis', '/feedback'],
     ]);
+    expect(el.querySelector('header button[popovertarget="account-menu"]')?.getAttribute('aria-label')).toBe('Menu du compte (Alice)');
+    expect(el.querySelector('header button[popovertarget="main-nav"]')).not.toBeNull();
     expect(el.querySelector('.skip-link')?.getAttribute('href')).toBe('#main');
     expect(el.querySelector('main#main router-outlet')).not.toBeNull();
-    expect(el.querySelector('header button')?.textContent).toContain('Se déconnecter');
+    expect(menu!.querySelector('button.logout')?.textContent).toContain('Se déconnecter');
     // Cloche hors de la navigation principale, alimentée par GET /notifications.
     TestBed.inject(HttpTestingController).match('/api/v1/notifications').forEach((r) => r.flush({ unreadCount: 2, items: [] }));
     await fixture.whenStable();
@@ -103,7 +109,7 @@ describe('Shell', () => {
     await restore(USER);
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
-    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('header button')!.click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('header button.logout')!.click();
 
     const req = TestBed.inject(HttpTestingController).expectOne('/api/v1/auth/logout');
     expect(req.request.method).toBe('POST');
@@ -113,6 +119,37 @@ describe('Shell', () => {
     expect(TestBed.inject(Session).user()).toBeNull();
     expect(TestBed.inject(Router).url).toBe('/login');
     expect((fixture.nativeElement as HTMLElement).querySelector('nav[aria-label="Navigation principale"]')).toBeNull();
+  });
+});
+
+describe('Thème', () => {
+  afterEach(() => {
+    localStorage.clear();
+    delete document.documentElement.dataset['theme'];
+  });
+
+  it('auto par défaut, choix « Sombre » appliqué et mémorisé, retour à « Auto »', async () => {
+    await restore(USER);
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    const pick = async (label: string) => {
+      [...el.querySelectorAll<HTMLButtonElement>('.segmented button')].find((b) => b.textContent?.trim() === label)!.click();
+      await fixture.whenStable();
+    };
+    const pressed = () => el.querySelector('.segmented [aria-pressed="true"]')?.textContent?.trim();
+
+    expect(pressed()).toBe('Auto');
+    expect(document.documentElement.dataset['theme']).toBeUndefined();
+
+    await pick('Sombre');
+    expect(pressed()).toBe('Sombre');
+    expect(document.documentElement.dataset['theme']).toBe('dark');
+    expect(localStorage.getItem('theme')).toBe('dark');
+
+    await pick('Auto');
+    expect(document.documentElement.dataset['theme']).toBeUndefined();
+    expect(localStorage.getItem('theme')).toBeNull();
   });
 });
 

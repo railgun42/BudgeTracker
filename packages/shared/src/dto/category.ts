@@ -79,7 +79,8 @@ export interface CategorySuggestionDto {
 }
 
 /**
- * POST /admin/category-suggestions/:id/resolve. ACCEPTED crée la catégorie globale (doublon ⇒ 409, rien n'est changé).
+ * POST /admin/category-suggestions/:id/resolve. ACCEPTED rend globale la catégorie perso de l'auteur (globale neuve s'il
+ * l'a supprimée), masquée par défaut pour les utilisateurs déjà inscrits ; doublon ⇒ 409, rien n'est changé.
  * `reply` : notification personnelle à l'auteur (facultative). Suggestion déjà traitée ⇒ 409.
  */
 export interface ResolveCategorySuggestionInput {

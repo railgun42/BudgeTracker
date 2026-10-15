@@ -40,7 +40,8 @@ export function defaultReply(decision: CategorySuggestionDecision, name: string)
     <p><a routerLink="/admin">← Administration</a></p>
     <h1>Suggestions de catégorie</h1>
     <p class="muted">
-      Accepter crée la catégorie globale pour tous. Si elle existe déjà, marquez la suggestion comme traitée.
+      Accepter rend la catégorie de l'auteur globale. Elle est masquée par défaut chez les utilisateurs déjà inscrits,
+      qui peuvent l'afficher depuis « Mes catégories ». Si elle existe déjà, marquez la suggestion comme traitée.
     </p>
 
     @if (error()) {

@@ -32,6 +32,7 @@ export const adminRoutes = [
   'GET /api/v1/admin/categories',
   'POST /api/v1/admin/categories',
   'PATCH /api/v1/admin/categories/:id',
+  'DELETE /api/v1/admin/categories/:id',
   'GET /api/v1/admin/feedback',
   'POST /api/v1/admin/feedback/:id/treat',
   'POST /api/v1/admin/announcements',

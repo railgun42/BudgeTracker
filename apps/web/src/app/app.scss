@@ -1,94 +1,264 @@
-:host {
-  display: block;
+// Coquille : en-tête collant, navigation en tiroir (popover) sur mobile, barre latérale dès 768px.
+
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'header'
+    'main'
+    'footer';
   min-height: 100dvh;
-  // Place pour la barre de navigation fixée en bas sur mobile.
-  padding-bottom: var(--nav-height);
 }
 
-.skip-link {
-  position: absolute;
-  left: var(--space-2);
-  top: -100%;
-  z-index: 10;
-  &:focus {
-    top: var(--space-2);
-  }
-}
+// --- En-tête ---
 
 .header {
+  grid-area: header;
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-2);
+  min-height: var(--header-height);
+  padding: var(--space-1) var(--space-3);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
 }
 
-.brand {
-  font-weight: 700;
-  font-size: 1.125rem;
-  color: var(--color-primary);
-  text-decoration: none;
+.icon-button,
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--color-surface-2);
+  }
 }
 
-.nav {
-  position: fixed;
-  inset: auto 0 0 0;
-  height: var(--nav-height);
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  color: var(--color-primary);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  text-decoration: none;
+
+  .brand-mark path {
+    stroke: var(--color-surface);
+  }
+}
+
+.header-actions {
   display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.add-button {
+  padding-inline: var(--space-3);
+}
+
+.avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+
+  &:hover {
+    background: var(--color-primary-soft);
+    box-shadow: inset 0 0 0 1px var(--color-primary);
+  }
+}
+
+// Écrans étroits : textes du logo et du bouton d'ajout réservés aux lecteurs d'écran.
+@media (max-width: 29.99rem) {
+  .add-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 21.24rem) {
+  .brand-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+}
+
+// --- Menu du compte : composant global .menu, ancré sous l'en-tête à droite ---
+
+.account-menu {
+  inset: calc(var(--header-height) + var(--space-1)) var(--space-3) auto auto;
+}
+
+.account-name {
+  margin: 0 0 var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+  font-weight: var(--weight-bold);
+  overflow-wrap: anywhere;
+
+  .muted {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-regular);
+  }
+}
+
+.theme {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+// --- Navigation principale : tiroir sur mobile ---
+
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  margin: 0;
+  width: min(18rem, 85vw);
+  height: 100dvh;
+  padding: var(--space-4) var(--space-2);
+  border: 0;
+  border-right: 1px solid var(--color-border);
   background: var(--color-surface);
-  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
+  overflow-y: auto;
+
+  &:popover-open {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    animation: drawer-in var(--duration-slow) var(--ease-out);
+  }
+
+  &::backdrop {
+    background: var(--color-overlay);
+  }
 
   a {
-    flex: 1;
     display: flex;
     align-items: center;
-    justify-content: center;
-    text-align: center;
-    font-size: 0.75rem;
-    color: var(--color-text-muted);
+    min-height: var(--tap);
+    padding: 0 var(--space-3);
+    border-radius: var(--radius);
+    color: var(--color-text);
     text-decoration: none;
+
+    &:hover {
+      background: var(--color-surface-2);
+    }
   }
 
+  // Lien actif : trait d'encre à gauche, seul marqueur appuyé de la navigation.
   a.active {
+    background: var(--color-primary-soft);
     color: var(--color-primary);
-    font-weight: 700;
+    font-weight: var(--weight-bold);
+    box-shadow: inset 3px 0 0 var(--color-primary);
   }
 }
 
+// --- Contenu et pied de page ---
+
 main {
-  max-width: 64rem;
+  grid-area: main;
+  width: 100%;
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: var(--space-3);
+  padding: var(--space-4) var(--space-3) var(--space-5);
   outline: none;
 }
 
-.footer nav {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-top: 1px solid var(--color-border);
-  font-size: 0.875rem;
-}
+.footer {
+  grid-area: footer;
 
-@media (min-width: 768px) {
-  :host {
-    padding-bottom: 0;
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-2) var(--space-4);
+    padding: var(--space-4) var(--space-3);
+    border-top: 1px solid var(--color-border);
+    font-size: var(--text-sm);
   }
 
-  .nav {
-    position: static;
-    height: auto;
-    border: 0;
-    gap: var(--space-3);
-    margin-right: auto;
+  a {
+    color: var(--color-text-muted);
 
-    a {
-      flex: none;
-      font-size: 1rem;
+    &:hover {
+      color: var(--color-text);
     }
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+// --- Bureau : barre latérale fixe, tiroir désactivé ---
+
+@media (min-width: 768px) {
+  .shell.signed-in {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    grid-template-areas:
+      'header header'
+      'sidebar main'
+      'sidebar footer';
+  }
+
+  .header {
+    padding-inline: var(--space-4);
+  }
+
+  .menu-button {
+    display: none;
+  }
+
+  // Le popover n'est jamais ouvert ici : la barre latérale est toujours affichée dans le flux.
+  .sidebar {
+    grid-area: sidebar;
+    align-self: start;
+    position: sticky;
+    top: var(--header-height);
+    inset: var(--header-height) auto auto auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    width: auto;
+    height: calc(100dvh - var(--header-height));
+    padding: var(--space-4) var(--space-3);
+    background: var(--color-bg);
+  }
+
+  main {
+    padding: var(--space-5) var(--space-5) var(--space-6);
   }
 }

@@ -12,6 +12,12 @@ const duplicate = (e: { code?: string }): never => {
   throw e;
 };
 
+// P2003 : clé étrangère (transaction, modèle de récurrence ou sous-catégorie de n'importe quel utilisateur).
+const inUse = (e: { code?: string }): never => {
+  if (e.code === 'P2003') throw new ConflictException('Catégorie utilisée : l’archiver plutôt');
+  throw e;
+};
+
 // Catégories globales (SPEC §13.3) : créées, renommées, archivées par l'administrateur, jamais supprimées
 // (des transactions de n'importe quel utilisateur peuvent les référencer). Chaque écriture est journalisée.
 @Injectable()
@@ -35,15 +41,27 @@ export class AdminCategoriesService {
     return this.prisma.$transaction((tx) => this.createIn(tx, adminId, dto));
   }
 
+  // Parent d'une globale : racine globale non technique ni archivée.
+  private async checkParent(tx: Prisma.TransactionClient, parentId: string): Promise<void> {
+    const parent = await this.editable(parentId, tx);
+    if (parent.parentId) throw new UnprocessableEntityException('2 niveaux de catégories maximum');
+    if (parent.archivedAt) throw new UnprocessableEntityException('Catégorie archivée');
+  }
+
   // Dans la transaction de l'appelant : sert aussi à accepter une suggestion (admin/suggestions.service.ts).
-  async createIn(tx: Prisma.TransactionClient, adminId: string, { name, parentId, color }: CreateCategoryInput): Promise<Category> {
-    if (parentId) {
-      const parent = await this.editable(parentId, tx);
-      if (parent.parentId) throw new UnprocessableEntityException('2 niveaux de catégories maximum');
-      if (parent.archivedAt) throw new UnprocessableEntityException('Catégorie archivée');
-    }
-    const category = await tx.category.create({ data: { name, parentId, color } }).catch(duplicate);
+  async createIn(tx: Prisma.TransactionClient, adminId: string, { name, parentId, color, hiddenForUsersBefore }: CreateCategoryInput & { hiddenForUsersBefore?: Date }): Promise<Category> {
+    if (parentId) await this.checkParent(tx, parentId);
+    const category = await tx.category.create({ data: { name, parentId, color, hiddenForUsersBefore } }).catch(duplicate);
     await tx.adminAuditLog.create({ data: { adminId, action: 'CATEGORY_CREATED', targetId: category.id } });
+    return category;
+  }
+
+  // Catégorie perso promue globale (suggestion acceptée, E41) : mêmes règles qu'une création, même identifiant,
+  // donc les transactions et récurrences de l'auteur la gardent.
+  async promoteIn(tx: Prisma.TransactionClient, adminId: string, { id, parentId }: Category, name: string, hiddenForUsersBefore: Date): Promise<Category> {
+    if (parentId) await this.checkParent(tx, parentId);
+    const category = await tx.category.update({ where: { id }, data: { userId: null, name, hiddenForUsersBefore } }).catch(duplicate);
+    await tx.adminAuditLog.create({ data: { adminId, action: 'CATEGORY_CREATED', targetId: id } });
     return category;
   }
 
@@ -64,5 +82,20 @@ export class AdminCategoriesService {
         return category;
       })
       .catch(duplicate);
+  }
+
+  // Suppression définitive d'une globale inutilisée créée par l'admin ; utilisée ⇒ 409 (l'archiver). Contraintes rendues
+  // immédiates : toute référence, supprimée logiquement comprise, fait échouer le DELETE lui-même, sans fenêtre de course.
+  // Catégorie du seed ⇒ 422 : le seed (upsert par nameKey) la recréerait. Préférences supprimées en cascade ;
+  // suggestions traitées gardées sans parent, en attente ⇒ 409.
+  async remove(adminId: string, id: string): Promise<void> {
+    const category = await this.editable(id);
+    if (category.nameKey) throw new UnprocessableEntityException('Catégorie de base : l’archiver');
+    await this.prisma.$transaction(async (tx) => {
+      if (await tx.categorySuggestion.count({ where: { parentId: id, status: 'PENDING' } })) throw new ConflictException('Suggestions en attente sous cette catégorie');
+      await tx.$executeRaw`SET CONSTRAINTS ALL IMMEDIATE`;
+      await tx.category.delete({ where: { id } }).catch(inUse);
+      await tx.adminAuditLog.create({ data: { adminId, action: 'CATEGORY_DELETED', targetId: id } });
+    });
   }
 }

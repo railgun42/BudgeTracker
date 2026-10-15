@@ -1,9 +1,57 @@
 <a class="skip-link" href="#main">Aller au contenu</a>
 
-<header class="header">
-  <a routerLink="/" class="brand">BudgeTracker</a>
-  @if (session.user(); as user) {
-    <nav class="nav" aria-label="Navigation principale">
+<div class="shell" [class.signed-in]="!!session.user()">
+  <header class="header">
+    @if (session.user()) {
+      <button type="button" class="icon-button menu-button" popovertarget="main-nav" aria-label="Menu">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
+        </svg>
+      </button>
+    }
+
+    <a routerLink="/" class="brand">
+      <svg class="brand-mark" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+        <rect width="24" height="24" rx="6" fill="currentColor" />
+        <path d="M6 16.5l4-4 3 2.5 5-6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+      </svg>
+      <span class="brand-name">BudgeTracker</span>
+    </a>
+
+    @if (session.user(); as user) {
+      <div class="header-actions">
+        <app-notification-bell />
+        <a routerLink="/transactions/new" class="button add-button">
+          + <span class="add-label">Transaction</span>
+        </a>
+        <button type="button" class="avatar" popovertarget="account-menu" [attr.aria-label]="'Menu du compte (' + user.name + ')'">
+          {{ initials() }}
+        </button>
+      </div>
+
+      <div id="account-menu" class="menu account-menu" popover (toggle)="onPopoverToggle($event)">
+        <p class="account-name">
+          {{ user.name }}<br /><span class="muted">{{ user.email }}</span>
+        </p>
+        <a routerLink="/me" routerLinkActive="active" ariaCurrentWhenActive="page">Mon compte</a>
+        <a routerLink="/feedback" routerLinkActive="active" ariaCurrentWhenActive="page">Donner mon avis</a>
+        <div class="theme" role="group" aria-labelledby="theme-label">
+          <span id="theme-label">Thème</span>
+          <div class="segmented">
+            @for (t of themes; track t.value) {
+              <button type="button" [attr.aria-pressed]="theme() === t.value" (click)="theme.set(t.value)">{{ t.label }}</button>
+            }
+          </div>
+        </div>
+        <button type="button" class="logout" (click)="logout()">
+          Se déconnecter<span class="visually-hidden"> ({{ user.name }})</span>
+        </button>
+      </div>
+    }
+  </header>
+
+  @if (session.user()) {
+    <nav id="main-nav" class="sidebar" popover aria-label="Navigation principale" (toggle)="onPopoverToggle($event)">
       @for (link of links(); track link.path) {
         <a
           [routerLink]="link.path"
@@ -14,22 +62,17 @@
         >
       }
     </nav>
-    <app-notification-bell />
-    <a routerLink="/transactions/new" class="button">+ Transaction</a>
-    <button type="button" class="link-button" (click)="logout()">
-      Se déconnecter<span class="visually-hidden"> ({{ user.name }})</span>
-    </button>
   }
-</header>
 
-<main id="main" tabindex="-1">
-  <router-outlet />
-</main>
+  <main id="main" tabindex="-1">
+    <router-outlet />
+  </main>
 
-<footer class="footer">
-  <nav aria-label="Informations légales">
-    <a routerLink="/mentions-legales">Mentions légales</a>
-    <a routerLink="/confidentialite">Confidentialité</a>
-    <a routerLink="/cgu">CGU</a>
-  </nav>
-</footer>
+  <footer class="footer">
+    <nav aria-label="Informations légales">
+      <a routerLink="/mentions-legales">Mentions légales</a>
+      <a routerLink="/confidentialite">Confidentialité</a>
+      <a routerLink="/cgu">CGU</a>
+    </nav>
+  </footer>
+</div>

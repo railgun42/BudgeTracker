@@ -16,8 +16,8 @@ interface Row {
 const DUPLICATE = 'Une catégorie porte déjà ce nom à cet endroit.';
 const sameName = (a: string, b: string) => a.toLocaleLowerCase('fr') === b.toLocaleLowerCase('fr');
 
-// E38 (SPEC §13.3) : catégories globales, visibles de tous. Créer, renommer, archiver (jamais supprimer : des
-// transactions les référencent). Les techniques (intérêts, virement…) n'y figurent pas. Route réservée aux admins.
+// E38 (SPEC §13.3) : catégories globales, visibles de tous. Créer, renommer, archiver (utilisée) ou supprimer
+// (inutilisée et créée ici ; le serveur tranche). Les techniques (intérêts, virement…) n'y figurent pas. Route réservée aux admins.
 @Component({
   selector: 'app-admin-categories-page',
   imports: [ReactiveFormsModule, RouterLink, NgTemplateOutlet],
@@ -26,8 +26,10 @@ const sameName = (a: string, b: string) => a.toLocaleLowerCase('fr') === b.toLoc
     <p><a routerLink="/admin">← Administration</a></p>
     <h1>Catégories globales</h1>
     <p class="muted">
-      Visibles de tous les utilisateurs. Une catégorie archivée disparaît des listes de saisie mais reste affichée
-      sur les transactions existantes ; elle peut être restaurée.
+      Visibles de tous les utilisateurs. <strong>Archiver</strong> retire la catégorie des listes de saisie mais la laisse
+      sur les transactions existantes ; elle peut être restaurée. <strong>Supprimer</strong> l'efface définitivement :
+      seulement si personne ne l'utilise (ni transaction, ni récurrence, ni sous-catégorie) et si elle a été créée ici,
+      les catégories de base étant réinstallées automatiquement.
     </p>
 
     @if (error()) {
@@ -73,7 +75,19 @@ const sameName = (a: string, b: string) => a.toLocaleLowerCase('fr') === b.toLoc
             <button type="button" class="button button-secondary" (click)="update(r.category, { archived: !r.category.archived })">
               {{ r.category.archived ? 'Restaurer' : 'Archiver' }}<span class="visually-hidden"> {{ r.label }}</span>
             </button>
+            @if (!r.category.nameKey) {
+              <button type="button" class="button button-secondary" (click)="deleting.set(r.category.id)">
+                Supprimer<span class="visually-hidden"> {{ r.label }}</span>
+              </button>
+            }
           </div>
+          @if (deleting() === r.category.id) {
+            <div class="inline" role="group" [attr.aria-label]="'Supprimer ' + r.label">
+              <p>Supprimer définitivement « {{ r.label }} » pour tous les utilisateurs ?</p>
+              <button type="button" class="button" (click)="remove(r)">Confirmer la suppression</button>
+              <button type="button" class="button button-secondary" (click)="deleting.set(null)">Annuler</button>
+            </div>
+          }
         }
       </div>
     </ng-template>
@@ -132,6 +146,7 @@ export class AdminCategoriesPage {
 
   private readonly all = signal<CategoryDto[]>([]);
   protected readonly editing = signal<string | null>(null);
+  protected readonly deleting = signal<string | null>(null);
   protected readonly pending = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly status = signal('');
@@ -201,6 +216,21 @@ export class AdminCategoriesPage {
         this.done(body.archived === undefined ? `Catégorie renommée en « ${label} ».` : `« ${label} » ${updated.archived ? 'archivée' : 'restaurée'}.`);
       },
       error: (e) => this.error.set(errorMessage(e, { 404: 'Cette catégorie n’existe plus.', 409: DUPLICATE, 422: 'Catégorie non modifiable.' })),
+    });
+  }
+
+  protected remove(r: Row): void {
+    this.deleting.set(null);
+    this.api.delete(`/admin/categories/${r.category.id}`).subscribe({
+      next: () => this.done(`« ${r.label} » supprimée.`),
+      error: (e) =>
+        this.error.set(
+          errorMessage(e, {
+            409: `« ${r.label} » est utilisée (transaction, récurrence, sous-catégorie ou suggestion en attente) : archivez-la plutôt.`,
+            422: 'Catégorie de base : archivez-la plutôt.',
+            404: 'Cette catégorie n’existe plus.',
+          }),
+        ),
     });
   }
 
