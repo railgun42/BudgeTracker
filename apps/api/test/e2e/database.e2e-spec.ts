@@ -141,7 +141,8 @@ describe('Schéma v1 (intégration Postgres)', () => {
 
   it('seed idempotent : catégories système sur 2 niveaux, inchangées après une 2ᵉ exécution', async () => {
     await seed(prisma);
-    const count = () => prisma.category.count({ where: { userId: null } });
+    // Seed seulement (nameKey) : les globales créées par admin-categories.e2e-spec.ts en parallèle n'en sont pas.
+    const count = () => prisma.category.count({ where: { userId: null, nameKey: { not: null } } });
     const before = await count();
     await seed(prisma);
     expect(await count()).toBe(before);

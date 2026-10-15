@@ -68,10 +68,11 @@ export class GdprService {
         p.cashflowSimulation.findMany({ where: mine }),
         // Actions d'administration dont l'utilisateur est l'auteur (aucune donnée d'autrui).
         p.adminAuditLog.findMany({ where: { adminId: userId } }),
+        p.feedback.findMany({ where: mine }),
       ],
       { isolationLevel: 'RepeatableRead' },
     );
-    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation', 'AdminAuditLog'];
+    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation', 'AdminAuditLog', 'Feedback'];
     return Object.fromEntries(names.map((name, i) => [name, (tables[i] as object[]).map(plain)]));
   }
 

@@ -24,3 +24,10 @@ export enum Role {
   USER = 'USER',
   ADMIN = 'ADMIN',
 }
+
+// Retour utilisateur (SPEC §13.5) : avis, idée de fonctionnalité, problème.
+export enum FeedbackType {
+  OPINION = 'OPINION',
+  IDEA = 'IDEA',
+  PROBLEM = 'PROBLEM',
+}

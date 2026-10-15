@@ -32,6 +32,8 @@ export const adminRoutes = [
   'GET /api/v1/admin/categories',
   'POST /api/v1/admin/categories',
   'PATCH /api/v1/admin/categories/:id',
+  'GET /api/v1/admin/feedback',
+  'POST /api/v1/admin/feedback/:id/treat',
 ];
 
 // Compte créé par B ; vérifie ensuite qu'il est resté intact pour B.
@@ -562,6 +564,16 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     const { id, intact } = await cashflowSimulationOfB(users);
     await users.a.call('delete', `/api/v1/cashflow-simulations/${id}`).expect(404);
     await intact();
+  },
+  // Retours : chacun ne liste que les siens.
+  'GET /api/v1/feedback': async ({ a, b }) => {
+    const { body } = await b.call('post', '/api/v1/feedback').send({ type: 'IDEA', message: 'Idée de B' }).expect(201);
+    expect((await a.call('get', '/api/v1/feedback').expect(200)).body.map((f: { id: string }) => f.id)).not.toContain(body.id);
+    expect((await b.call('get', '/api/v1/feedback').expect(200)).body).toContainEqual(body);
+  },
+  'POST /api/v1/feedback': async ({ a, b }) => {
+    const { body } = await a.call('post', '/api/v1/feedback').send({ type: 'OPINION', message: 'Avis de A' }).expect(201);
+    expect((await b.call('get', '/api/v1/feedback').expect(200)).body.map((f: { id: string }) => f.id)).not.toContain(body.id);
   },
   // Export de A : aucune donnée de B ; celui de B la contient.
   'GET /api/v1/me/export': async (users) => {

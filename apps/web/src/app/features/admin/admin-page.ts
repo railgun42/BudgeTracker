@@ -36,6 +36,7 @@ const JOBS: { key: keyof AdminStatsDto['api']['jobs']; label: string }[] = [
     <h1>Administration</h1>
     <nav aria-label="Administration">
       <a routerLink="/admin/categories">Catégories globales</a>
+      <a routerLink="/admin/feedback">Retours utilisateurs</a>
     </nav>
 
     @if (error()) {

@@ -68,6 +68,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/my-account/my-account-page').then((m) => m.MyAccountPage),
   },
   {
+    path: 'feedback',
+    title: 'Donner mon avis',
+    ...authed,
+    loadComponent: () => import('./features/feedback/feedback-page').then((m) => m.FeedbackPage),
+  },
+  {
     path: 'admin',
     title: 'Administration',
     canActivate: [authGuard, adminGuard],
@@ -78,6 +84,12 @@ export const routes: Routes = [
     title: 'Catégories globales',
     canActivate: [authGuard, adminGuard],
     loadComponent: () => import('./features/admin/categories/admin-categories-page').then((m) => m.AdminCategoriesPage),
+  },
+  {
+    path: 'admin/feedback',
+    title: 'Retours utilisateurs',
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () => import('./features/admin/feedback/admin-feedback-page').then((m) => m.AdminFeedbackPage),
   },
   {
     path: 'login',

@@ -37,6 +37,13 @@ enum Role {
   ADMIN
 }
 
+// Retours utilisateurs (SPEC §13.5).
+enum FeedbackType {
+  OPINION
+  IDEA
+  PROBLEM
+}
+
 enum EmailTokenType {
   VERIFY
   RESET
@@ -76,6 +83,7 @@ model User {
   cashflowSimulations CashflowSimulation[]
   categoryPreferences UserCategoryPreference[]
   adminAuditLogs      AdminAuditLog[]
+  feedbacks           Feedback[]
 }
 
 // Journal des actions d'administration (SPEC §13.1) : qui, quoi, quand ; jamais de donnée financière ni d'e-mail.
@@ -418,4 +426,22 @@ model CashflowSimulation {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+
+// Retour libre d'un utilisateur vers l'administrateur (SPEC §13.5). Statut dérivé de treatedAt (NULL = nouveau) :
+// une seule colonne, pas d'état incohérent possible. Purgé par jobs/purge.job.ts (FEEDBACK_RETENTION).
+model Feedback {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String       @db.Uuid
+  type      FeedbackType
+  // Texte brut, jamais interprété comme HTML (SPEC §13.6).
+  message   String
+  treatedAt DateTime?    @db.Timestamptz(3)
+  createdAt DateTime     @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
 }

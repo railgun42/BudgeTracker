@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { FEEDBACK_RETENTION } from '@budgetracker/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { trackJob } from './job-runs';
@@ -34,7 +35,9 @@ export class PurgeJob {
       where: { transaction: { OR: [{ deletedAt: deleted }, { account: { deletedAt: deleted } }, { transfer: { deletedAt: deleted } }, { transfer: { transactions: { some: { account: { deletedAt: deleted } } } } }] } },
       select: { s3Key: true },
     });
-    const [transfers, transactions, recurrences, accounts] = await this.prisma.$transaction([
+    const daysAgo = (days: number) => ({ lt: new Date(now.getTime() - days * 86_400_000) });
+    const { afterTreatedDays, untreatedDays } = FEEDBACK_RETENTION;
+    const [transfers, transactions, recurrences, accounts, feedback] = await this.prisma.$transaction([
       // Jambes ensemble (cascade Transfer → Transaction), y compris quand l'une est sur un compte purgé :
       // sinon il resterait une jambe orpheline, ni modifiable ni supprimable.
       this.prisma.transfer.deleteMany({ where: { OR: [{ deletedAt: old }, { transactions: { some: { account: { deletedAt: old } } } }] } }),
@@ -43,13 +46,15 @@ export class PurgeJob {
       this.prisma.recurrence.deleteMany({ where: { deletedAt: old } }),
       // Cascade : transactions, récurrences et taux du compte.
       this.prisma.account.deleteMany({ where: { deletedAt: old } }),
+      // Retours (SPEC §13.5) : 30 j après traitement, 90 j après création si jamais traités.
+      this.prisma.feedback.deleteMany({ where: { OR: [{ treatedAt: daysAgo(afterTreatedDays) }, { treatedAt: null, createdAt: daysAgo(untreatedDays) }] } }),
     ]);
     const kept = new Set((await this.prisma.attachment.findMany({ where: { s3Key: { in: candidates.map((c) => c.s3Key) } }, select: { s3Key: true } })).map((a) => a.s3Key));
     const gone = candidates.filter((c) => !kept.has(c.s3Key));
     // Après le commit : un échec S3 laisse un objet orphelin journalisé, jamais une ligne sans objet.
     const failed = (await Promise.allSettled(gone.map((c) => this.storage.delete(c.s3Key)))).filter((r) => r.status === 'rejected').length;
     if (failed) this.logger.error(`Purge : ${failed} objet(s) S3 non supprimé(s)`);
-    const counts = { transfers: transfers.count, transactions: transactions.count, recurrences: recurrences.count, accounts: accounts.count, attachments: gone.length - failed };
+    const counts = { transfers: transfers.count, transactions: transactions.count, recurrences: recurrences.count, accounts: accounts.count, attachments: gone.length - failed, feedback: feedback.count };
     this.logger.log(`Purge : ${JSON.stringify(counts)}`);
     return counts;
   }

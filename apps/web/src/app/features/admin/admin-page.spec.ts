@@ -60,6 +60,7 @@ describe('AdminPage', () => {
     expect(v['Crédit des intérêts']).toBe('pas encore exécutée depuis le démarrage');
     expect(v['Purge des suppressions']).toMatch(/en échec$/);
     expect(clean(el.querySelector('a[href="/admin/categories"]')?.textContent)).toBe('Catégories globales');
+    expect(clean(el.querySelector('a[href="/admin/feedback"]')?.textContent)).toBe('Retours utilisateurs');
   });
 
   it('Actualiser relance la requête ; une erreur s’affiche dans une alerte', async () => {

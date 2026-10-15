@@ -277,6 +277,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Front : page `/admin/categories` ([admin-categories-page.ts](apps/web/src/app/features/admin/categories/admin-categories-page.ts)), liée depuis `/admin`.
 - Tests : `test/e2e/admin-categories.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `features/admin/categories/admin-categories-page.spec.ts`, `features/categories/categories-page.spec.ts`, `shared-ui/labels.spec.ts`.
 
+## Retours utilisateurs et boîte de réception admin (E39)
+
+- `GET/POST /api/v1/feedback` : l'utilisateur envoie un retour (`type` : `OPINION` | `IDEA` | `PROBLEM`, `message` rogné, 1 à 2000 caractères, sinon 400) et ne liste que les siens. Limites (`FEEDBACK_LIMITS` de `shared`) : 5 par 24 h glissantes et 20 non traités au plus ⇒ 429, vérifiées sous verrou consultatif par utilisateur (envois simultanés compris).
+- `GET /api/v1/admin/feedback?type&status=NEW|TREATED&sort=date|type|status`, `POST /api/v1/admin/feedback/:id/treat` (`adminRoutes`) : boîte de réception sans auteur ni e-mail, échéance de suppression (`expiresAt`) et alerte `expiringSoon` (non traité à moins de 7 j). Traitement idempotent, journalisé `FEEDBACK_TREATED`.
+- Table `Feedback` (migration `feedback`, CHECK de longueur) : statut dérivé de `treatedAt` (NULL = nouveau). Purge dans `PurgeJob` : 30 j après traitement, 90 j après création sinon (`FEEDBACK_RETENTION`).
+- Texte brut partout (interpolation Angular, jamais `innerHTML`). Export RGPD (section `Feedback`), suppression en cascade avec le compte, politique de confidentialité et `docs/privacy` mises à jour.
+- Front : page `/feedback` « Donner mon avis » (lien dans la navigation, [feedback-page.ts](apps/web/src/app/features/feedback/feedback-page.ts)) ; page `/admin/feedback` ([admin-feedback-page.ts](apps/web/src/app/features/admin/feedback/admin-feedback-page.ts)), liée depuis `/admin`, filtres type/statut et tri.
+- Tests : `test/e2e/feedback.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `test/e2e/gdpr.e2e-spec.ts`, `features/feedback/feedback-page.spec.ts`, `features/admin/feedback/admin-feedback-page.spec.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -324,7 +333,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E36 — Catégories personnalisables par l'utilisateur | ✅ |
 | E37 — Rôle administrateur et statistiques | ✅ |
 | E38 — Administration : catégories globales | ✅ |
-| E39 → E43 | ⏳ Administration et communication, tableau de bord, style |
+| E39 — Retours utilisateurs et boîte de réception admin | ✅ |
+| E40 → E43 | ⏳ Notifications, suggestions, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

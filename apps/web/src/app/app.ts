@@ -25,6 +25,7 @@ export class App {
     { path: '/stats', label: 'Statistiques', exact: false },
     { path: '/simulations', label: 'Simulations', exact: false },
     { path: '/me', label: 'Mon compte', exact: false },
+    { path: '/feedback', label: 'Donner mon avis', exact: false },
   ];
 
   // Lien d'administration seulement pour un admin (SPEC §13.1).

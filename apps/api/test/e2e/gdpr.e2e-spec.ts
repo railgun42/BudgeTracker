@@ -63,6 +63,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
     ).body;
     await user.call('post', '/api/v1/scenarios').send({ name: 'Netflix', params: { changes: [{ kind: 'SUBSCRIPTION', monthlyCents: 999 }] } }).expect(201);
     await user.call('post', '/api/v1/cashflow-simulations').send({ name: 'Été', params: { accountIds: [account.id], endDate: '2030-08-31' } }).expect(201);
+    await user.call('post', '/api/v1/feedback').send({ type: 'IDEA', message: 'Un mode sombre' }).expect(201);
     // Sans endpoint de création directe : identité Google et crédit d'intérêts.
     await prisma.oAuthIdentity.create({ data: { userId: user.id, provider: 'google', providerId: randomUUID() } });
     await prisma.interestCredit.create({ data: { accountId: savings.id, year: 2025 } });
@@ -99,6 +100,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(data.InterestCredit).toEqual([expect.objectContaining({ accountId: a.savingsId, year: 2025 })]);
       expect(data.UserCategoryPreference).toEqual([expect.objectContaining({ hidden: true, customName: 'Épicerie' })]);
       expect(data.Attachment).toEqual([expect.objectContaining({ transactionId: a.txId, mime: 'application/pdf' })]);
+      expect(data.Feedback).toEqual([expect.objectContaining({ userId: users.a.id, type: 'IDEA', message: 'Un mode sombre', treatedAt: null })]);
 
       const text = JSON.stringify(data);
       for (const id of [users.b.id, b.accountId, b.savingsId, b.txId, b.recurrenceId, b.tagId]) expect(text).not.toContain(id);

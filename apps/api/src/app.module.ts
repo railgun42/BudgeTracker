@@ -6,11 +6,14 @@ import { AdminController } from './admin/admin.controller';
 import { AdminService } from './admin/admin.service';
 import { AdminCategoriesController } from './admin/categories.controller';
 import { AdminCategoriesService } from './admin/categories.service';
+import { AdminFeedbackController } from './admin/feedback.controller';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AuthModule } from './auth/auth.module';
 import { BalanceModule } from './balance/balance.module';
 import { CategoriesModule } from './categories/categories.module';
 import { CsrfGuard } from './common/csrf.guard';
+import { FeedbackController } from './feedback/feedback.controller';
+import { FeedbackService } from './feedback/feedback.service';
 import { GdprController } from './gdpr/gdpr.controller';
 import { GdprService } from './gdpr/gdpr.service';
 import { HealthController } from './health/health.controller';
@@ -35,8 +38,8 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule, RecurrencesModule, InterestModule, StorageModule, AttachmentsModule, StatsModule],
-  controllers: [HealthController, AdminController, AdminCategoriesController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, GdprController],
+  controllers: [HealthController, AdminController, AdminCategoriesController, AdminFeedbackController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, FeedbackController, GdprController],
   // CSRF global : toute nouvelle route non sûre est protégée par défaut.
-  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, AdminService, AdminCategoriesService, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, GdprService],
+  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, AdminService, AdminCategoriesService, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, FeedbackService, GdprService],
 })
 export class AppModule {}
