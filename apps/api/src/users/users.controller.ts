@@ -1,5 +1,5 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { UserDto } from '@budgetracker/shared';
+import { Role, UserDto } from '@budgetracker/shared';
 import { User } from '../generated/prisma/client';
 import { AuthUser, CurrentUser, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,6 +10,7 @@ export const toUserDto = (u: User): UserDto => ({
   email: u.email,
   name: u.name,
   lastConnection: u.lastConnection?.toISOString() ?? null,
+  role: u.role as Role,
 });
 
 @Controller('v1/me')

@@ -18,3 +18,9 @@ export enum IntervalUnit {
   MONTH = 'MONTH',
   YEAR = 'YEAR',
 }
+
+// ADMIN : attribué uniquement hors API HTTP (script d'exploitation, SPEC §13.1).
+export enum Role {
+  USER = 'USER',
+  ADMIN = 'ADMIN',
+}

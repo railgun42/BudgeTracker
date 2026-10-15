@@ -8,7 +8,8 @@ import { routes } from './app.routes';
 import { Session } from './core/auth/session';
 import { provideApiHttp } from './core/http';
 
-const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
+const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null, role: 'USER' };
+const ADMIN = { ...USER, role: 'ADMIN' };
 
 beforeEach(() =>
   TestBed.configureTestingModule({ providers: [provideRouter(routes), provideApiHttp(), provideHttpClientTesting()] }),
@@ -47,6 +48,19 @@ describe('Shell', () => {
     expect(el.querySelector('.skip-link')?.getAttribute('href')).toBe('#main');
     expect(el.querySelector('main#main router-outlet')).not.toBeNull();
     expect(el.querySelector('header button')?.textContent).toContain('Se déconnecter');
+  });
+
+  it('lien Administration : absent pour un utilisateur ordinaire, présent pour un admin', async () => {
+    const adminLinks = async (user: typeof USER) => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({ providers: [provideRouter(routes), provideApiHttp(), provideHttpClientTesting()] });
+      await restore(user);
+      const fixture = TestBed.createComponent(App);
+      await fixture.whenStable();
+      return [...(fixture.nativeElement as HTMLElement).querySelectorAll('a')].filter((a) => a.getAttribute('href') === '/admin').map((a) => a.textContent?.trim());
+    };
+    expect(await adminLinks(USER)).toEqual([]);
+    expect(await adminLinks(ADMIN)).toEqual(['Administration']);
   });
 
   it('invité : ni navigation ni bouton de déconnexion', async () => {
@@ -139,6 +153,24 @@ describe('Routes', () => {
       'cgu',
       '**',
     ]);
+  });
+});
+
+describe('adminGuard', () => {
+  it('admin ⇒ page d’administration', async () => {
+    await restore(ADMIN);
+    const harness = await RouterTestingHarness.create('/admin');
+    TestBed.inject(HttpTestingController).expectOne('/api/v1/admin/stats');
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toBe('Administration');
+    expect(TestBed.inject(Title).getTitle()).toBe('Administration');
+  });
+
+  it('utilisateur ordinaire ⇒ renvoyé au tableau de bord, sans appel à /admin/stats', async () => {
+    await restore(USER);
+    const harness = await RouterTestingHarness.create('/admin');
+    expect(TestBed.inject(Router).url).toBe('/');
+    expect(harness.routeNativeElement?.querySelector('h1')?.textContent).toBe('Tableau de bord');
+    TestBed.inject(HttpTestingController).expectNone('/api/v1/admin/stats');
   });
 });
 

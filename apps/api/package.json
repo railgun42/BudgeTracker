@@ -9,7 +9,8 @@
     "test": "jest",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:reset": "prisma migrate reset --force && prisma db seed"
+    "db:reset": "prisma migrate reset --force && prisma db seed",
+    "admin:grant": "tsx scripts/grant-admin.ts"
   },
   "jest": {
     "testEnvironment": "node",

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { trackJob } from './job-runs';
 
 export const PURGE_AFTER_DAYS = 30;
 
@@ -20,7 +21,7 @@ export class PurgeJob {
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   handleCron() {
-    return this.purge(new Date());
+    return trackJob('purge', () => this.purge(new Date()));
   }
 
   // Horloge injectée pour les tests.

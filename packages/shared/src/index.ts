@@ -12,3 +12,4 @@ export * from './dto/recurrence';
 export * from './dto/stats';
 export * from './dto/simulation';
 export * from './dto/scenario';
+export * from './dto/admin';

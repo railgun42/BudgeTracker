@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AccountsModule } from './accounts/accounts.module';
+import { AdminController } from './admin/admin.controller';
+import { AdminService } from './admin/admin.service';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AuthModule } from './auth/auth.module';
 import { BalanceModule } from './balance/balance.module';
@@ -31,8 +33,8 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule, RecurrencesModule, InterestModule, StorageModule, AttachmentsModule, StatsModule],
-  controllers: [HealthController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, GdprController],
+  controllers: [HealthController, AdminController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, GdprController],
   // CSRF global : toute nouvelle route non sûre est protégée par défaut.
-  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, GdprService],
+  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, AdminService, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, GdprService],
 })
 export class AppModule {}

@@ -9,6 +9,7 @@ const CHILD_TABLES: Record<string, string> = {
   TemplateTag:
     'SELECT count(*) FROM "TemplateTag" x JOIN "TransactionTemplate" tt ON tt.id = x."templateId" JOIN "Recurrence" r ON r.id = tt."recurrenceId" WHERE r."userId" = $1::uuid',
   InterestCredit: 'SELECT count(*) FROM "InterestCredit" x JOIN "Account" a ON a.id = x."accountId" WHERE a."userId" = $1::uuid',
+  AdminAuditLog: 'SELECT count(*) FROM "AdminAuditLog" WHERE "adminId" = $1::uuid',
 };
 
 // Nombre de lignes de l'utilisateur dans chaque table de la base (« rien n'est écrit »).

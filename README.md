@@ -259,6 +259,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Export RGPD : section `UserCategoryPreference` ; supprimée avec le compte (cascade).
 - Tests : `test/e2e/category-preferences.e2e-spec.ts`, registre d'isolation, `features/categories/categories-page.spec.ts`, `shared-ui/labels.spec.ts`.
 
+## Administration (E37)
+
+- Rôle `User.role` (`USER` par défaut, `ADMIN`), attribué **uniquement** hors HTTP : `npm run admin:grant -w api -- <email>` ([scripts/grant-admin.ts](apps/api/scripts/grant-admin.ts)). Refuse un e-mail inconnu ou non vérifié (et un `CHECK` en base interdit un admin non vérifié) ; idempotent ; journalise `ADMIN_GRANTED` dans `AdminAuditLog` (auteur, action, cible, date ; ni e-mail ni montant). Retrait : `UPDATE "User" SET role = 'USER'`, effectif à la requête suivante (rôle relu en base par `AdminGuard`).
+- `GET /api/v1/admin/stats` (`JwtAuthGuard` + `AdminGuard` : 401 sans session, 403 non-admin) : utilisateurs (total, vérifiés, nouveaux et actifs sur 7/30 j), volumes (comptes, transactions, récurrences, pièces jointes, stockage), taille et latence de la base, uptime, mémoire, erreurs 5xx et dernière exécution des tâches planifiées. Compteurs **en mémoire** (remis à zéro au redémarrage).
+- Test méta d'isolation étendu : toute route `/api/v1/admin/*` doit figurer dans `adminRoutes` (registre) avec les deux gardes, et répond 401 anonyme / 403 à A et B.
+- Front : `GET /me` expose `role` ; lien « Administration » et page `/admin` ([admin-page.ts](apps/web/src/app/features/admin/admin-page.ts)) réservés aux admins (`adminGuard`, sinon retour au tableau de bord).
+- Export RGPD : section `AdminAuditLog` (actions dont l'utilisateur est l'auteur) ; à la suppression du compte, l'entrée reste sans auteur.
+- Tests : `test/e2e/admin.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `features/admin/admin-page.spec.ts`, `app.spec.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -304,7 +313,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E34 — Plafond minimum et enveloppe dépensable | ✅ |
 | E35 — Simulation : interface | ✅ |
 | E36 — Catégories personnalisables par l'utilisateur | ✅ |
-| E37 → E43 | ⏳ Administration et communication, tableau de bord, style |
+| E37 — Rôle administrateur et statistiques | ✅ |
+| E38 → E43 | ⏳ Administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

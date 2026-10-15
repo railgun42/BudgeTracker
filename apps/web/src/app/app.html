@@ -4,7 +4,7 @@
   <a routerLink="/" class="brand">BudgeTracker</a>
   @if (session.user(); as user) {
     <nav class="nav" aria-label="Navigation principale">
-      @for (link of links; track link.path) {
+      @for (link of links(); track link.path) {
         <a
           [routerLink]="link.path"
           routerLinkActive="active"

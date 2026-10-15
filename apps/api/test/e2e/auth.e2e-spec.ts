@@ -92,7 +92,7 @@ describe('Auth (e2e)', () => {
 
     const res = await login(email).expect(200);
     const jar = jarOf(res);
-    expect(res.body).toEqual({ id: expect.any(String), email, name: 'Alice', lastConnection: expect.any(String) });
+    expect(res.body).toEqual({ id: expect.any(String), email, name: 'Alice', lastConnection: expect.any(String), role: 'USER' });
     expect(JSON.stringify(res.body)).not.toContain(jar.access_token);
     expect(JSON.stringify(res.body)).not.toContain(jar.refresh_token);
     for (const name of ['access_token', 'refresh_token']) {

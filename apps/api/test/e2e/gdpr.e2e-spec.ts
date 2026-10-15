@@ -66,6 +66,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
     // Sans endpoint de création directe : identité Google et crédit d'intérêts.
     await prisma.oAuthIdentity.create({ data: { userId: user.id, provider: 'google', providerId: randomUUID() } });
     await prisma.interestCredit.create({ data: { accountId: savings.id, year: 2025 } });
+    await prisma.adminAuditLog.create({ data: { adminId: user.id, action: 'TEST' } });
     await prisma.user.update({ where: { id: user.id }, data: { termsAcceptedAt: new Date('2026-10-14T08:00:00Z'), termsVersion: '2026-10-14' } });
     const s3Key = (await prisma.attachment.findUniqueOrThrow({ where: { transactionId: tx.id } })).s3Key;
     return { accountId: account.id as string, savingsId: savings.id as string, txId: tx.id as string, recurrenceId: recurrence.id as string, tagId: tag.id as string, s3Key };
@@ -169,6 +170,8 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(await prisma.transactionTag.count({ where: { tagId: a.tagId } })).toBe(0);
       expect(await prisma.transactionTemplate.count({ where: { recurrenceId: a.recurrenceId } })).toBe(0);
       expect(await prisma.interestCredit.count({ where: { accountId: a.savingsId } })).toBe(0);
+      // Journal d'administration : l'entrée reste (quoi, quand), son auteur supprimé n'y figure plus.
+      expect(await prisma.adminAuditLog.count({ where: { adminId: userA.id } })).toBe(0);
 
       // Objets S3 effacés (pièce jointe et orphelin) ; ceux de B restent.
       expect(await storage.exists(a.s3Key)).toBe(false);

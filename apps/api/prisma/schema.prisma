@@ -31,6 +31,12 @@ enum IntervalUnit {
   YEAR
 }
 
+// ADMIN : attribué uniquement par scripts/grant-admin.ts (jamais par l'API HTTP), e-mail vérifié exigé (CHECK).
+enum Role {
+  USER
+  ADMIN
+}
+
 enum EmailTokenType {
   VERIFY
   RESET
@@ -50,6 +56,7 @@ model User {
   // Preuve du consentement aux CGU (date + version acceptée). Nul : comptes antérieurs à E29b.
   termsAcceptedAt   DateTime? @db.Timestamptz(3)
   termsVersion      String?
+  role              Role      @default(USER)
   createdAt         DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
 
@@ -68,6 +75,21 @@ model User {
   scenarios           Scenario[]
   cashflowSimulations CashflowSimulation[]
   categoryPreferences UserCategoryPreference[]
+  adminAuditLogs      AdminAuditLog[]
+}
+
+// Journal des actions d'administration (SPEC §13.1) : qui, quoi, quand ; jamais de donnée financière ni d'e-mail.
+// adminId NULL : action hors HTTP (script d'exploitation) ou administrateur supprimé depuis.
+model AdminAuditLog {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  adminId   String?  @db.Uuid
+  action    String
+  targetId  String?  @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  admin User? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
 }
 
 model Credential {
