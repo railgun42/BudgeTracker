@@ -159,6 +159,27 @@ describe('Récurrences (e2e)', () => {
     expect((await occurrences(body.id)).map((t) => Number(t.amountCents))).toEqual([80_000, 80_000, 95_000]);
   });
 
+  it('scope « all » : montant et libellé appliqués aussi aux occurrences passées non supprimées, retouche écrasée ; scope inconnu ⇒ 400', async () => {
+    const { body } = await create().expect(201);
+    await service.generate(a.id, body.id, '2030-03-31');
+    const [jan, feb] = await occurrences(body.id);
+    await a.call('patch', `/api/v1/transactions/${jan.id}`).send({ version: jan.version, amountCents: 1 }).expect(200);
+    await a.call('delete', `/api/v1/transactions/${feb.id}`).expect(204);
+
+    await a.call('patch', `/api/v1/recurrences/${body.id}`).send({ version: 1, scope: 'everything', template: { amountCents: 95_000 } }).expect(400);
+    await a.call('patch', `/api/v1/recurrences/${body.id}`).send({ version: 1, scope: 'all', template: { amountCents: 95_000, name: 'Loyer 2030' } }).expect(200);
+    const rows = await prisma.transaction.findMany({ where: { recurrenceId: body.id }, orderBy: { date: 'asc' }, select: { amountCents: true, name: true, deletedAt: true, version: true } });
+    expect(rows.map((t) => [Number(t.amountCents), t.name, t.deletedAt === null])).toEqual([
+      [95_000, 'Loyer 2030', true],
+      [80_000, 'Loyer', false],
+      [95_000, 'Loyer 2030', true],
+    ]);
+    expect(rows[0].version).toBe(jan.version + 2);
+
+    await service.generate(a.id, body.id, '2030-04-30');
+    expect((await occurrences(body.id)).map((t) => Number(t.amountCents))).toEqual([95_000, 95_000, 95_000]);
+  });
+
   it('modification avec génération en retard : les occurrences déjà dues partent avec l’ancien montant', async () => {
     const id = await lagging(5, 300n);
     await a.call('patch', `/api/v1/recurrences/${id}`).send({ version: 1, template: { amountCents: 450 } }).expect(200);

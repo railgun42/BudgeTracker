@@ -440,6 +440,51 @@ input[type='file']::file-selector-button {
   font-size: var(--text-base);
 }
 
+// Groupe de champs (sens, question à choix) : <fieldset class="field"> sans cadre natif.
+fieldset.field {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+// Question obligatoire mise en évidence (« Compter dans le solde ? ») ; la légende devient une ligne de la grille.
+.field.question {
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  background: var(--color-surface-2);
+
+  legend {
+    float: left;
+    width: 100%;
+    padding: 0;
+  }
+}
+
+// Montant mis en avant : grand, gras, chiffres tabulaires ; signe facultatif en préfixe (.amount-sign.credit/.debit).
+.field .amount-input {
+  position: relative;
+
+  input {
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+  }
+
+  .amount-sign {
+    position: absolute;
+    inset: 0 auto 0 var(--space-3);
+    display: flex;
+    align-items: center;
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+    pointer-events: none;
+  }
+
+  .amount-sign + input {
+    padding-left: var(--space-5);
+  }
+}
+
 .field-hint,
 .field-error {
   margin: 0;
@@ -521,6 +566,47 @@ input[type='file']::file-selector-button {
   box-shadow: var(--shadow-2);
 }
 
+// Bandeau flottant (succès d'une saisie en modale) : en bas de l'écran, hors du flux de la page.
+.alert.toast {
+  position: fixed;
+  inset: auto var(--space-3) var(--space-3);
+  z-index: 20;
+  justify-content: space-between;
+  margin: 0 auto;
+  box-shadow: var(--shadow-2);
+}
+
+// --- Modale : <dialog class="modal"> ouvert par showModal() (Échap, focus piégé et voile natifs) ---
+
+.modal {
+  width: min(100% - 2 * var(--space-3), 32rem);
+  max-height: calc(100dvh - 2 * var(--space-3));
+  overflow-y: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-2);
+
+  &[open] {
+    animation: enter-up var(--duration-slow) var(--ease-out);
+  }
+
+  &::backdrop {
+    background: var(--color-overlay);
+  }
+
+  h2 {
+    margin-top: 0;
+  }
+
+  .form {
+    max-width: none;
+    margin-bottom: 0;
+  }
+}
+
 // --- Tableaux : compacts, chiffres alignés à droite ---
 
 .scroll {
@@ -591,6 +677,36 @@ td.num {
   animation: none;
 }
 
+// Pastille de catégorie : décorative (aria-hidden), couleur de la catégorie posée en style en ligne, neutre sinon.
+.category-dot {
+  flex: none;
+  width: calc(var(--space-2) + var(--space-1));
+  height: calc(var(--space-2) + var(--space-1));
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+// Icône de catégorie : <svg class="category-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="…" /></svg>, tracé au trait.
+.category-icon {
+  flex: none;
+  box-sizing: border-box;
+  width: var(--space-5);
+  height: var(--space-5);
+  padding: calc(var(--space-1) + 2px);
+  border-radius: var(--radius);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+
+  path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
 // --- Menu déroulant : élément [popover], positionné par l'appelant (inset) ---
 
 .menu {
@@ -651,7 +767,7 @@ td.num {
   border-radius: var(--radius);
 
   button {
-    min-height: 2.25rem;
+    min-height: var(--tap);
     border: 0;
     border-radius: var(--radius-sm);
     background: none;

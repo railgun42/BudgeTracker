@@ -31,6 +31,17 @@ function type(id: string, value: string): void {
 }
 
 const stable = () => harness.fixture.whenStable();
+const dialogOf = (id: string) => el.querySelector(`#${id}`)!.closest('dialog')!;
+
+// jsdom n'implémente pas <dialog> : ouverture/fermeture minimales (attribut open + événement close).
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.setAttribute('open', '');
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  if (!this.hasAttribute('open')) return;
+  this.removeAttribute('open');
+  this.dispatchEvent(new Event('close'));
+};
 
 /** Ouvre /accounts et répond à GET /accounts puis aux soldes des comptes suivis. */
 async function open(accounts: AccountDto[], currentCents = 10000): Promise<void> {
@@ -85,6 +96,9 @@ describe('Comptes : liste', () => {
 describe('Comptes : création', () => {
   it('solde de départ « -12,34 » ⇒ openingBalance de -1234 centimes à la date du jour', async () => {
     await open([]);
+    expect(dialogOf('account-name').hasAttribute('open')).toBe(false);
+    button('Nouveau compte').click();
+    expect(dialogOf('account-name').hasAttribute('open')).toBe(true);
     type('account-name', 'Livret');
     type('account-type', TrackingType.WITH_INTEREST);
     type('account-opening', '-12,34');
@@ -100,6 +114,7 @@ describe('Comptes : création', () => {
     req.flush({ ...COURANT, name: 'Livret' });
     await respond([{ ...COURANT, name: 'Livret' }], -1234);
     expect(text('li.card')).toContain('Solde : -12,34 €');
+    expect(dialogOf('account-name').hasAttribute('open')).toBe(false);
   });
 
   it('NOT_TRACKED : champ de solde de départ masqué, aucun openingBalance envoyé', async () => {
@@ -140,6 +155,7 @@ describe('Comptes : édition', () => {
 
     const name = el.querySelector<HTMLInputElement>('#account-name')!;
     expect(name.value).toBe('Courant');
+    expect(dialogOf('account-name').hasAttribute('open')).toBe(true);
     expect(document.activeElement).toBe(name);
     expect(el.querySelector('#account-opening')).toBeNull();
 
@@ -152,7 +168,18 @@ describe('Comptes : édition', () => {
     await respond([{ ...COURANT, name: 'Compte joint', version: 2 }]);
 
     expect(text('h2')).toBe('Nouveau compte');
+    expect(dialogOf('account-name').hasAttribute('open')).toBe(false);
     expect(text('li.card')).toContain('Compte joint');
+  });
+
+  it('fermer la modale (Échap ou Annuler) abandonne la modification', async () => {
+    await open([COURANT]);
+    button('Modifier').click();
+    await stable();
+    dialogOf('account-name').close(); // Échap déclenche le même événement close
+    await stable();
+    expect(text('h2')).toBe('Nouveau compte');
+    expect(el.querySelector<HTMLInputElement>('#account-name')!.value).toBe('');
   });
 
   it('409 ⇒ message clair et bouton « Recharger » qui relit les comptes', async () => {
@@ -218,8 +245,21 @@ describe('Comptes : taux d’intérêt', () => {
     expect(text('li.card')).not.toContain('manquant');
   });
 
+  it('« Définir le taux » sur la carte ⇒ modale avec le compte présélectionné', async () => {
+    const LIVRET_2: AccountDto = { ...LIVRET, id: 'a4', name: 'LDDS' };
+    await open([LIVRET, LIVRET_2]);
+    expect(el.querySelector<HTMLSelectElement>('#rate-account')!.value).toBe('a3');
+    button('Définir le taux de LDDS').click();
+    await stable();
+    expect(dialogOf('rate-value').hasAttribute('open')).toBe(true);
+    expect(el.querySelector<HTMLSelectElement>('#rate-account')!.value).toBe('a4');
+  });
+
   it('saisie « 2,5 » ⇒ POST rateBp 250 à la date du jour sur le compte choisi, puis rechargement', async () => {
     await open([COURANT, LIVRET]);
+    expect(text('li.card:first-child')).not.toContain('Définir le taux'); // compte NORMAL
+    button('Définir le taux').click();
+    await stable();
     expect(el.querySelector<HTMLSelectElement>('#rate-account')!.value).toBe('a3');
     type('rate-value', '2,5');
     button('Enregistrer le taux').click();
@@ -231,6 +271,7 @@ describe('Comptes : taux d’intérêt', () => {
     await respond([COURANT, LIVRET], 10000, { missingRate: false, rates: [{ id: 'r1', accountId: 'a3', rateBp: 250, effectiveDate: today() }] });
     expect(text('li.card:nth-child(2)')).toContain('Taux : 2,50 %');
     expect(el.querySelector<HTMLInputElement>('#rate-value')!.value).toBe('');
+    expect(dialogOf('rate-value').hasAttribute('open')).toBe(false);
   });
 
   it('taux invalide (vide, > 100, 3 décimales) ⇒ aucune requête, erreur reliée au champ', async () => {

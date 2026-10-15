@@ -7,12 +7,14 @@ import { App } from './app';
 import { routes } from './app.routes';
 import { Session } from './core/auth/session';
 import { provideApiHttp } from './core/http';
+import { today } from './core/today';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null, role: 'USER' };
 const ADMIN = { ...USER, role: 'ADMIN' };
 
+// compileComponents : la coquille contient des blocs @defer (modale de saisie rapide).
 beforeEach(() =>
-  TestBed.configureTestingModule({ providers: [provideRouter(routes), provideApiHttp(), provideHttpClientTesting()] }),
+  TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes), provideApiHttp(), provideHttpClientTesting()] }).compileComponents(),
 );
 
 /** Session restaurée par GET /me : connecté (user) ou invité (401). */
@@ -64,7 +66,7 @@ describe('Shell', () => {
   it('lien Administration : absent pour un utilisateur ordinaire, présent pour un admin', async () => {
     const adminLinks = async (user: typeof USER) => {
       TestBed.resetTestingModule();
-      TestBed.configureTestingModule({ providers: [provideRouter(routes), provideApiHttp(), provideHttpClientTesting()] });
+      await TestBed.configureTestingModule({ imports: [App], providers: [provideRouter(routes), provideApiHttp(), provideHttpClientTesting()] }).compileComponents();
       await restore(user);
       const fixture = TestBed.createComponent(App);
       await fixture.whenStable();
@@ -119,6 +121,105 @@ describe('Shell', () => {
     expect(TestBed.inject(Session).user()).toBeNull();
     expect(TestBed.inject(Router).url).toBe('/login');
     expect((fixture.nativeElement as HTMLElement).querySelector('nav[aria-label="Navigation principale"]')).toBeNull();
+  });
+});
+
+describe('Saisie rapide en modale (coquille)', () => {
+  const COURANT = { id: 'a1', name: 'Courant', trackingType: 'NORMAL', openingDate: null, version: 1 };
+  const LIVRET = { ...COURANT, id: 'a2', name: 'Livret' };
+  const balanceUrl = (id: string) => `/api/v1/accounts/${id}/balance?today=${today()}`;
+
+  // jsdom n'implémente pas <dialog> : ouverture/fermeture minimales (attribut open + événement close).
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+    this.setAttribute('open', '');
+  };
+  HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+    if (!this.hasAttribute('open')) return;
+    this.removeAttribute('open');
+    this.dispatchEvent(new Event('close'));
+  };
+
+  /** Coquille sur /accounts, un compte « Courant ». */
+  async function onAccounts() {
+    await restore(USER);
+    const http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(App);
+    await TestBed.inject(Router).navigateByUrl('/accounts');
+    await fixture.whenStable();
+    http.expectOne('/api/v1/accounts').flush([COURANT]);
+    http.expectOne(balanceUrl('a1')).flush({ currentCents: 10000, forecastCents: 10000 });
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    const dialog = el.querySelector('dialog[aria-labelledby="entry-title"]')!;
+    const fill = (id: string, value: string) => {
+      const input = el.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!;
+      input.value = value;
+      input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? 'change' : 'input'));
+    };
+    return { http, fixture, el, dialog, fill };
+  }
+
+  it('« + Transaction » ouvre la modale sur la page courante ; succès ⇒ modale fermée, bandeau, soldes relus', async () => {
+    const { http, fixture, el, dialog, fill } = await onAccounts();
+    el.querySelector<HTMLButtonElement>('header button.add-button')!.click();
+    await fixture.whenStable();
+
+    expect(dialog.hasAttribute('open')).toBe(true);
+    expect(dialog.getAttribute('aria-labelledby')).toBe('entry-title');
+    expect(dialog.querySelector('#entry-title')?.textContent).toBe('Ajouter une transaction');
+    expect(dialog.querySelector('h1')).toBeNull();
+    expect(TestBed.inject(Router).url).toBe('/accounts');
+    http.expectOne('/api/v1/accounts').flush([COURANT]);
+    http.expectOne('/api/v1/categories').flush([]);
+    await fixture.whenStable();
+
+    fill('tx-amount', '12,34');
+    dialog.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    http.expectOne('/api/v1/transactions').flush({});
+    await fixture.whenStable();
+
+    expect(dialog.hasAttribute('open')).toBe(false);
+    expect(dialog.querySelector('form')).toBeNull();
+    expect(el.querySelector('.toast[role="status"]')?.textContent).toContain('Transaction enregistrée.');
+    expect(TestBed.inject(Router).url).toBe('/accounts');
+    // La page Comptes relit ses soldes.
+    http.expectOne('/api/v1/accounts').flush([COURANT]);
+    http.expectOne(balanceUrl('a1')).flush({ currentCents: 8766, forecastCents: 8766 });
+    await fixture.whenStable();
+    expect(el.querySelector('.balance')?.textContent).toContain('87,66');
+  });
+
+  it('virement depuis Comptes : modale sans h1 ni « Retour aux comptes », Annuler la ferme ; succès ⇒ bandeau', async () => {
+    const { http, fixture, el, dialog, fill } = await onAccounts();
+    const openTransfer = async () => {
+      [...el.querySelectorAll<HTMLButtonElement>('main button')].find((b) => b.textContent?.includes('Faire un virement'))!.click();
+      await fixture.whenStable();
+      http.expectOne('/api/v1/accounts').flush([COURANT, LIVRET]);
+      await fixture.whenStable();
+    };
+
+    await openTransfer();
+    expect(dialog.querySelector('#entry-title')?.textContent).toBe('Nouveau virement');
+    expect(dialog.querySelector('h1')).toBeNull();
+    expect(dialog.textContent).not.toContain('Retour aux comptes');
+    [...dialog.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Annuler')!.click();
+    await fixture.whenStable();
+    expect(dialog.hasAttribute('open')).toBe(false);
+
+    await openTransfer();
+    fill('transfer-from', 'a1');
+    fill('transfer-to', 'a2');
+    fill('transfer-amount', '10');
+    dialog.querySelector('form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    const req = http.expectOne('/api/v1/transfers');
+    expect(req.request.body).toMatchObject({ fromAccountId: 'a1', toAccountId: 'a2', amountCents: 1000 });
+    req.flush({});
+    await fixture.whenStable();
+    expect(dialog.hasAttribute('open')).toBe(false);
+    expect(el.querySelector('.toast')?.textContent).toContain('Virement enregistré.');
+    http.expectOne('/api/v1/accounts').flush([COURANT, LIVRET]);
   });
 });
 

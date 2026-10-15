@@ -66,7 +66,11 @@ export type CategorySuggestionDecision = Exclude<CategorySuggestionStatus, 'PEND
 /** 429 au-delà de ce nombre de suggestions en attente par utilisateur. */
 export const CATEGORY_SUGGESTION_MAX_PENDING = 20;
 
-/** GET /categories/suggestions (les siennes) et GET /admin/category-suggestions?status (toutes, sans auteur). */
+/**
+ * GET /categories/suggestions (les siennes) et GET /admin/category-suggestions?status (toutes, sans auteur).
+ * DELETE /categories/suggestions/:id (204) : l'auteur retire la sienne ; en attente ⇒ annulée (sa catégorie perso
+ * reste), traitée ⇒ « vu ». Supprimée pour de bon, y compris de la boîte admin. Celle d'un autre ⇒ 404.
+ */
 export interface CategorySuggestionDto {
   id: string;
   name: string;

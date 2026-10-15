@@ -258,6 +258,12 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     expect((await a.call('get', '/api/v1/categories/suggestions').expect(200)).body).toEqual([]);
     expect((await b.call('get', '/api/v1/categories/suggestions').expect(200)).body).toEqual([expect.objectContaining({ name: 'Suggestion de B', status: 'PENDING' })]);
   },
+  'DELETE /api/v1/categories/suggestions/:id': async ({ a, b }) => {
+    await b.call('post', '/api/v1/categories').send({ name: 'Suggestion de B', suggest: true }).expect(201);
+    const [s] = (await b.call('get', '/api/v1/categories/suggestions').expect(200)).body;
+    await a.call('delete', `/api/v1/categories/suggestions/${s.id}`).expect(404);
+    expect((await b.call('get', '/api/v1/categories/suggestions').expect(200)).body).toContainEqual(s);
+  },
   'PATCH /api/v1/categories/:id': async (users) => {
     const { id, intact } = await categoryOfB(users);
     await users.a.call('patch', `/api/v1/categories/${id}`).send({ name: 'Piraté' }).expect(404);

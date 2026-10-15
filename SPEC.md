@@ -69,7 +69,7 @@ Un virement est **une opération, deux transactions** jumelées par `transferId`
 - Génération **côté serveur** : job quotidien + rattrapage à la connexion (utilisateur absent un mois ⇒ toutes les occurrences dues sont créées).
 - **Idempotence** : contrainte unique `(recurrenceId, occurrenceDate)`.
 - Cas du 29/30/31 : une récurrence mensuelle démarrée le 31 tombe sur le **dernier jour** des mois courts, sans dérive (le jour d'ancrage reste 31).
-- **Modification du montant/template : futur seulement.** Le passé n'est jamais réécrit. Une occurrence peut être éditée ou supprimée individuellement sans casser la règle. Supprimer une occurrence passée ne la régénère pas.
+- **Modification du montant/template : au choix de l'utilisateur.** Par défaut, futur seulement (le passé n'est pas réécrit) ; s'il le demande explicitement, les champs modifiés sont aussi appliqués aux occurrences déjà créées et non supprimées (une retouche individuelle de ces champs est écrasée, une occurrence supprimée reste supprimée). Compte, fréquence et première échéance ne se modifient pas. Une occurrence peut être éditée ou supprimée individuellement sans casser la règle. Supprimer une occurrence passée ne la régénère pas.
 - Le front ne génère plus rien (`autoUpdateTransaction` est supprimé).
 
 ## 4. Pièces jointes
@@ -109,6 +109,7 @@ Fonctions **pures**, testées unitairement, indépendantes de la BDD :
 - Historique paginé par curseur (50 par page), filtres date/catégorie/tag/compte.
 - Annulation d'une suppression (bannière « Annuler »), message clair sur un conflit 409.
 - Catégorie et sous-catégorie : deux champs liés et facultatifs ; l'historique peut filtrer les transactions sans catégorie.
+- **Icône de catégorie** : chaque catégorie racine a une icône (catégories du seed et techniques ; icône générique pour les personnelles et celles de l'administrateur) ; une sous-catégorie prend celle de son parent. Affichée dans « Mes catégories » et devant chaque transaction de l'historique (icône propre « sans catégorie »). Décorative : le nom reste écrit.
 - **Notifications** : cloche dans la barre de navigation avec le nombre de nouvelles notifications (§13).
 - **Page 404** : le libellé du bouton de retour correspond à la page réellement atteinte (connecté ou non).
 - **Tableau de bord** : prévu, contenu **à décrire** par le propriétaire du produit avant spécification.
@@ -154,6 +155,7 @@ Valeurs par défaut retenues, modifiables sans impact sur le reste :
 - Rétention des sauvegardes : **30 jours** (donc données d'un compte supprimé purgées des sauvegardes sous 30 jours).
 - Fenêtre du « rythme moyen » de la projection : **3 derniers mois**.
 - Tranché : pas de ré-acceptation forcée des CGU (préavis 30 jours par e-mail et annonce, §13.6) ; retours utilisateurs conservés 30 jours après traitement, 90 jours au plus sans traitement (§13.5).
+- **À spécifier (souhait du propriétaire)** : **transactions rapides**, des modèles réutilisables (ex. « McDo » : libellé, catégorie, compte, montant habituel) avec **leur propre icône**, retrouvés par recherche depuis « Nouvelle transaction » ; une transaction créée depuis un modèle affiche l'icône du modèle dans l'historique à la place de celle de sa catégorie. Demande un modèle de données, une API et des règles (modification ou suppression d'un modèle déjà utilisé) avant toute implémentation.
 
 ## 13. Administration et communication
 
@@ -177,6 +179,7 @@ Une page permet à l'utilisateur de créer ses catégories et sous-catégories (
 - **Retour libre** : page avec un formulaire (type : avis, idée de fonctionnalité, problème ; texte limité en taille). Limites par utilisateur : **5 retours par 24 h** et **20 retours non traités** au plus. L'administrateur les lit dans une boîte de réception **triable par type et par statut** (nouveau, traité).
 - **Conservation** : un retour est supprimé **30 jours après son passage à « traité »** ; un retour jamais traité est conservé **90 jours au maximum**, l'administrateur étant averti à l'approche de l'échéance. Durées en constantes modifiables.
 - **Suggestion de catégorie** : à la création d'une catégorie personnelle, une case facultative « proposer cette catégorie à tous » crée une `CategorySuggestion` visible de l'administrateur, qui peut l'accepter, la refuser ou la traiter, et répondre à l'auteur. Accepter **rend globale la catégorie de l'auteur** (pas de doublon chez lui, ses transactions la gardent ; globale neuve s'il l'a supprimée entre-temps) ; elle est **masquée par défaut pour les utilisateurs déjà inscrits** (pas d'ajout inopiné dans des listes déjà triées, démasquable depuis « Mes catégories ») et visible pour les nouveaux inscrits.
+- **Retrait par l'auteur** (« Mes catégories ») : une suggestion **en attente** peut être annulée (sa catégorie personnelle reste) ; une suggestion **traitée** (acceptée, refusée ou traitée) peut être marquée « Vu » pour disparaître de sa liste. Dans les deux cas elle est supprimée, y compris de la boîte de l'administrateur ; le journal d'administration garde la décision déjà prise.
 
 ### 13.6 Communication administrateur → utilisateur
 - **Notifications** dans l'application : cloche dans la barre de navigation, avec compteur de notifications non lues.

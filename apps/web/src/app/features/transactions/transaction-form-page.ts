@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -13,35 +13,64 @@ import {
 import { forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api-client';
 import { amountValidator } from '../../core/money';
+import { QuickEntry } from '../../core/quick-entry';
 import { today } from '../../core/today';
 import { categoryOptions } from '../../shared-ui/labels';
 import { errorMessage } from '../auth/auth-form';
 
 // Saisie en 3 champs (SPEC §7) : montant, catégorie, compte. Date = aujourd'hui, le reste est replié.
 // Catégorie puis sous-catégorie : deux listes liées, toutes deux facultatives (SPEC §3.2).
+// Page (/transactions/new) ou modale de la coquille (« + Transaction »), selon `modal`.
 @Component({
   selector: 'app-transaction-form-page',
   imports: [ReactiveFormsModule, RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h1>Ajouter une transaction</h1>
-    <p><a routerLink="/transfers/new">Faire un virement entre comptes</a></p>
+    <div class="entry-head">
+      @if (modal()) {
+        <h2 id="entry-title">Ajouter une transaction</h2>
+      } @else {
+        <h1>Ajouter une transaction</h1>
+      }
+      <p><a routerLink="/transfers/new">Faire un virement entre comptes</a></p>
+    </div>
 
     @if (error()) {
       <p class="alert alert-error" role="alert">{{ error() }}</p>
     }
 
-    <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <form class="form" [class.card]="!modal()" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <!-- Sens en tête, toujours visible (charte §7) ; pilote le même contrôle « type » qu'avant. -->
+      <fieldset class="field">
+        <legend>Sens</legend>
+        <div id="tx-type" class="segmented">
+          <button type="button" [attr.aria-pressed]="form.controls.type.value === DEBIT" (click)="form.controls.type.setValue(DEBIT)">
+            Dépense
+          </button>
+          <button type="button" [attr.aria-pressed]="form.controls.type.value === CREDIT" (click)="form.controls.type.setValue(CREDIT)">
+            Revenu
+          </button>
+        </div>
+      </fieldset>
+
       <div class="field">
         <label for="tx-amount">Montant (€)</label>
-        <input
-          id="tx-amount"
-          formControlName="amount"
-          inputmode="decimal"
-          autocomplete="off"
-          [attr.aria-invalid]="invalid('amount')"
-          aria-describedby="tx-amount-hint"
-        />
+        <!-- Signe selon le sens : la couleur ne porte jamais seule l'information. -->
+        <div class="amount-input">
+          @if (form.controls.type.value === CREDIT) {
+            <span class="amount-sign credit" aria-hidden="true">+</span>
+          } @else {
+            <span class="amount-sign debit" aria-hidden="true">−</span>
+          }
+          <input
+            id="tx-amount"
+            formControlName="amount"
+            inputmode="decimal"
+            autocomplete="off"
+            [attr.aria-invalid]="invalid('amount')"
+            aria-describedby="tx-amount-hint"
+          />
+        </div>
         <p id="tx-amount-hint" [class]="invalid('amount') ? 'field-error' : 'field-hint'">
           Montant positif, ex. 12,34.
         </p>
@@ -93,16 +122,9 @@ import { errorMessage } from '../auth/auth-form';
         }
       </div>
 
-      <details>
+      <details class="more">
         <summary>Plus de détails (facultatif)</summary>
         <div class="form">
-          <div class="field">
-            <label for="tx-type">Sens</label>
-            <select id="tx-type" formControlName="type">
-              <option [value]="DEBIT">Dépense</option>
-              <option [value]="CREDIT">Revenu</option>
-            </select>
-          </div>
           <div class="field">
             <label for="tx-date">Date</label>
             <input id="tx-date" type="date" formControlName="date" />
@@ -119,27 +141,65 @@ import { errorMessage } from '../auth/auth-form';
       </details>
 
       @if (onOpening()) {
-        <fieldset class="field" aria-describedby="tx-count-hint">
+        <fieldset class="field question" aria-describedby="tx-count-hint">
           <legend>Compter dans le solde ?</legend>
           <p id="tx-count-hint" [class]="choiceMissing() ? 'field-error' : 'field-hint'">
             Même jour que le solde de départ du compte : cette transaction y est-elle déjà comprise ?
           </p>
-          <label><input type="radio" formControlName="countInBalance" value="true" /> Oui, l'ajouter au solde</label>
-          <label><input type="radio" formControlName="countInBalance" value="false" /> Non, déjà comprise dans le solde de départ</label>
+          <label class="checkbox"><input type="radio" formControlName="countInBalance" value="true" /> Oui, l'ajouter au solde</label>
+          <label class="checkbox"><input type="radio" formControlName="countInBalance" value="false" /> Non, déjà comprise dans le solde de départ</label>
         </fieldset>
       } @else if (beforeOpening()) {
-        <p id="tx-before-opening" class="field-hint">
+        <p id="tx-before-opening" class="alert" role="status">
           Antérieure au solde de départ : visible dans l'historique et les statistiques, sans changer le solde.
         </p>
       }
 
-      <button class="button" type="submit" [disabled]="pending()">Enregistrer</button>
+      <div class="actions">
+        <button class="button" type="submit" [disabled]="pending()">Enregistrer</button>
+        @if (modal()) {
+          <button class="button button-secondary" type="button" (click)="quick.open.set(null)">Annuler</button>
+        }
+      </div>
     </form>
+  `,
+  // Mise en page seulement : champs, segmenté, montant, question, bandeaux et boutons viennent de la charte (styles.scss).
+  styles: `
+    .entry-head {
+      margin-bottom: var(--space-3);
+      h1,
+      h2 {
+        margin-bottom: var(--space-1);
+      }
+      p {
+        margin: 0;
+      }
+    }
+    .form.card {
+      padding: var(--space-4);
+    }
+    .more {
+      summary {
+        padding-block: calc((var(--tap) - 1lh) / 2);
+        color: var(--color-primary);
+        font-weight: var(--weight-medium);
+        cursor: pointer;
+      }
+      .form {
+        margin: var(--space-2) 0 0;
+      }
+    }
+    .alert {
+      margin: 0;
+    }
   `,
 })
 export class TransactionFormPage {
   private readonly api = inject(ApiClient);
   private readonly router = inject(Router);
+  protected readonly quick = inject(QuickEntry);
+  /** Dans la modale de la coquille : titre h2, bouton Annuler, fin signalée à la coquille au lieu d'une navigation. */
+  readonly modal = input(false);
 
   protected readonly DEBIT = TransactionType.DEBIT;
   protected readonly CREDIT = TransactionType.CREDIT;
@@ -212,8 +272,8 @@ export class TransactionFormPage {
     this.pending.set(true);
     this.error.set(null);
     this.api.post('/transactions', body).subscribe({
-      // Retour aux comptes : les soldes y sont relus, la dépense est visible tout de suite.
-      next: () => this.router.navigateByUrl('/accounts'),
+      // Page : retour aux comptes, soldes relus. Modale : la coquille ferme et la page courante relit ses données.
+      next: () => (this.modal() ? this.quick.saved.next('Transaction enregistrée.') : this.router.navigateByUrl('/accounts')),
       error: (e) => {
         this.pending.set(false);
         const portfolio = this.accounts().find((a) => a.id === accountId)?.trackingType === TrackingType.NOT_TRACKED;

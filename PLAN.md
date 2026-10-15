@@ -93,7 +93,7 @@ Conventions : ids `uuid` ; `createdAt/updatedAt` UTC ; montants `amountCents BIG
 | **Tag** / **TransactionTag** | userId, name | unique (userId, lower(name)) |
 | **Attachment** | userId, transactionId (unique ⇒ 0..1), s3Key, originalName (affichage seul), mime, sizeBytes | quota = `SUM(sizeBytes)` par utilisateur |
 | **Recurrence** | accountId, interval, unit (`DAY`/`WEEK`/`MONTH`/`YEAR`), startDate, endDate?, anchorDay, lastGeneration?, version, deletedAt | |
-| **TransactionTemplate** | recurrenceId (1-1), name, amountCents, type, categoryId, details, tags | lu **au moment de la génération** ⇒ « futur seulement » sans réécrire le passé |
+| **TransactionTemplate** | recurrenceId (1-1), name, amountCents, type, categoryId, details, tags | lu **au moment de la génération** ⇒ « futur seulement » par défaut ; `scope: 'all'` réécrit aussi les occurrences passées non supprimées (SPEC §3.6, amendée le 2026-10-15) |
 | **InterestRate** | accountId, rateBp (taux annuel en points de base), effectiveDate | unique (accountId, effectiveDate) |
 | **InterestCredit** | accountId, year, transactionId | **unique (accountId, year)** ⇒ idempotence du 31/12 |
 | **Scenario** | userId, name, params (JSON), version | `params` validé par un DTO union discriminée, pas du JSON libre |

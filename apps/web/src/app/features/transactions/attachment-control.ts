@@ -28,12 +28,33 @@ import { errorMessage } from '../auth/auth-form';
     }
   `,
   styles: `
+    // Pied de ligne sous un filet ; les boutons et le champ fichier gardent 44 px de cible.
     :host {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       gap: var(--space-2);
       flex-basis: 100%;
+      padding-top: var(--space-2);
+      border-top: 1px solid var(--color-border);
+      font-size: var(--text-sm);
+      overflow-wrap: anywhere;
+    }
+    label {
+      flex-basis: 100%;
+      color: var(--color-text-muted);
+    }
+    input[type='file'] {
+      max-width: 100%;
+      min-height: var(--tap);
+      font: inherit;
+    }
+    span.muted {
+      flex: 1 1 12rem;
+    }
+    .field-error {
+      flex-basis: 100%;
+      margin: 0;
     }
   `,
 })

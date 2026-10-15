@@ -88,7 +88,9 @@ export class TransactionsService {
       where: {
         ...live(userId),
         accountId,
-        categoryId: categoryId === UNCATEGORIZED ? null : categoryId,
+        categoryId: categoryId === UNCATEGORIZED ? null : undefined,
+        // Catégorie ⇒ elle et ses sous-catégories ; sous-catégorie (sans enfant, 2 niveaux) ⇒ elle seule.
+        category: categoryId && categoryId !== UNCATEGORIZED ? { OR: [{ id: categoryId }, { parentId: categoryId }] } : undefined,
         tags: tagId ? { some: { tagId } } : undefined,
         date: { gte: from && toDate(from), lte: to && toDate(to) },
         // Strictement après le curseur dans l'ordre (date, id) décroissant : ni doublon ni trou à date égale.

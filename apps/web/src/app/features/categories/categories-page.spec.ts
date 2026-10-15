@@ -36,6 +36,16 @@ const clean = (s: string | null | undefined) => s?.replace(/\s+/g, ' ').trim();
 const button = (label: string) => [...el.querySelectorAll('button')].find((b) => clean(b.textContent) === label)!;
 const options = (id: string) => [...el.querySelectorAll(`#${id} option`)].map((o) => clean(o.textContent));
 
+// jsdom n'implémente pas <dialog> : ouverture/fermeture minimales (attribut open + événement close).
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.setAttribute('open', '');
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  this.removeAttribute('open');
+  this.dispatchEvent(new Event('close'));
+};
+const dialogOf = (id: string) => el.querySelector(`#${id}`)?.closest('dialog');
+
 function type(id: string, value: string): void {
   const input = el.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!;
   input.value = value;
@@ -72,8 +82,13 @@ afterEach(() => http.verify());
 describe('Mes catégories', () => {
   it('arbre globales et perso, noms personnalisés, masquées signalées, techniques absentes', async () => {
     await open();
-    const rows = [...el.querySelectorAll('.card p')].map((p) => clean(p.textContent));
-    expect(rows).toEqual(['Maison (globale, d\'origine « Logement », masquée)', 'Sport (globale)', 'Licence (globale)', 'Vélo (personnelle)']);
+    const rows = [...el.querySelectorAll('.row-main')].map((p) => clean(p.textContent));
+    // Globale par défaut, non écrite ; seule une perso est signalée.
+    expect(rows).toEqual(['Maison, d\'origine « Logement », masquée', 'Sport', 'Licence', 'Vélo, personnelle']);
+    expect(el.querySelector('[aria-label="Catégories"]')?.textContent).not.toContain('globale');
+    expect(el.querySelector('.hidden-category .badge')?.textContent).toBe('masquée');
+    // Icône décorative sur les racines seulement.
+    expect(el.querySelectorAll('.category-icon[aria-hidden="true"]').length).toBe(2);
     expect(el.querySelector('[aria-label="Sous-catégories de Sport"]')).not.toBeNull();
     // Parents possibles : racines proposées à la saisie (ni masquée ni technique).
     expect(options('cat-parent')).toEqual(['Aucune : catégorie principale', 'Sport']);
@@ -113,6 +128,8 @@ describe('Mes catégories', () => {
 
   it('crée une sous-catégorie sous une catégorie globale', async () => {
     await open();
+    button('Nouvelle catégorie').click();
+    expect(dialogOf('cat-name')?.hasAttribute('open')).toBe(true);
     el.querySelector<HTMLFormElement>('form.form')!.dispatchEvent(new Event('submit'));
     await stable();
     expect(el.querySelector('#cat-name')?.getAttribute('aria-invalid')).toBe('true'); // nom obligatoire
@@ -123,6 +140,7 @@ describe('Mes catégories', () => {
       name: 'Escalade',
       parentId: 'c1',
     });
+    expect(dialogOf('cat-name')?.hasAttribute('open')).toBe(false); // modale fermée après succès
   });
 
   it('suppression d’une perso : 409 ⇒ demande une cible, puis réaffectation', async () => {
@@ -130,6 +148,8 @@ describe('Mes catégories', () => {
     expect(button('Supprimer Sport')).toBeUndefined(); // globale : non supprimable
     button('Supprimer Vélo').click();
     await stable();
+    expect(dialogOf('reassign-p1')?.hasAttribute('open')).toBe(true);
+    expect(clean(dialogOf('reassign-p1')?.querySelector('h2')?.textContent)).toBe('Supprimer « Vélo »');
     expect(options('reassign-p1')).toEqual(['Aucune (catégorie inutilisée)', 'Maison', 'Sport', 'Sport › Licence']);
 
     const confirm = () => button('Confirmer la suppression').click();
@@ -140,7 +160,8 @@ describe('Mes catégories', () => {
 
     type('reassign-p1', 'c2');
     await act(confirm, 'DELETE', '/api/v1/categories/p1?reassignTo=c2', null, [SPORT, LICENCE, HOUSING]);
-    expect(el.querySelector('.tree')?.textContent).not.toContain('Vélo');
+    expect(el.querySelector('[aria-label="Catégories"]')?.textContent).not.toContain('Vélo');
+    expect(el.querySelector('#reassign-p1')).toBeNull(); // modale fermée
     expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('Catégorie « Vélo » supprimée.');
   });
 
@@ -148,9 +169,9 @@ describe('Mes catégories', () => {
     const AIDE = cat('a1', { name: 'Aide sociale', customName: 'Aides' });
     const OLD = cat('a2', { name: 'Ancienne', archived: true });
     await open([...ALL, AIDE, OLD]);
-    const rows = [...el.querySelectorAll('.card p')].map((p) => clean(p.textContent));
-    expect(rows).toContain('Aides (globale, d\'origine « Aide sociale »)');
-    expect(rows).toContain('Ancienne (globale, archivée)');
+    const rows = [...el.querySelectorAll('.row-main')].map((p) => clean(p.textContent));
+    expect(rows).toContain('Aides, d\'origine « Aide sociale »');
+    expect(rows).toContain('Ancienne, archivée');
     expect(options('cat-parent')).toEqual(['Aucune : catégorie principale', 'Aides', 'Sport']);
     button('Supprimer Vélo').click();
     await stable();
@@ -162,8 +183,10 @@ describe('Mes catégories', () => {
     const ACCEPTED: CategorySuggestionDto = { id: 's1', name: 'Escalade', parentId: 'c1', status: 'ACCEPTED', createdAt: '2026-10-15T08:00:00.000Z', treatedAt: '2026-10-15T09:00:00.000Z' };
     const PENDING: CategorySuggestionDto = { id: 's2', name: '<b>Yoga</b>', parentId: null, status: 'PENDING', createdAt: '2026-10-15T10:00:00.000Z', treatedAt: null };
     await open([...ALL, PERSO], [ACCEPTED]);
-    const suggestions = () => [...el.querySelectorAll('[aria-label="Mes suggestions"] li')].map((li) => clean(li.textContent));
-    expect(suggestions()).toEqual(['Escalade dans « Sport » · Acceptée']);
+    // Nom et statut, sans le bouton.
+    const suggestions = () =>
+      [...el.querySelectorAll('[aria-label="Mes suggestions"] li')].map((li) => clean([...li.querySelectorAll('.row-main, .badge')].map((n) => n.textContent).join(', ')));
+    expect(suggestions()).toEqual(['Escalade dans « Sport », Acceptée']);
     const box = el.querySelector<HTMLInputElement>('#cat-suggest')!;
     expect(box.checked).toBe(false); // facultative
 
@@ -176,7 +199,7 @@ describe('Mes catégories', () => {
     http.expectOne('/api/v1/categories').flush([...ALL, PERSO]);
     http.expectOne('/api/v1/categories/suggestions').flush([PENDING, ACCEPTED]);
     await stable();
-    expect(suggestions()).toEqual(['<b>Yoga</b> · En attente', 'Escalade dans « Sport » · Acceptée']); // texte brut
+    expect(suggestions()).toEqual(['<b>Yoga</b>, En attente', 'Escalade dans « Sport », Acceptée']); // texte brut
     expect(el.querySelector('[aria-label="Mes suggestions"] b')).toBeNull();
     expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('Catégorie « <b>Yoga</b> » créée et proposée à tous.');
     expect(box.checked).toBe(false); // formulaire remis à zéro
@@ -190,6 +213,24 @@ describe('Mes catégories', () => {
     expect(clean(el.querySelector('#cat-suggest-hint')?.textContent)).toMatch(/^Impossible sous une de vos catégories personnelles/);
     const body = await act(() => el.querySelector<HTMLFormElement>('form.form')!.dispatchEvent(new Event('submit')), 'POST', '/api/v1/categories', PERSO, [...ALL, PERSO]);
     expect(body).toEqual({ name: 'Établi', parentId: 'p3' });
+  });
+
+  it('« Retirer » annule une suggestion en attente, « Vu » retire une suggestion traitée', async () => {
+    const PENDING: CategorySuggestionDto = { id: 's2', name: 'Yoga', parentId: null, status: 'PENDING', createdAt: '2026-10-15T10:00:00.000Z', treatedAt: null };
+    const REJECTED: CategorySuggestionDto = { id: 's3', name: 'Golf', parentId: null, status: 'REJECTED', createdAt: '2026-10-15T08:00:00.000Z', treatedAt: '2026-10-15T09:00:00.000Z' };
+    await open(ALL, [PENDING, REJECTED]);
+    expect(button('Vu : retirer de la liste « Yoga »')).toBeUndefined(); // en attente : pas de « Vu »
+
+    button('Retirer : annuler la suggestion « Yoga »').click();
+    http.expectOne({ method: 'DELETE', url: '/api/v1/categories/suggestions/s2' }).flush(null);
+    await stable();
+    expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('Suggestion « Yoga » annulée.');
+
+    button('Vu : retirer de la liste « Golf »').click();
+    http.expectOne({ method: 'DELETE', url: '/api/v1/categories/suggestions/s3' }).flush(null);
+    await stable();
+    expect(el.querySelector('[aria-label="Mes suggestions"]')).toBeNull(); // liste vide ⇒ section masquée
+    expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('Suggestion « Golf » retirée de la liste.');
   });
 
   it('trop de suggestions en attente (429) : message explicite', async () => {

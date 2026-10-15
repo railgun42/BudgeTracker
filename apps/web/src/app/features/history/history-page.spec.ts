@@ -6,6 +6,7 @@ import { AccountDto, CategoryDto, TrackingType, TransactionDto, TransactionType 
 import { routes } from '../../app.routes';
 import { Session } from '../../core/auth/session';
 import { provideApiHttp } from '../../core/http';
+import { FILTER_DELAY_MS } from './history-page';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
 const ACCOUNTS: AccountDto[] = [
@@ -45,6 +46,9 @@ const text = (selector: string) => el.querySelector(selector)?.textContent?.repl
 const rows = () => [...el.querySelectorAll('li.row')].map((li) => li.textContent!.replace(/\s+/g, ' ').trim());
 const button = (label: string) => [...el.querySelectorAll('button')].find((b) => b.textContent?.includes(label));
 const stable = () => harness.fixture.whenStable();
+/** Laisse passer le délai d'application automatique des filtres. */
+const afterDelay = () => new Promise((r) => setTimeout(r, FILTER_DELAY_MS + 50)).then(stable);
+const noListRequest = () => http.expectNone((r) => r.method === 'GET' && r.url === '/api/v1/transactions');
 
 function type(id: string, value: string): void {
   const input = el.querySelector<HTMLInputElement | HTMLSelectElement>(`#${id}`)!;
@@ -92,13 +96,23 @@ describe('Historique : liste et pagination', () => {
 
     expect(params(first)).toEqual({});
     const [debit, credit] = rows();
-    expect(debit).toContain('2026-10-01');
+    // Regroupement par jour (défaut) : la date lisible est dans l'en-tête du groupe.
+    expect(text('.group-head')).toContain('1 oct. 2026');
     expect(debit).toContain('Marché');
     expect(debit).toContain('Courant · Courses › Alimentaire');
-    expect(debit).toContain('-12,34 €');
+    expect(debit).toContain('−12,34 €'); // U+2212
     expect(credit).toContain('Livret · Courses');
     expect(credit).toContain('+500,00 €');
     expect(button('Charger plus')).toBeUndefined();
+  });
+
+  it('icône de la catégorie racine (sous-catégorie ⇒ parent), virement et sans catégorie à part', async () => {
+    await open([tx('t1'), tx('t2', { categoryId: 'c1' }), tx('t3', { categoryId: 'c3' }), tx('t4', { categoryId: null })]);
+    const icons = [...el.querySelectorAll('li.row .category-icon')];
+    expect(icons.every((i) => i.getAttribute('aria-hidden') === 'true')).toBe(true);
+    const [food, groceries, transfer, none] = icons.map((i) => i.querySelector('path')!.getAttribute('d'));
+    expect(food).toBe(groceries);
+    expect(new Set([groceries, transfer, none]).size).toBe(3);
   });
 
   it('« Charger plus » envoie le curseur et ajoute la page suivante sans remplacer la première', async () => {
@@ -118,15 +132,51 @@ describe('Historique : liste et pagination', () => {
   });
 });
 
+describe('Historique : regroupement', () => {
+  it('par jour, semaine (lundi) ou mois, avec le solde signé de chaque groupe', async () => {
+    await open([
+      tx('t1', { name: 'Lundi', date: '2026-10-05' }),
+      tx('t2', { name: 'Paie', date: '2026-10-04', type: TransactionType.CREDIT, amountCents: 50000 }),
+      tx('t3', { name: 'Jeudi', date: '2026-10-01', amountCents: 1000 }),
+      tx('t4', { name: 'Septembre', date: '2026-09-30', amountCents: 66 }),
+    ]);
+    const heads = () => [...el.querySelectorAll('.group-head')].map((h) => h.textContent!.replace(/\s+/g, ' ').trim());
+
+    expect(heads()).toHaveLength(4);
+    expect(heads()[0]).toBe('5 oct. 2026 Solde −12,34 €');
+
+    button('Semaine')!.click();
+    await stable();
+    expect(heads()).toEqual(['Semaine du 5 oct. 2026 Solde −12,34 €', 'Semaine du 28 sept. 2026 Solde +489,34 €']);
+    expect(rows()[0]).toContain('5 oct. 2026 · Courant');
+
+    button('Mois')!.click();
+    await stable();
+    expect(heads()).toEqual(['octobre 2026 Solde +477,66 €', 'septembre 2026 Solde −0,66 €']);
+    expect(rows()).toHaveLength(4);
+  });
+
+  it('dernier groupe incomplet tant qu’il reste une page : « Solde partiel »', async () => {
+    await open([tx('t1', { date: '2026-10-05' }), tx('t2', { date: '2026-10-04' })], 'CUR1');
+    const heads = [...el.querySelectorAll('.group-head')].map((h) => h.textContent!);
+    expect(heads[0]).not.toContain('partiel');
+    expect(heads[1]).toContain('Solde partiel');
+  });
+});
+
 describe('Historique : filtres', () => {
-  it('filtres date/compte/catégorie/tag envoyés à l’API, conservés par « Charger plus », effacés ensuite', async () => {
+  it('filtres appliqués dès qu’ils changent, en une seule requête après le délai ; conservés par « Charger plus », effacés ensuite', async () => {
     await open([tx('t1')]);
+    expect(button('Filtrer')).toBeUndefined();
     type('f-from', '2026-09-01');
     type('f-to', '2026-09-30');
     type('f-account', 'a2');
-    type('f-category', 'c2');
+    type('f-category', 'c1');
+    await stable();
+    type('f-subcategory', 'c2'); // la sous-catégorie choisie est envoyée comme categoryId
     type('f-tag', 'g1');
-    button('Filtrer')!.click();
+    noListRequest(); // pas de requête par champ modifié
+    await afterDelay();
 
     const filtered = await page([tx('t2', { name: 'Filtrée' })], 'CUR1');
     const expected = { from: '2026-09-01', to: '2026-09-30', accountId: 'a2', categoryId: 'c2', tagId: 'g1' };
@@ -134,30 +184,70 @@ describe('Historique : filtres', () => {
     expect(rows()).toHaveLength(1);
     expect(rows()[0]).toContain('Filtrée');
 
-    // Le formulaire change sans « Filtrer » : la page suivante garde les filtres de la recherche.
+    // « Charger plus » pendant le délai : la page suivante garde les filtres de la recherche en cours…
     type('f-account', 'a1');
     button('Charger plus')!.click();
     expect(params(await page([]))).toEqual({ ...expected, cursor: 'CUR1' });
+    // … puis le nouveau filtre s'applique et repart de la première page.
+    await afterDelay();
+    expect(params(await page([]))).toEqual({ ...expected, accountId: 'a1' });
 
     button('Effacer les filtres')!.click();
     expect(params(await page([]))).toEqual({});
+    await afterDelay();
+    noListRequest(); // l'effacement ne relance pas une seconde recherche
   });
 
   it('filtre « Sans catégorie » ⇒ categoryId=none ; une transaction sans catégorie l’affiche', async () => {
     await open([tx('t1')]);
     type('f-category', 'none');
-    button('Filtrer')!.click();
+    await afterDelay();
     const req = await page([tx('t2', { categoryId: null })]);
     expect(params(req)).toEqual({ categoryId: 'none' });
     expect(rows()[0]).toContain('Courant · Sans catégorie');
+    expect(el.querySelector('#f-subcategory')).toBeNull();
   });
 
-  it('options : comptes, catégories triées avec parent, tags', async () => {
+  it('catégorie seule ⇒ son id ; changer de catégorie efface la sous-catégorie', async () => {
+    await open([tx('t1')]);
+    type('f-category', 'c1');
+    await afterDelay();
+    expect(params(await page([]))).toEqual({ categoryId: 'c1' });
+
+    type('f-subcategory', 'c2');
+    await afterDelay();
+    expect(params(await page([]))).toEqual({ categoryId: 'c2' });
+
+    type('f-category', 'c3'); // « Virement » n'a pas d'enfant : plus de liste de sous-catégories
+    await afterDelay();
+    expect(params(await page([]))).toEqual({ categoryId: 'c3' });
+    expect(el.querySelector('#f-subcategory')).toBeNull();
+  });
+
+  it('effacer un filtre appliqué le retire aussitôt de la recherche', async () => {
+    await open([tx('t1')]);
+    type('f-tag', 'g1');
+    await afterDelay();
+    expect(params(await page([]))).toEqual({ tagId: 'g1' });
+    type('f-tag', '');
+    await afterDelay();
+    expect(params(await page([]))).toEqual({});
+  });
+
+  it('options : comptes, catégories racines triées, sous-catégories de la catégorie choisie, tags', async () => {
     await open([]);
     const options = (id: string) => [...el.querySelectorAll(`#${id} option`)].map((o) => o.textContent!.trim());
     expect(options('f-account')).toEqual(['Tous les comptes', 'Courant', 'Livret']);
-    expect(options('f-category')).toEqual(['Toutes les catégories', 'Sans catégorie', 'Courses', 'Courses › Alimentaire', 'Virement']);
+    expect(options('f-category')).toEqual(['Toutes les catégories', 'Sans catégorie', 'Courses', 'Virement']);
+    expect(el.querySelector('#f-subcategory')).toBeNull();
     expect(options('f-tag')).toEqual(['Tous les tags', 'Vacances']);
+
+    type('f-category', 'c1');
+    await stable();
+    expect(options('f-subcategory')).toEqual(['Toutes les sous-catégories', 'Alimentaire']);
+    expect(el.querySelector('label[for="f-subcategory"]')?.textContent).toBe('Sous-catégorie');
+    await afterDelay();
+    await page([]);
   });
 });
 
@@ -219,7 +309,7 @@ describe('Historique : modification et conflit 409', () => {
 
     expect(el.querySelector('#e-amount')).toBeNull();
     expect(rows()[0]).toContain('Marché bio');
-    expect(rows()[0]).toContain('-20,50 €');
+    expect(rows()[0]).toContain('−20,50 €');
   });
 
   it('date déplacée sur le jour du solde de départ (E30) : choix obligatoire puis envoyé', async () => {

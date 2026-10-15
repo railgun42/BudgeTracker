@@ -227,6 +227,24 @@ describe('Suggestions de catégorie (e2e)', () => {
     await suggest(b, { name }).expect(201);
   });
 
+  it('retrait par l’auteur : en attente ⇒ annulée (catégorie perso gardée, absente de la boîte admin) ; traitée ⇒ « vu »', async () => {
+    const name = unique('Annulée');
+    const { body: category } = await suggest(b, { name, suggest: true }).expect(201);
+    const [pending] = await mine(b);
+    await b.call('delete', `/api/v1/categories/suggestions/${pending.id}`).expect(204);
+    expect(await mine(b)).toEqual([]);
+    expect((await inbox()).map((s) => s.id)).not.toContain(pending.id);
+    expect(await categories(b)).toContainEqual(category);
+    await resolve(pending.id, { decision: 'ACCEPTED' }).expect(404); // plus rien à décider
+    await b.call('delete', `/api/v1/categories/suggestions/${pending.id}`).expect(404);
+
+    await suggest(b, { name: unique('Refusée'), suggest: true }).expect(201);
+    const [s] = await mine(b);
+    await resolve(s.id, { decision: 'REJECTED' }).expect(200);
+    await b.call('delete', `/api/v1/categories/suggestions/${s.id}`).expect(204);
+    expect(await mine(b)).toEqual([]);
+  });
+
   it('suppression du compte : ses suggestions partent avec lui', async () => {
     await suggest(b, { name: unique('Partie'), suggest: true }).expect(201);
     await b.call('delete', '/api/v1/me').expect(204);

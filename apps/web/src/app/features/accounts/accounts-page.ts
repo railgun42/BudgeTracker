@@ -1,8 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import {
   AccountBalanceDto,
   AccountDto,
@@ -15,6 +14,7 @@ import {
 } from '@budgetracker/shared';
 import { ApiClient } from '../../core/api-client';
 import { EurPipe } from '../../core/money';
+import { QuickEntry } from '../../core/quick-entry';
 import { today } from '../../core/today';
 import { TRACKING_TYPE_LABELS } from '../../shared-ui/labels';
 import { errorMessage } from '../auth/auth-form';
@@ -35,15 +35,21 @@ function rateValidator(control: AbstractControl<string>): ValidationErrors | nul
 
 @Component({
   selector: 'app-accounts-page',
-  imports: [ReactiveFormsModule, RouterLink, EurPipe],
+  imports: [ReactiveFormsModule, EurPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h1>Mes comptes</h1>
+    <div class="page-head">
+      <h1>Mes comptes</h1>
+      <div class="actions">
+        <button type="button" class="button" (click)="create()">Nouveau compte</button>
+        <button type="button" class="button button-secondary" (click)="quick.open.set('transfer')">Faire un virement entre comptes</button>
+      </div>
+    </div>
 
     @if (undoable(); as deleted) {
-      <p class="alert" role="status">
-        Compte « {{ deleted.name }} » supprimé.
-        <button type="button" class="link-button" (click)="restore(deleted)">Annuler</button>
+      <p class="alert undo-banner" role="status">
+        <span>Compte « {{ deleted.name }} » supprimé.</span>
+        <button type="button" class="button button-secondary" (click)="restore(deleted)">Annuler</button>
       </p>
     }
     @if (error()) {
@@ -57,171 +63,210 @@ function rateValidator(control: AbstractControl<string>): ValidationErrors | nul
 
     <ul class="cards" aria-label="Comptes">
       @for (account of accounts(); track account.id) {
-        <li class="card">
-          <p class="card-title">
-            <strong>{{ account.name }}</strong>
-            <span class="muted">{{ labels[account.trackingType] }}</span>
-          </p>
+        <li class="card account">
+          <div class="account-head">
+            <p class="card-title">{{ account.name }}</p>
+            <span class="badge badge-neutral">{{ labels[account.trackingType] }}</span>
+          </div>
           <!-- NOT_TRACKED : aucun solde affiché (SPEC §7). -->
           @if (account.trackingType !== NOT_TRACKED) {
             @if (balances()[account.id]; as b) {
-              <p class="balance" [class.negative]="b.currentCents! < 0">Solde : {{ b.currentCents | eur }}</p>
+              <p class="balance" [class.negative]="b.currentCents! < 0">
+                <span class="balance-label">Solde :</span> {{ b.currentCents | eur }}
+              </p>
               @if (b.forecastCents !== b.currentCents) {
-                <p class="muted">Prévisionnel : {{ b.forecastCents | eur }}</p>
+                <p class="muted">
+                  Prévisionnel : <span class="amount" [class.negative]="b.forecastCents! < 0">{{ b.forecastCents | eur }}</span>
+                </p>
               }
+            } @else {
+              <p class="muted" aria-busy="true">Chargement du solde…</p>
             }
           }
           @if (account.trackingType === WITH_INTEREST && rates()[account.id]; as r) {
             @if (r.missingRate) {
-              <p class="alert alert-error">Taux d'intérêt manquant : aucun intérêt ne sera crédité au 31/12.</p>
+              <p class="alert alert-warning">Taux d'intérêt manquant : aucun intérêt ne sera crédité au 31/12.</p>
             } @else if (r.rates.at(-1); as rate) {
               <p class="muted">Taux : {{ percent(rate.rateBp) }} à partir du {{ rate.effectiveDate }}</p>
             }
           }
-          <div class="actions">
+          <div class="card-actions">
             <button type="button" class="button button-secondary" (click)="edit(account)">
               Modifier<span class="visually-hidden"> {{ account.name }}</span>
             </button>
+            @if (account.trackingType === WITH_INTEREST) {
+              <button type="button" class="button button-secondary" (click)="openRate(account)">
+                Définir le taux<span class="visually-hidden"> de {{ account.name }}</span>
+              </button>
+            }
             <button type="button" class="button button-secondary" (click)="remove(account)">
               Supprimer<span class="visually-hidden"> {{ account.name }}</span>
             </button>
           </div>
         </li>
       } @empty {
-        <li class="muted">Aucun compte pour l'instant : créez-en un ci-dessous.</li>
+        <li class="empty muted">Aucun compte pour l'instant : créez-en un avec « Nouveau compte ».</li>
       }
     </ul>
 
-    <p><a routerLink="/transfers/new">Faire un virement entre comptes</a></p>
-
-    <h2>{{ editing() ? 'Modifier le compte' : 'Nouveau compte' }}</h2>
-    <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <div class="field">
-        <label for="account-name">Nom</label>
-        <input
-          #nameInput
-          id="account-name"
-          formControlName="name"
-          maxlength="100"
-          autocomplete="off"
-          [attr.aria-invalid]="invalid('name')"
-          aria-describedby="account-name-error"
-        />
-        @if (invalid('name')) {
-          <p id="account-name-error" class="field-error">Saisissez un nom.</p>
-        }
-      </div>
-
-      <div class="field">
-        <label for="account-type">Type de suivi</label>
-        <select id="account-type" formControlName="trackingType">
-          @for (type of types; track type) {
-            <option [value]="type">{{ labels[type] }}</option>
-          }
-        </select>
-      </div>
-
-      @if (!editing() && trackingType() !== NOT_TRACKED) {
-        <div class="field">
-          <label for="account-opening">Solde de départ (€, facultatif)</label>
-          <input
-            id="account-opening"
-            formControlName="openingAmount"
-            inputmode="decimal"
-            autocomplete="off"
-            [attr.aria-invalid]="invalid('openingAmount')"
-            aria-describedby="account-opening-hint"
-          />
-          <p id="account-opening-hint" [class]="invalid('openingAmount') ? 'field-error' : 'field-hint'">
-            Ex. 1 234,56 ou -50 pour un découvert.
-          </p>
-        </div>
-        <div class="field">
-          <label for="account-opening-date">Date du solde de départ</label>
-          <input id="account-opening-date" type="date" formControlName="openingDate" />
-        </div>
+    <!-- Modales natives : Échap, focus piégé et voile gérés par le navigateur ; la page derrière est inerte,
+         d'où l'erreur répétée dans chaque modale (seule la copie visible est lue). -->
+    <dialog #accountDialog class="modal" aria-labelledby="account-dialog-title" (close)="reset()">
+      <h2 id="account-dialog-title">{{ editing() ? 'Modifier le compte' : 'Nouveau compte' }}</h2>
+      @if (error()) {
+        <p class="alert alert-error" role="alert">{{ error() }}</p>
       }
-
-      <div class="actions">
-        <button class="button" type="submit" [disabled]="pending()">{{ editing() ? 'Enregistrer' : 'Créer le compte' }}</button>
-        @if (editing()) {
-          <button class="button button-secondary" type="button" (click)="reset()">Annuler la modification</button>
-        }
-      </div>
-    </form>
-
-    @if (interestAccounts().length) {
-      <h2>Taux d'intérêt</h2>
-      <form class="form" [formGroup]="rateForm" (ngSubmit)="submitRate()" novalidate>
+      <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
         <div class="field">
-          <label for="rate-account">Compte</label>
-          <select id="rate-account" formControlName="accountId">
-            @for (account of interestAccounts(); track account.id) {
-              <option [value]="account.id">{{ account.name }}</option>
+          <label for="account-name">Nom</label>
+          <input
+            #nameInput
+            id="account-name"
+            formControlName="name"
+            maxlength="100"
+            autocomplete="off"
+            [attr.aria-invalid]="invalid('name')"
+            aria-describedby="account-name-error"
+          />
+          @if (invalid('name')) {
+            <p id="account-name-error" class="field-error">Saisissez un nom.</p>
+          }
+        </div>
+
+        <div class="field">
+          <label for="account-type">Type de suivi</label>
+          <select id="account-type" formControlName="trackingType">
+            @for (type of types; track type) {
+              <option [value]="type">{{ labels[type] }}</option>
             }
           </select>
         </div>
-        <div class="field">
-          <label for="rate-value">Taux annuel (%)</label>
-          <input
-            id="rate-value"
-            formControlName="rate"
-            inputmode="decimal"
-            autocomplete="off"
-            [attr.aria-invalid]="rateInvalid()"
-            aria-describedby="rate-value-hint"
-          />
-          <p id="rate-value-hint" [class]="rateInvalid() ? 'field-error' : 'field-hint'">Entre 0 et 100, ex. 3 ou 2,4.</p>
-        </div>
-        <div class="field">
-          <label for="rate-date">Date d'effet</label>
-          <input id="rate-date" type="date" formControlName="effectiveDate" />
-        </div>
+
+        @if (!editing() && trackingType() !== NOT_TRACKED) {
+          <div class="field">
+            <label for="account-opening">Solde de départ (€, facultatif)</label>
+            <input
+              id="account-opening"
+              formControlName="openingAmount"
+              inputmode="decimal"
+              autocomplete="off"
+              [attr.aria-invalid]="invalid('openingAmount')"
+              aria-describedby="account-opening-hint"
+            />
+            <p id="account-opening-hint" [class]="invalid('openingAmount') ? 'field-error' : 'field-hint'">
+              Ex. 1 234,56 ou -50 pour un découvert.
+            </p>
+          </div>
+          <div class="field">
+            <label for="account-opening-date">Date du solde de départ</label>
+            <input id="account-opening-date" type="date" formControlName="openingDate" />
+          </div>
+        }
+
         <div class="actions">
-          <button class="button" type="submit" [disabled]="pending()">Enregistrer le taux</button>
+          <button class="button" type="submit" [disabled]="pending()">{{ editing() ? 'Enregistrer' : 'Créer le compte' }}</button>
+          <button class="button button-secondary" type="button" (click)="reset()">
+            {{ editing() ? 'Annuler la modification' : 'Annuler' }}
+          </button>
         </div>
       </form>
+    </dialog>
+
+    @if (interestAccounts().length) {
+      <dialog #rateDialog class="modal" aria-labelledby="rate-dialog-title">
+        <h2 id="rate-dialog-title">Taux d'intérêt</h2>
+        @if (error()) {
+          <p class="alert alert-error" role="alert">{{ error() }}</p>
+        }
+        <form class="form" [formGroup]="rateForm" (ngSubmit)="submitRate()" novalidate>
+          <div class="field">
+            <label for="rate-account">Compte</label>
+            <select id="rate-account" formControlName="accountId">
+              @for (account of interestAccounts(); track account.id) {
+                <option [value]="account.id">{{ account.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="rate-value">Taux annuel (%)</label>
+            <input
+              id="rate-value"
+              formControlName="rate"
+              inputmode="decimal"
+              autocomplete="off"
+              [attr.aria-invalid]="rateInvalid()"
+              aria-describedby="rate-value-hint"
+            />
+            <p id="rate-value-hint" [class]="rateInvalid() ? 'field-error' : 'field-hint'">Entre 0 et 100, ex. 3 ou 2,4.</p>
+          </div>
+          <div class="field">
+            <label for="rate-date">Date d'effet</label>
+            <input id="rate-date" type="date" formControlName="effectiveDate" />
+          </div>
+          <div class="actions">
+            <button class="button" type="submit" [disabled]="pending()">Enregistrer le taux</button>
+            <button class="button button-secondary" type="button" (click)="rateDialog.close()">Annuler</button>
+          </div>
+        </form>
+      </dialog>
     }
   `,
+  // Mise en page seulement : cartes, boutons, champs, bandeaux et modales viennent de la charte (styles.scss).
   styles: `
-    .cards {
-      list-style: none;
-      padding: 0;
-      display: grid;
-      gap: var(--space-2);
-    }
-    .card {
-      padding: var(--space-3);
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      p {
-        margin: 0 0 var(--space-2);
+    .page-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+      h1 {
+        margin: 0;
       }
     }
-    .card-title {
+    .cards {
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+    }
+    .account {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      p {
+        margin: 0;
+      }
+    }
+    .account-head {
       display: flex;
       flex-wrap: wrap;
-      gap: var(--space-2);
       align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-1) var(--space-2);
     }
-    .balance {
-      font-size: 1.25rem;
-      font-weight: 700;
+    .balance-label {
+      color: var(--color-text-muted);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
     }
-    .negative {
-      color: var(--color-debit);
+    .account .card-actions {
+      margin-top: auto;
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-border);
     }
-    .actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-2);
+    .empty {
+      grid-column: 1 / -1;
+      padding: var(--space-4);
+      border: 1px dashed var(--color-border-strong);
+      border-radius: var(--radius);
+      text-align: center;
     }
   `,
 })
 export class AccountsPage {
   private readonly api = inject(ApiClient);
+  protected readonly quick = inject(QuickEntry);
   private readonly nameInput = viewChild.required<ElementRef<HTMLInputElement>>('nameInput');
+  private readonly accountDialog = viewChild.required<ElementRef<HTMLDialogElement>>('accountDialog');
+  private readonly rateDialog = viewChild<ElementRef<HTMLDialogElement>>('rateDialog');
 
   protected readonly NOT_TRACKED = TrackingType.NOT_TRACKED;
   protected readonly WITH_INTEREST = TrackingType.WITH_INTEREST;
@@ -255,6 +300,8 @@ export class AccountsPage {
 
   constructor() {
     this.reload();
+    // Transaction ou virement saisi dans la modale de la coquille : soldes relus.
+    this.quick.saved.pipe(takeUntilDestroyed()).subscribe(() => this.reload());
   }
 
   protected reload(): void {
@@ -294,6 +341,11 @@ export class AccountsPage {
     return c.invalid && c.touched;
   }
 
+  protected openRate(account: AccountDto): void {
+    this.rateForm.controls.accountId.setValue(account.id);
+    this.rateDialog()?.nativeElement.showModal();
+  }
+
   // Même date d'effet ⇒ l'API remplace le taux.
   protected submitRate(): void {
     if (this.rateForm.invalid) {
@@ -308,6 +360,7 @@ export class AccountsPage {
       next: () => {
         this.pending.set(false);
         this.rateForm.controls.rate.reset();
+        this.rateDialog()?.nativeElement.close();
         this.reload();
       },
       error: (e) => {
@@ -325,12 +378,20 @@ export class AccountsPage {
   protected edit(account: AccountDto): void {
     this.editing.set(account);
     this.form.reset({ name: account.name, trackingType: account.trackingType, openingAmount: '', openingDate: today() });
+    this.accountDialog().nativeElement.showModal();
     this.nameInput().nativeElement.focus();
   }
 
+  protected create(): void {
+    this.reset();
+    this.accountDialog().nativeElement.showModal();
+  }
+
+  // Appelé aussi par l'événement `close` de la modale (Échap) : close() sur une modale déjà fermée ne fait rien.
   protected reset(): void {
     this.editing.set(null);
     this.form.reset({ name: '', trackingType: TrackingType.NORMAL, openingAmount: '', openingDate: today() });
+    this.accountDialog().nativeElement.close();
   }
 
   protected submit(): void {

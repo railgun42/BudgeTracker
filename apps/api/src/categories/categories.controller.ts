@@ -25,6 +25,13 @@ export class CategoriesController {
     return (await this.categories.suggestions(id)).map(toSuggestionDto);
   }
 
+  // En attente ⇒ annulée ; traitée ⇒ « vu » (retirée de la liste). Celle d'un autre ⇒ 404.
+  @Delete('suggestions/:id')
+  @HttpCode(204)
+  removeSuggestion(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    return this.categories.removeSuggestion(user.id, id);
+  }
+
   @Patch(':id')
   async update(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCategoryDto): Promise<CategoryDto> {
     return toCategoryDto(await this.categories.update(user.id, id, dto));

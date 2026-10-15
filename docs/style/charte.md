@@ -159,6 +159,9 @@ Hauteur minimale de 44 px, léger enfoncement à l'appui, `:disabled` à 55 % d'
 - Montants : `inputmode="decimal"` ⇒ chiffres tabulaires automatiques.
 - Case à cocher et bouton radio : `.checkbox` sur le `<label>` (texte à droite, couleur `accent-color` primaire).
 - Champ fichier : le bouton natif est stylé comme un bouton secondaire.
+- Groupe de champs : `<fieldset class="field"><legend>…</legend>…</fieldset>` (sans cadre natif), ex. le sens Dépense / Revenu.
+- Question obligatoire mise en évidence : `<fieldset class="field question">` (fond `--color-surface-2`, radios en `.checkbox`), ex. « Compter dans le solde ? ».
+- Montant mis en avant : `<div class="amount-input">` autour de l'`<input inputmode="decimal">` (22 px, gras). Signe facultatif devant : `<span class="amount-sign debit" aria-hidden="true">−</span>` ou `.credit` avec « + » (le sens est déjà annoncé par le champ qui le choisit).
 
 ### Carte et liste
 
@@ -186,9 +189,17 @@ Surface blanche, bordure 1 px, `--shadow-1`, marge intérieure 16/24 px. Ne pas 
 
 Apparition en `enter-down`. Message : dire ce qui s'est passé et comment corriger, sans s'excuser.
 
+`.alert.toast` : bandeau flottant en bas de l'écran (ombre `--shadow-2`), hors du flux de la page, avec un bouton « Fermer » en `.link-button`. Sert au succès d'une saisie en modale (« Transaction enregistrée. »), avec `.confirm-pop`. Effacé à la navigation suivante.
+
 ### Bannière « Annuler »
 
 Composant `<app-undo-banner [message]="…" (undo)="…">` (`shared-ui/undo-banner.ts`) : `.alert.undo-banner`, message à gauche, bouton secondaire « Annuler » à droite, ombre `--shadow-2`. À utiliser après chaque suppression logique.
+
+### Modale
+
+`<dialog class="modal" aria-labelledby="…">` ouvert par `showModal()` : Échap, piège à focus, page derrière inerte et voile `--color-overlay` sont natifs. Titre `h2` en tête, `.form` pleine largeur, puis une ligne `.actions` [action validante][Annuler]. Apparition en `enter-up`. Fermer par `close()` après un enregistrement réussi ; écouter `(close)` pour remettre le formulaire à zéro. La page derrière étant inerte, une erreur serveur s'affiche **aussi** dans la modale. Première utilisation : comptes (création, modification, taux).
+
+**Saisie rapide** (transaction, virement) : une seule `<dialog>` dans la coquille, pilotée par le service `QuickEntry` (`core/quick-entry.ts`). Pour l'ouvrir depuis n'importe quelle page : `quick.open.set('transaction' | 'transfer')`. Les formulaires sont chargés à l'ouverture (`@defer`) avec `[modal]="true"` (titre `h2#entry-title`, bouton Annuler). Après un succès, `quick.saved` émet le message : la coquille ferme la modale et affiche un `.alert.toast`, et une page qui s'abonne à `quick.saved` relit ses données (Comptes le fait). Les routes `/transactions/new` et `/transfers/new` restent des pages pleines.
 
 ### Tableau
 
@@ -214,12 +225,16 @@ Compact (8/16 px), en-tête sur `--color-surface-2`, survol de ligne, chiffres t
 | `.credit` | revenu (vert) |
 | `.debit`, `.negative` | dépense, solde négatif (rouge) |
 
+Pipe `signedEur` (`core/money.ts`) : `{{ cents | signedEur }}` → « −54,20 € » (U+2212) / « +2 100,00 € » / « 0,00 € ». À utiliser pour tout montant signé affiché.
+
 **Toujours afficher le signe** (`+2 100,00 €`, `−54,20 €`) : la couleur ne porte jamais seule l'information.
 
 ### Pastilles
 
 - `.badge` : compteur (« 3 », « 99+ »), pilule primaire, apparition en `pop`.
 - `.badge.badge-neutral` : statut (« archivée », « En attente », « Acceptée »).
+- `.category-dot` : pastille ronde de 12 px devant un libellé, couleur de la catégorie (`[style.background-color]`, sinon celle du parent), neutre (`--color-border-strong`) sans couleur. Décorative : `aria-hidden="true"`, le nom de la catégorie reste écrit à côté. Première utilisation : historique.
+- `.category-icon` : icône de catégorie racine, `<svg class="category-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="…" /></svg>` ; carré de 32 px (`--space-5`), fond `--color-primary-soft`, trait 2 px `--color-primary` (7,91 / 6,16:1). Tracés dans `shared-ui/category-icons.ts` (`categoryIcon(c)` par `nameKey` seedé, y compris les techniques Virement / Espèces / Intérêts / Solde de départ ; étiquette pour les perso et celles de l'admin ; `NO_CATEGORY_ICON` sans catégorie). Une sous-catégorie prend l'icône de son parent. Décorative, le nom reste écrit. Utilisée dans Mes catégories et l'historique (à la place de `.category-dot`).
 
 ### Menu déroulant
 
@@ -227,7 +242,7 @@ Compact (8/16 px), en-tête sur `--color-surface-2`, survol de ligne, chiffres t
 
 ### Sélecteur segmenté
 
-`.segmented` contenant des `<button aria-pressed>` : thème, et à réutiliser pour **Dépense / Revenu** dans la saisie de transaction. Le bouton pressé est plein primaire.
+`.segmented` contenant des `<button aria-pressed>` (44 px de haut) : thème, **Dépense / Revenu** dans la saisie de transaction (dans un `fieldset.field` avec la légende « Sens »). Le bouton pressé est plein primaire.
 
 ### Confirmation
 
@@ -245,8 +260,8 @@ Compact (8/16 px), en-tête sur `--color-surface-2`, survol de ligne, chiffres t
 
 - Supprimer les styles locaux qui redéfinissent `.card`, `.cards`, `.actions`, `.scroll`, `.negative`, `.balance`… dès qu'ils doublonnent la charte (le style local l'emporte sur le global).
 - Cloche (`features/notifications/notification-bell.ts`) : remplacer l'emoji 🔔 par une icône SVG `currentColor` ; la pastille peut utiliser `.badge`.
-- Signe moins : le format actuel affiche « -720,00 € » (trait d'union) ; viser « −720,00 € » (U+2212) et « +» explicite partout.
-- Historique : les boutons Filtrer / Effacer s'étirent dans la grille de filtres ; les regrouper dans une ligne `.actions`.
-- Saisie de transaction : sens Dépense / Revenu en `.segmented`, bien visible.
+- Signe moins : le format actuel affiche « -720,00 € » (trait d'union) ; viser « −720,00 € » (U+2212) et « +» explicite partout. Pipe `signedEur` disponible ; fait dans l'historique (§3.5).
+- ~~Historique : les boutons Filtrer / Effacer s'étirent dans la grille de filtres ; les regrouper dans une ligne `.actions`.~~ Fait (§3.5, 2026-10-15).
+- ~~Saisie de transaction : sens Dépense / Revenu en `.segmented`, bien visible.~~ Fait (§3.3, 2026-10-15).
 - Alerte « taux manquant » : passer en `.alert-warning` plutôt qu'en `.alert-error`.
-- Dates affichées « 2026-10-15 » : format lisible (« 15 oct. 2026 »).
+- Dates affichées « 2026-10-15 » : format lisible (« 15 oct. 2026 »). Fait dans l'historique (`Intl.DateTimeFormat` fr-FR en UTC, affichage seulement).

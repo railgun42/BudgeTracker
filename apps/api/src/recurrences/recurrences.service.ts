@@ -81,9 +81,10 @@ export class RecurrencesService {
     return this.get(userId, id);
   }
 
-  // Futur seulement (SPEC §3.6) : sous le verrou, les occurrences déjà dues sont générées avec l'ancien modèle,
-  // puis le modèle change. Aucune transaction existante n'est réécrite.
-  async update(userId: string, id: string, { version, endDate, template = {} }: UpdateRecurrenceDto, today: LocalDate): Promise<RecurrenceRow> {
+  // SPEC §3.6 : sous le verrou, les occurrences déjà dues sont générées avec l'ancien modèle, puis le modèle change.
+  // scope 'future' (défaut) : aucune transaction existante n'est réécrite ; 'all' : les champs envoyés sont aussi
+  // appliqués aux occurrences non supprimées (une retouche individuelle est écrasée, une occurrence supprimée reste supprimée).
+  async update(userId: string, id: string, { version, scope = 'future', endDate, template = {} }: UpdateRecurrenceDto, today: LocalDate): Promise<RecurrenceRow> {
     const current = await this.get(userId, id);
     const { tagIds, amountCents, categoryId, subcategoryId, ...rest } = template;
     await this.transactions.checkAccount(userId, current.accountId, rest.type ?? (current.template!.type as TransactionType));
@@ -98,15 +99,20 @@ export class RecurrencesService {
         data: { endDate: endDate === undefined ? undefined : endDate && toDate(endDate), version: { increment: 1 } },
       });
       if (count === 0) throw new ConflictException('La récurrence a été modifiée entre-temps');
+      const fields = { ...rest, categoryId: category, amountCents: amountCents === undefined ? undefined : BigInt(amountCents) };
       await tx.transactionTemplate.update({
         where: { recurrenceId: id, recurrence: { userId } },
-        data: {
-          ...rest,
-          categoryId: category,
-          amountCents: amountCents === undefined ? undefined : BigInt(amountCents),
-          tags: tagIds && { deleteMany: {}, create: tagIds.map((tagId) => ({ tagId })) },
-        },
+        data: { ...fields, tags: tagIds && { deleteMany: {}, create: tagIds.map((tagId) => ({ tagId })) } },
       });
+      if (scope === 'all') {
+        const past = { recurrenceId: id, userId, deletedAt: null };
+        await tx.transaction.updateMany({ where: past, data: { ...fields, version: { increment: 1 } } });
+        if (tagIds) {
+          const ids = (await tx.transaction.findMany({ where: past, select: { id: true } })).map((t) => t.id);
+          await tx.transactionTag.deleteMany({ where: { transactionId: { in: ids } } });
+          await tx.transactionTag.createMany({ data: ids.flatMap((transactionId) => tagIds.map((tagId) => ({ transactionId, tagId }))) });
+        }
+      }
     }, TX_OPTIONS);
     return this.get(userId, id);
   }

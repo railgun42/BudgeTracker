@@ -74,7 +74,7 @@ export interface TransactionListQuery {
   from?: LocalDate;
   to?: LocalDate;
   accountId?: string;
-  /** Exacte (sous-catégories exclues) ; `UNCATEGORIZED` ⇒ transactions sans catégorie. */
+  /** Catégorie et ses sous-catégories (une sous-catégorie : elle seule) ; `UNCATEGORIZED` ⇒ transactions sans catégorie. */
   categoryId?: string;
   tagId?: string;
 }

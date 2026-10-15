@@ -12,6 +12,14 @@ export class EurPipe implements PipeTransform {
   }
 }
 
+/** Montant signé : {{ -5420 | signedEur }} → « −54,20 € » (U+2212), {{ 210000 | signedEur }} → « +2 100,00 € », 0 sans signe. */
+@Pipe({ name: 'signedEur' })
+export class SignedEurPipe implements PipeTransform {
+  transform(cents: number): string {
+    return (cents > 0 ? '+' : cents < 0 ? '−' : '') + formatEur(Math.abs(cents));
+  }
+}
+
 /** Champ de saisie d'un montant (> 0, ex. « 12,34 ») ; envoyer eurosToCents(control.value) à l'API. */
 export function amountValidator(control: AbstractControl<string | null>): ValidationErrors | null {
   if (!control.value) return null; // laissé à Validators.required

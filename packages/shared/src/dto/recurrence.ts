@@ -48,10 +48,15 @@ export interface TransactionTemplateInput {
   tagIds?: string[];
 }
 
-// PATCH /recurrences/:id. Futur seulement : les occurrences déjà dues sont d'abord générées avec
-// l'ancien modèle, aucune transaction existante n'est réécrite. `version` périmée ⇒ 409.
+// PATCH /recurrences/:id. Les occurrences déjà dues sont d'abord générées avec l'ancien modèle, puis :
+// scope 'future' (défaut) ⇒ aucune transaction existante n'est réécrite ; 'all' ⇒ les champs envoyés du modèle
+// sont aussi appliqués aux occurrences déjà créées et non supprimées (retouches individuelles écrasées). `version` périmée ⇒ 409.
+export type RecurrenceUpdateScope = 'future' | 'all';
+export const RECURRENCE_UPDATE_SCOPES: readonly RecurrenceUpdateScope[] = ['future', 'all'];
+
 export interface UpdateRecurrenceInput {
   version: number;
+  scope?: RecurrenceUpdateScope;
   endDate?: LocalDate | null;
   template?: Partial<TransactionTemplateInput>;
 }

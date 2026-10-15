@@ -48,6 +48,11 @@ function type(id: string, value: string): void {
   input.dispatchEvent(new Event('blur'));
 }
 
+/** Sens Dépense / Revenu : sélecteur segmenté (boutons aria-pressed). */
+function sens(label: 'Dépense' | 'Revenu'): void {
+  [...el.querySelectorAll<HTMLButtonElement>('#tx-type button')].find((b) => b.textContent?.trim() === label)!.click();
+}
+
 async function submit(): Promise<void> {
   el.querySelector('form')!.dispatchEvent(new Event('submit'));
   await stable();
@@ -115,7 +120,7 @@ describe('Saisie d’une dépense', () => {
     type('tx-amount', '1 500');
     type('tx-category', 'c6');
     type('tx-account', 'a1');
-    type('tx-type', 'CREDIT');
+    sens('Revenu');
     type('tx-date', '2026-01-31');
     type('tx-name', '  Prime ');
     type('tx-details', 'annuelle');
@@ -202,13 +207,29 @@ describe('Saisie d’une dépense', () => {
     type('tx-amount', '5');
     type('tx-category', 'c1');
     type('tx-account', 'a3');
-    type('tx-type', 'CREDIT');
+    sens('Revenu');
     await submit();
     http.expectOne('/api/v1/transactions').flush(null, status(422));
     await stable();
 
     expect(text('[role="alert"]')).toBe('Un portefeuille non suivi n’accepte que des dépenses.');
     expect(el.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
+  });
+
+  it('sens en sélecteur segmenté visible (hors repli) : Dépense par défaut, signe affiché devant le montant', async () => {
+    await openExpense();
+    const pressed = () => el.querySelector('#tx-type [aria-pressed="true"]')?.textContent?.trim();
+    expect(el.querySelector('#tx-type')!.closest('details')).toBeNull();
+    expect(el.querySelector('#tx-type')!.closest('fieldset')!.querySelector('legend')!.textContent).toBe('Sens');
+    expect(el.querySelector('details')!.open).toBe(false);
+    expect(pressed()).toBe('Dépense');
+    expect(text('.amount-sign')).toBe('−');
+
+    sens('Revenu');
+    await stable();
+    expect(pressed()).toBe('Revenu');
+    expect(text('.amount-sign')).toBe('+');
+    expect(el.querySelector('#tx-type [aria-pressed="false"]')?.textContent?.trim()).toBe('Dépense');
   });
 
   it('accessibilité : chaque champ a un libellé, ordre de tabulation naturel', async () => {
@@ -266,6 +287,27 @@ describe('Virement', () => {
     expect(text('#transfer-to-hint')).toContain('double comptage');
   });
 
+  it('« Échanger les comptes » inverse source et cible ; désactivé vers un portefeuille (non débitable)', async () => {
+    await openTransfer();
+    const swap = () => [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Échanger les comptes'))!;
+    type('transfer-from', 'a1');
+    type('transfer-to', 'a2');
+    swap().click();
+    await stable();
+    expect(el.querySelector<HTMLSelectElement>('#transfer-from')!.value).toBe('a2');
+    expect(el.querySelector<HTMLSelectElement>('#transfer-to')!.value).toBe('a1');
+
+    type('transfer-to', 'a3');
+    await stable();
+    expect(swap().disabled).toBe(true);
+  });
+
+  it('page : titre h1 et « Retour aux comptes » (absents en modale, voir app.spec)', async () => {
+    await openTransfer();
+    expect(text('h1')).toBe('Nouveau virement');
+    expect(el.querySelector('a[href="/accounts"]')?.textContent).toBe('Retour aux comptes');
+  });
+
   it('accessibilité : chaque champ a un libellé', async () => {
     await openTransfer();
     for (const c of el.querySelectorAll('input, select')) {
@@ -284,7 +326,7 @@ describe('Jour du solde de départ (E30)', () => {
 
   it('dépense le jour même : la question est posée et le choix est obligatoire puis envoyé', async () => {
     await openExpense([OPENED]);
-    expect(text('legend')).toBe('Compter dans le solde ?');
+    expect(text('.question legend')).toBe('Compter dans le solde ?');
     type('tx-amount', '5');
     type('tx-category', 'c1');
     await submit();
@@ -300,7 +342,7 @@ describe('Jour du solde de départ (E30)', () => {
     await openExpense([{ ...COURANT, openingDate: '2026-03-01' }]);
     type('tx-date', '2026-02-15');
     await stable();
-    expect(el.querySelector('legend')).toBeNull();
+    expect(el.querySelector('.question legend')).toBeNull();
     expect(text('#tx-before-opening')).toContain('sans changer le solde');
     type('tx-amount', '5');
     type('tx-category', 'c1');
@@ -313,11 +355,11 @@ describe('Jour du solde de départ (E30)', () => {
     http.expectOne('/api/v1/accounts').flush([COURANT, { ...LIVRET, openingDate: today() }]);
     await stable();
     type('transfer-from', 'a1');
-    expect(el.querySelector('legend')).toBeNull();
+    expect(el.querySelector('.question legend')).toBeNull();
     type('transfer-to', 'a2');
     type('transfer-amount', '10');
     await stable();
-    expect(text('legend')).toBe('Compter dans le solde ?');
+    expect(text('.question legend')).toBe('Compter dans le solde ?');
     choose('true');
     await submit();
     expect(http.expectOne('/api/v1/transfers').request.body).toMatchObject({ amountCents: 1000, countInBalance: true });

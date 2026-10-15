@@ -21,9 +21,9 @@
     @if (session.user(); as user) {
       <div class="header-actions">
         <app-notification-bell />
-        <a routerLink="/transactions/new" class="button add-button">
+        <button type="button" class="button add-button" (click)="quick.open.set('transaction')">
           + <span class="add-label">Transaction</span>
-        </a>
+        </button>
         <button type="button" class="avatar" popovertarget="account-menu" [attr.aria-label]="'Menu du compte (' + user.name + ')'">
           {{ initials() }}
         </button>
@@ -67,6 +67,31 @@
   <main id="main" tabindex="-1">
     <router-outlet />
   </main>
+
+  @if (session.user()) {
+    <!-- Saisie rapide (transaction, virement) par-dessus la page courante ; formulaires chargés à l'ouverture. -->
+    <dialog #entryDialog class="modal" aria-labelledby="entry-title" (close)="quick.open.set(null)">
+      @switch (quick.open()) {
+        @case ('transaction') {
+          @defer (on immediate) {
+            <app-transaction-form-page [modal]="true" />
+          }
+        }
+        @case ('transfer') {
+          @defer (on immediate) {
+            <app-transfer-form-page [modal]="true" />
+          }
+        }
+      }
+    </dialog>
+
+    @if (notice(); as message) {
+      <p class="alert alert-success toast confirm-pop" role="status">
+        <span>{{ message }}</span>
+        <button type="button" class="link-button" (click)="notice.set(null)">Fermer</button>
+      </p>
+    }
+  }
 
   <footer class="footer">
     <nav aria-label="Informations légales">

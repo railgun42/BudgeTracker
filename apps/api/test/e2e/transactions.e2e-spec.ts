@@ -168,6 +168,20 @@ describe('Transactions (e2e)', () => {
       expect(await ids(`tagId=${tag}`)).toEqual([mar]);
       expect(await ids(`categoryId=${housing}&tagId=${tag}`)).toEqual([]);
     });
+
+    it('filtre catégorie : inclut ses sous-catégories ; une sous-catégorie ne renvoie qu’elle', async () => {
+      const acc = await newAccount();
+      const food = (await prisma.category.findUniqueOrThrow({ where: { nameKey: 'groceries.food' } })).id;
+      const mk = async (date: string, extra: object = {}) => (await create({ accountId: acc, date, ...extra }).expect(201)).body.id as string;
+      const parent = await mk('2026-01-01', { categoryId: groceries });
+      const child = await mk('2026-01-02', { categoryId: groceries, subcategoryId: food });
+      await mk('2026-01-03', { categoryId: housing });
+      await mk('2026-01-04', { categoryId: null });
+      const ids = async (query: string) => (await list(`accountId=${acc}&${query}`)).items.map((t) => t.id);
+
+      expect(await ids(`categoryId=${groceries}`)).toEqual([child, parent]);
+      expect(await ids(`categoryId=${food}`)).toEqual([child]);
+    });
   });
 
   describe('édition versionnée', () => {

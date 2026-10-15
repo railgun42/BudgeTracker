@@ -1,11 +1,14 @@
 import { DOCUMENT } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Role } from '@budgetracker/shared';
 import { filter, finalize } from 'rxjs';
 import { Session } from './core/auth/session';
+import { QuickEntry } from './core/quick-entry';
 import { NotificationBell } from './features/notifications/notification-bell';
+import { TransactionFormPage } from './features/transactions/transaction-form-page';
+import { TransferFormPage } from './features/transactions/transfer-form-page';
 
 type Theme = 'auto' | 'light' | 'dark';
 const THEME_KEY = 'theme';
@@ -23,7 +26,8 @@ function readTheme(): Theme {
 // Shell mobile-first : menu hamburger (popover) sur mobile, barre latérale dès 768px ; menu du compte (popover).
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NotificationBell],
+  // Formulaires de saisie rapide : importés pour la modale, mais chargés en différé (@defer).
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NotificationBell, TransactionFormPage, TransferFormPage],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -67,7 +71,28 @@ export class App {
 
   private readonly openPopovers = new Set<HTMLElement>();
 
+  protected readonly quick = inject(QuickEntry);
+  private readonly entryDialog = viewChild<ElementRef<HTMLDialogElement>>('entryDialog');
+  /** Bandeau de succès après une saisie en modale ; effacé à la navigation suivante. */
+  protected readonly notice = signal<string | null>(null);
+
   constructor() {
+    // La modale suit quick.open : ouverte par showModal(), fermée par close() (Échap la ferme aussi, via (close)).
+    effect(() => {
+      const dialog = this.entryDialog()?.nativeElement;
+      if (!dialog) return;
+      if (!this.quick.open()) {
+        if (dialog.open) dialog.close();
+      } else if (!dialog.open) {
+        this.notice.set(null);
+        dialog.showModal();
+      }
+    });
+    this.quick.saved.pipe(takeUntilDestroyed()).subscribe((message) => {
+      this.quick.open.set(null);
+      this.notice.set(message);
+    });
+
     effect(() => {
       const theme = this.theme();
       const root = this.document.documentElement;
@@ -81,13 +106,17 @@ export class App {
       }
     });
 
-    // Un lien suivi dans un menu ouvert le referme.
+    // Un lien suivi dans un menu ou dans la modale (« Faire un virement », « créez-en un ») les referme.
     this.router.events
       .pipe(
         filter((e) => e instanceof NavigationEnd),
         takeUntilDestroyed(),
       )
-      .subscribe(() => this.openPopovers.forEach((el) => el.hidePopover()));
+      .subscribe(() => {
+        this.openPopovers.forEach((el) => el.hidePopover());
+        this.quick.open.set(null);
+        this.notice.set(null);
+      });
   }
 
   protected onPopoverToggle(event: Event): void {

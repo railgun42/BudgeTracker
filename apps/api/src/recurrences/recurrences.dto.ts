@@ -1,10 +1,20 @@
-import { CreateRecurrenceInput, IntervalUnit, LocalDate, TransactionTemplateInput, TransactionType, UpdateRecurrenceInput } from '@budgetracker/shared';
+import {
+  CreateRecurrenceInput,
+  IntervalUnit,
+  LocalDate,
+  RECURRENCE_UPDATE_SCOPES,
+  RecurrenceUpdateScope,
+  TransactionTemplateInput,
+  TransactionType,
+  UpdateRecurrenceInput,
+} from '@budgetracker/shared';
 import { Transform, TransformFnParams, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -126,6 +136,10 @@ export class UpdateRecurrenceDto implements UpdateRecurrenceInput {
   @IsInt()
   @Min(1)
   version!: number;
+
+  @IsOptional()
+  @IsIn(RECURRENCE_UPDATE_SCOPES)
+  scope?: RecurrenceUpdateScope;
 
   @IsOptional()
   @IsLocalDate()

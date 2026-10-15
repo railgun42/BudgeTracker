@@ -101,6 +101,14 @@ export class CategoriesService {
     return this.prisma.categorySuggestion.findMany({ where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });
   }
 
+  // Retrait par l'auteur : en attente ⇒ proposition annulée (sa catégorie perso reste) ; traitée ⇒ « vu », retirée
+  // de sa liste (et de la boîte admin ; le journal admin garde la décision). Une décision admin en cours verrouille la
+  // ligne : la suppression l'attend, puis retire la suggestion décidée ; une décision après le retrait reçoit 404.
+  async removeSuggestion(userId: string, id: string): Promise<void> {
+    const { count } = await this.prisma.categorySuggestion.deleteMany({ where: { id, userId } });
+    if (!count) throw new NotFoundException();
+  }
+
   async update(userId: string, id: string, { name, parentId, color }: UpdateCategoryDto): Promise<Category> {
     await this.own(userId, id);
     if (parentId) {
