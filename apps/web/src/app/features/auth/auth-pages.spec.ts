@@ -83,6 +83,23 @@ describe('Connexion', () => {
     expect(el.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(false);
   });
 
+  it('bouton œil : mot de passe visible tant qu’on maintient, recaché au relâchement', async () => {
+    const el = await open('/login');
+    const pw = el.querySelector<HTMLInputElement>('#login-password')!;
+    const reveal = el.querySelector('app-password-reveal')!;
+    expect(pw.type).toBe('password');
+
+    reveal.dispatchEvent(new Event('pointerdown', { cancelable: true }));
+    expect(pw.type).toBe('text');
+    reveal.dispatchEvent(new Event('pointerup'));
+    expect(pw.type).toBe('password');
+
+    reveal.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', cancelable: true }));
+    expect(pw.type).toBe('text');
+    reveal.dispatchEvent(new KeyboardEvent('keyup', { key: ' ' }));
+    expect(pw.type).toBe('password');
+  });
+
   it('bouton Google : navigation pleine page vers l’API', async () => {
     const el = await open('/login');
     const google = [...el.querySelectorAll('a')].find((a) => a.textContent?.includes('Google'));

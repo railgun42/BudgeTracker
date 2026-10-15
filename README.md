@@ -270,11 +270,11 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 
 ## Administration : catégories globales (E38)
 
-- `GET/POST /api/v1/admin/categories`, `PATCH /api/v1/admin/categories/:id` (`JwtAuthGuard` + `AdminGuard`, dans `adminRoutes`) : l'admin crée des catégories et sous-catégories globales (nom libre, `userId` NULL), les renomme (y compris celles du seed : `name` remplace alors la traduction de `nameKey`, conservée) et les archive / restaure (`archived: true|false`). Pas de suppression. Catégories techniques (`TECHNICAL_CATEGORY_KEYS` de `shared`) ⇒ 422 ; catégorie perso ou inconnue ⇒ 404.
+- `GET/POST /api/v1/admin/categories`, `PATCH /api/v1/admin/categories/:id` (`JwtAuthGuard` + `AdminGuard`, dans `adminRoutes`) : l'admin crée des catégories et sous-catégories globales (nom libre, `userId` NULL), les renomme (y compris celles du seed : `name` remplace alors la traduction de `nameKey`, conservée) et les archive / restaure (`archived: true|false`). `DELETE /api/v1/admin/categories/:id` (204) supprime définitivement une globale **inutilisée créée par l'admin** : utilisée par une transaction (supprimée logiquement comprise), une récurrence, une sous-catégorie (perso comprise) ou une suggestion en attente ⇒ 409 (contraintes rendues immédiates : c'est la base qui refuse, sans fenêtre de course) ; catégorie du seed ⇒ 422 (le seed la recréerait) ; préférences supprimées en cascade, suggestions traitées gardées sans parent (migration `suggestion_parent_set_null`). Catégories techniques (`TECHNICAL_CATEGORY_KEYS` de `shared`) ⇒ 422 ; catégorie perso ou inconnue ⇒ 404.
 - Colonne `Category.archivedAt` (migration `global_categories`) : une globale archivée reste servie par `GET /categories` (`archived: true`) et sur les transactions existantes ; les listes de saisie du front l'excluent, et aucune sous-catégorie (perso ou globale) ne peut plus y être créée (422).
 - Deux niveaux max, parent = racine globale ni technique ni archivée ; doublon de nom entre sœurs globales refusé (409) par un index unique `(parentId, lower(name))` ; les libellés traduits du seed sont comparés côté front avant envoi.
-- Journal `AdminAuditLog` : `CATEGORY_CREATED`, `CATEGORY_UPDATED`, `CATEGORY_ARCHIVED`, `CATEGORY_RESTORED` (auteur, cible, date).
-- Front : page `/admin/categories` ([admin-categories-page.ts](apps/web/src/app/features/admin/categories/admin-categories-page.ts)), liée depuis `/admin`.
+- Journal `AdminAuditLog` : `CATEGORY_CREATED`, `CATEGORY_UPDATED`, `CATEGORY_ARCHIVED`, `CATEGORY_RESTORED`, `CATEGORY_DELETED` (auteur, cible, date).
+- Front : page `/admin/categories` ([admin-categories-page.ts](apps/web/src/app/features/admin/categories/admin-categories-page.ts)), liée depuis `/admin` ; elle explique Archiver / Supprimer, « Supprimer » (hors catégories de base) demande une confirmation.
 - Tests : `test/e2e/admin-categories.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `features/admin/categories/admin-categories-page.spec.ts`, `features/categories/categories-page.spec.ts`, `shared-ui/labels.spec.ts`.
 
 ## Retours utilisateurs et boîte de réception admin (E39)
@@ -297,10 +297,18 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 ## Suggestions de catégorie et réponse à l'auteur (E41)
 
 - `POST /api/v1/categories` accepte `suggest: true` (case facultative « Proposer cette catégorie à tous ») : la catégorie perso et une `CategorySuggestion` sont créées ensemble. Proposable seulement en catégorie principale ou sous une globale (sous une perso ⇒ 422) ; 20 suggestions en attente au plus par utilisateur (⇒ 429, `CATEGORY_SUGGESTION_MAX_PENDING`). `GET /api/v1/categories/suggestions` : les siennes seulement.
-- `GET /api/v1/admin/category-suggestions?status` (en attente d'abord, sans auteur ni e-mail) et `POST /api/v1/admin/category-suggestions/:id/resolve` `{ decision: ACCEPTED|REJECTED|TREATED, reply? }` (`adminRoutes`). Tout ou rien : `ACCEPTED` crée la catégorie globale (règles E38 : doublon ⇒ 409, parent archivé ⇒ 422, la suggestion reste alors en attente) ; `reply` part en notification personnelle à l'auteur (E40). Déjà traitée ⇒ 409 (décisions concurrentes comprises). Journal : `CATEGORY_SUGGESTION_*`, `CATEGORY_CREATED`, `NOTIFICATION_SENT`.
-- Table `CategorySuggestion` (migration `category_suggestions`, CHECK statut ⇔ `treatedAt`) : export RGPD, suppression en cascade avec le compte, politique de confidentialité et `docs/privacy` mises à jour.
+- `GET /api/v1/admin/category-suggestions?status` (en attente d'abord, sans auteur ni e-mail) et `POST /api/v1/admin/category-suggestions/:id/resolve` `{ decision: ACCEPTED|REJECTED|TREATED, reply? }` (`adminRoutes`). Tout ou rien : `ACCEPTED` rend globale la catégorie perso de l'auteur (même id : pas de doublon, ses transactions la gardent ; globale neuve s'il l'a supprimée ou déplacée ; s'il l'a renommée, il garde son nom pour lui seul) et la masque par défaut pour les utilisateurs inscrits avant l'acceptation (`Category.hiddenForUsersBefore`, aucune ligne écrite chez eux ; démasquable, visible pour les nouveaux inscrits) ; règles E38 : doublon ⇒ 409, parent archivé ⇒ 422, la suggestion reste alors en attente ; `reply` part en notification personnelle à l'auteur (E40). Déjà traitée ⇒ 409 (décisions concurrentes comprises). Journal : `CATEGORY_SUGGESTION_*`, `CATEGORY_CREATED`, `NOTIFICATION_SENT`.
+- Table `CategorySuggestion` (migrations `category_suggestions`, CHECK statut ⇔ `treatedAt`, puis `suggestion_promotion` : `categoryId` d'origine et `Category.hiddenForUsersBefore`) : export RGPD, suppression en cascade avec le compte, politique de confidentialité et `docs/privacy` mises à jour.
 - Front : case et liste « Mes suggestions » sur `/categories` ; page `/admin/suggestions` ([admin-suggestions-page.ts](apps/web/src/app/features/admin/suggestions/admin-suggestions-page.ts)), liée depuis `/admin` : filtre par statut, accepter / refuser / marquer comme traitée avec une réponse préremplie modifiable (« J'ai vu ta suggestion de la catégorie X, je l'ai ajoutée, merci ! »), envoi facultatif. Texte brut partout.
 - Tests : `test/e2e/category-suggestions.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `test/e2e/gdpr.e2e-spec.ts`, `features/categories/categories-page.spec.ts`, `features/admin/suggestions/admin-suggestions-page.spec.ts`.
+
+## Style : charte et refonte des écrans (E43)
+
+- Charte « Encre de chéquier » dans [docs/style/charte.md](docs/style/charte.md) : tokens (couleurs clair/sombre mesurées AA, typo, espacements, animations) et composants globaux dans `apps/web/src/styles.scss`, coquille dans `app.{html,scss,ts}`. Inventaire des écrans et retours par écran : [docs/style/inventaire-ecrans.md](docs/style/inventaire-ecrans.md).
+- Pages refaites : connexion et inscription (carte centrée, accroche, boutons pleine largeur ; sur bureau l'inscription tient sans défilement en 1366×768). Les autres écrans suivent l'ordre de l'inventaire.
+- Bouton « œil » des champs mot de passe ([password-reveal.ts](apps/web/src/app/shared-ui/password-reveal.ts)) : le mot de passe est visible tant qu'on maintient le bouton (souris, doigt, Espace/Entrée), recaché au relâchement. Utilisé sur connexion et inscription.
+- Tests : `features/auth/auth-pages.spec.ts`.
+
 
 ## État actuel
 
@@ -352,7 +360,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E39 — Retours utilisateurs et boîte de réception admin | ✅ |
 | E40 — Notifications (cloche) et annonces | ✅ |
 | E41 — Suggestion de catégorie et réponse à l'auteur | ✅ |
-| E42 → E43 | ⏳ Tableau de bord, style |
+| E42 | ⏳ Tableau de bord |
+| E43 — Style (charte, connexion, inscription) | 🔄 charte posée ; autres écrans à refaire |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.
