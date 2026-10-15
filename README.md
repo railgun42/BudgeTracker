@@ -244,6 +244,13 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Simulations sauvegardées : `GET|POST /api/v1/cashflow-simulations`, `GET|PATCH|DELETE /api/v1/cashflow-simulations/:id` (paramètres validés comme l'appel direct, date de début figée à l'enregistrement, `version` périmée ⇒ 409, table `CashflowSimulation`, export RGPD). `GET /api/v1/cashflow-simulations/:id/result?today` relit la simulation avec le solde réel : les dépenses passées ont diminué le solde projeté, le reliquat d'une période écoulée se répartit donc sur les suivantes (100 €/mois, 50 € dépensés en février ⇒ 125 €/mois ensuite). Simulation terminée ⇒ 422 ; récurrence décochée puis supprimée ignorée.
 - Moteur pur [allowance.ts](apps/api/src/simulations/engine/allowance.ts). Tests : `src/simulations/engine/allowance.spec.ts`, `test/e2e/allowance.e2e-spec.ts`, registre d'isolation, export RGPD.
 
+## Simulation de trésorerie : interface (E35)
+
+- Page `/simulations/tresorerie` ([cashflow-page.ts](apps/web/src/app/features/simulations/cashflow-page.ts)), liée depuis `/simulations` : comptes avec solde à cocher, dates de début (aujourd'hui au plus tôt) et de fin, récurrences enregistrées des comptes cochés à décocher (un résultat affiché est recalculé aussitôt), récurrences et dépenses/revenus ponctuels propres à la simulation, plancher facultatif (négatif = découvert) par mois ou par semaine.
+- Résultat : solde au jour X, totaux, enveloppe de la période en cours (déjà dépensé, reste, alerte sous le plancher), courbe (graphique des scénarios réutilisé) avec tableau jour par jour, détail par ligne (récurrences décochées barrées, hors solde).
+- Sauvegarde (`POST`/`PATCH /cashflow-simulations`, `version` ⇒ 409 « rechargez »), réouverture = suivi via `GET /cashflow-simulations/:id/result` (dépenses réelles, reliquat réparti), suppression. Une simulation déjà commencée que l'on recalcule ou réenregistre repart d'aujourd'hui (l'API refuse un début passé).
+- Tests : `npm test -w web` (`features/simulations/cashflow-page.spec.ts`).
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -287,7 +294,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E32 — Page 404 : libellé du bouton de retour | ✅ |
 | E33 — Simulation de trésorerie : moteur et API | ✅ |
 | E34 — Plafond minimum et enveloppe dépensable | ✅ |
-| E35 → E43 | ⏳ Évolutions après essai local (simulation), administration et communication, tableau de bord, style |
+| E35 — Simulation : interface | ✅ |
+| E36 → E43 | ⏳ Évolutions après essai local (catégories), administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

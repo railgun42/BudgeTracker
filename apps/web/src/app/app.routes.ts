@@ -50,6 +50,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/simulations/simulations-page').then((m) => m.SimulationsPage),
   },
   {
+    path: 'simulations/tresorerie',
+    title: 'Simulation de trésorerie',
+    ...authed,
+    loadComponent: () => import('./features/simulations/cashflow-page').then((m) => m.CashflowPage),
+  },
+  {
     path: 'me',
     title: 'Mon compte',
     ...authed,

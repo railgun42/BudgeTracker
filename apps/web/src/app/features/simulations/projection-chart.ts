@@ -159,6 +159,8 @@ function niceStep(range: number): number {
 })
 export class ProjectionChart {
   readonly data = input.required<ScenarioComparisonDto>();
+  /** Nom de la série de base (trésorerie : une seule courbe). */
+  readonly baselineName = input('Sans changement');
 
   protected readonly W = W;
   protected readonly H = H;
@@ -168,7 +170,7 @@ export class ProjectionChart {
   protected readonly series = computed(() => {
     const { baseline, scenarios } = this.data();
     return [
-      { id: 'baseline', name: 'Sans changement', color: BASELINE_COLOR, points: baseline.points },
+      { id: 'baseline', name: this.baselineName(), color: BASELINE_COLOR, points: baseline.points },
       ...scenarios.map((s, i) => ({ id: s.id, name: s.name, color: SERIES_COLORS[i], points: s.projection.points })),
     ];
   });

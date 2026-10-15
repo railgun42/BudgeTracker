@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormGroup, NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import {
   AccountDto,
   CategoryDto,
@@ -35,11 +36,12 @@ const percent = (bp: number) => `${(bp / 100).toLocaleString('fr-FR')} %`;
 // rien n'est écrit dans les comptes. Comparaison côte à côte : courbes, puis tableau (une colonne par scénario).
 @Component({
   selector: 'app-simulations-page',
-  imports: [ReactiveFormsModule, EurPipe, ProjectionChart],
+  imports: [ReactiveFormsModule, RouterLink, EurPipe, ProjectionChart],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1>Simulations</h1>
     <p class="muted">Un scénario « et si » s'applique à une copie virtuelle de votre compte : vos données ne sont jamais modifiées.</p>
+    <p><a routerLink="/simulations/tresorerie">Simulation de trésorerie : combien me restera-t-il au jour X ?</a></p>
 
     @if (error()) {
       <p class="alert alert-error" role="alert">{{ error() }}</p>
