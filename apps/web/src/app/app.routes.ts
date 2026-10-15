@@ -38,6 +38,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/recurrences/recurrences-page').then((m) => m.RecurrencesPage),
   },
   {
+    path: 'categories',
+    title: 'Mes catégories',
+    ...authed,
+    loadComponent: () => import('./features/categories/categories-page').then((m) => m.CategoriesPage),
+  },
+  {
     path: 'stats',
     title: 'Statistiques',
     ...authed,

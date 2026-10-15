@@ -1,16 +1,21 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { CategoryDto } from '@budgetracker/shared';
-import { Category } from '../generated/prisma/client';
+import { Category, UserCategoryPreference } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateCategoryDto, UpdateCategoryDto } from './categories.dto';
+import { CategoryPreferenceDto, CreateCategoryDto, UpdateCategoryDto } from './categories.dto';
 
-export const toCategoryDto = (c: Category): CategoryDto => ({
+// `preferences` : celles de l'utilisateur courant seulement (0 ou 1 ligne).
+type WithPreferences = Category & { preferences?: UserCategoryPreference[] };
+
+export const toCategoryDto = ({ preferences: [pref] = [], ...c }: WithPreferences): CategoryDto => ({
   id: c.id,
   parentId: c.parentId,
   system: c.userId === null,
   nameKey: c.nameKey,
   name: c.name,
   color: c.color,
+  hidden: pref?.hidden ?? false,
+  customName: pref?.customName ?? null,
 });
 
 // Visibles : catégories système (userId NULL) + catégories perso de l'utilisateur.
@@ -22,8 +27,13 @@ const visibleTo = (userId: string) => ({ OR: [{ userId: null }, { userId }] });
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(userId: string): Promise<Category[]> {
-    return this.prisma.category.findMany({ where: visibleTo(userId), orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+  // Masquées comprises : l'historique et les stats en affichent encore le nom ; seules les listes de saisie les excluent (front).
+  list(userId: string): Promise<WithPreferences[]> {
+    return this.prisma.category.findMany({
+      where: visibleTo(userId),
+      include: { preferences: { where: { userId } } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
   }
 
   private async visible(userId: string, id: string): Promise<Category> {
@@ -62,6 +72,19 @@ export class CategoriesService {
       if (await this.hasChildren(userId, id)) throw new UnprocessableEntityException('2 niveaux de catégories maximum');
     }
     return this.prisma.category.update({ where: { id, userId }, data: { name, parentId, color } });
+  }
+
+  // Masquer / renommer une catégorie système pour soi seul ; les valeurs par défaut suppriment la ligne.
+  async setPreference(userId: string, categoryId: string, { hidden, customName = null }: CategoryPreferenceDto): Promise<WithPreferences> {
+    const category = await this.visible(userId, categoryId);
+    if (category.userId !== null) throw new UnprocessableEntityException('Catégorie personnelle : la modifier directement');
+    const key = { userId_categoryId: { userId, categoryId } };
+    if (!hidden && customName === null) {
+      await this.prisma.userCategoryPreference.deleteMany({ where: { userId, categoryId } });
+      return category;
+    }
+    const pref = await this.prisma.userCategoryPreference.upsert({ where: key, create: { userId, categoryId, hidden, customName }, update: { hidden, customName } });
+    return { ...category, preferences: [pref] };
   }
 
   // Catégorie utilisée : réaffectation obligatoire vers `reassignTo` (système ou perso visible), sinon 409.

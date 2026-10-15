@@ -242,6 +242,17 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await users.a.call('patch', `/api/v1/categories/${own.id}`).send({ parentId: id }).expect(404); // parent de B inutilisable
     await intact();
   },
+  // Préférence de B sur une catégorie système : A ne la voit pas ; une catégorie perso de B ⇒ 404 pour A.
+  'PUT /api/v1/categories/:id/preference': async (users) => {
+    const { a, b } = users;
+    const systemId = await systemCategory(users);
+    await b.call('put', `/api/v1/categories/${systemId}/preference`).send({ hidden: true, customName: 'Nom de B' }).expect(200);
+    expect((await a.call('get', '/api/v1/categories').expect(200)).body).toContainEqual(expect.objectContaining({ id: systemId, hidden: false, customName: null }));
+    const { id, intact } = await categoryOfB(users);
+    await a.call('put', `/api/v1/categories/${id}/preference`).send({ hidden: true }).expect(404);
+    await intact();
+    await b.call('put', `/api/v1/categories/${systemId}/preference`).send({ hidden: false }).expect(200);
+  },
   'DELETE /api/v1/categories/:id': async (users) => {
     const { id, intact } = await categoryOfB(users);
     await users.a.call('delete', `/api/v1/categories/${id}`).expect(404);

@@ -47,11 +47,11 @@ describe('Catégories et tags (e2e)', () => {
   describe('catégories', () => {
     it('liste les catégories système (lecture seule, 2 niveaux) et les perso', async () => {
       const { body: mine } = await createCategory({ name: '  Vacances  ', color: '#AbCdEf' }).expect(201);
-      expect(mine).toEqual({ id: expect.any(String), parentId: null, system: false, nameKey: null, name: 'Vacances', color: '#AbCdEf' });
+      expect(mine).toEqual({ id: expect.any(String), parentId: null, system: false, nameKey: null, name: 'Vacances', color: '#AbCdEf', hidden: false, customName: null });
       const list = await listCategories();
       expect(list).toContainEqual(mine);
-      expect(list).toContainEqual({ id: system.groceries, parentId: null, system: true, nameKey: 'groceries', name: null, color: null });
-      expect(list).toContainEqual({ id: system['groceries.food'], parentId: system.groceries, system: true, nameKey: 'groceries.food', name: null, color: null });
+      expect(list).toContainEqual({ id: system.groceries, parentId: null, system: true, nameKey: 'groceries', name: null, color: null, hidden: false, customName: null });
+      expect(list).toContainEqual({ id: system['groceries.food'], parentId: system.groceries, system: true, nameKey: 'groceries.food', name: null, color: null, hidden: false, customName: null });
     });
 
     it('sous-catégorie sous une racine perso ou système ; 3e niveau ⇒ 422', async () => {

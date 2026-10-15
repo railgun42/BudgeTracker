@@ -12,9 +12,9 @@ import { monthLabel } from './stats-page';
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
 const ACCOUNTS: AccountDto[] = [{ id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, openingDate: null, version: 1 }];
 const CATEGORIES: CategoryDto[] = [
-  { id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null },
-  { id: 'c2', parentId: 'c1', system: true, nameKey: 'groceries.food', name: null, color: null },
-  { id: 'c3', parentId: null, system: false, nameKey: null, name: 'Salaire', color: null },
+  { id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null, hidden: false, customName: null },
+  { id: 'c2', parentId: 'c1', system: true, nameKey: 'groceries.food', name: null, color: null, hidden: false, customName: null },
+  { id: 'c3', parentId: null, system: false, nameKey: null, name: 'Salaire', color: null, hidden: false, customName: null },
 ];
 const TAGS = [{ id: 'g1', name: 'Vacances' }];
 const MONTHLY: MonthlyStatDto[] = [

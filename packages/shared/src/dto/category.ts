@@ -7,6 +7,10 @@ export interface CategoryDto {
   /** Libellé d'une catégorie personnelle. */
   name: string | null;
   color: string | null;
+  /** Préférence de l'utilisateur sur une catégorie système : exclue des listes de saisie (reste affichée sur les transactions). */
+  hidden: boolean;
+  /** Renommage d'une catégorie système pour cet utilisateur seul ; prioritaire sur `nameKey`. */
+  customName: string | null;
 }
 
 /** Valeur du filtre `categoryId` de GET /transactions : transactions sans catégorie. */
@@ -27,6 +31,13 @@ export type UpdateCategoryInput = Partial<CreateCategoryInput>;
 // avec cible, ses transactions et modèles de récurrence y sont réaffectés avant suppression.
 export interface DeleteCategoryQuery {
   reassignTo?: string;
+}
+
+// PUT /categories/:id/preference (catégorie système uniquement, perso ⇒ 422 : la modifier directement).
+// `customName: null` ⇒ nom d'origine. Ne touche ni aux autres utilisateurs ni aux transactions.
+export interface CategoryPreferenceInput {
+  hidden: boolean;
+  customName?: string | null;
 }
 
 export interface TagDto {

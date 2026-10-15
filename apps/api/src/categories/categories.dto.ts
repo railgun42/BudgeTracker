@@ -1,6 +1,6 @@
-import { CreateCategoryInput, DeleteCategoryQuery, UpdateCategoryInput } from '@budgetracker/shared';
+import { CategoryPreferenceInput, CreateCategoryInput, DeleteCategoryQuery, UpdateCategoryInput } from '@budgetracker/shared';
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsOptional, IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
 
 const trim = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim() : value);
 const COLOR = /^#[0-9a-fA-F]{6}$/;
@@ -41,4 +41,15 @@ export class DeleteCategoryQueryDto implements DeleteCategoryQuery {
   @IsOptional()
   @IsUUID()
   reassignTo?: string;
+}
+
+export class CategoryPreferenceDto implements CategoryPreferenceInput {
+  @IsBoolean()
+  hidden!: boolean;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  customName?: string | null;
 }

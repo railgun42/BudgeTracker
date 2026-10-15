@@ -36,6 +36,10 @@ export class ApiClient {
     return this.http.patch<T>(API_BASE + path, body);
   }
 
+  put<T>(path: string, body: unknown): Observable<T> {
+    return this.http.put<T>(API_BASE + path, body);
+  }
+
   /** Fichier à télécharger (export) : même chemin d'intercepteurs, donc refresh sur 401. */
   download(path: string, params?: Params): Observable<Blob> {
     return this.http.get(API_BASE + path, { params: toParams(params), responseType: 'blob' });

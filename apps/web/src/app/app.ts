@@ -20,6 +20,7 @@ export class App {
     { path: '/accounts', label: 'Comptes', exact: false },
     { path: '/history', label: 'Historique', exact: false },
     { path: '/recurrences', label: 'Récurrences', exact: false },
+    { path: '/categories', label: 'Catégories', exact: false },
     { path: '/stats', label: 'Statistiques', exact: false },
     { path: '/simulations', label: 'Simulations', exact: false },
     { path: '/me', label: 'Mon compte', exact: false },

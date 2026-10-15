@@ -67,6 +67,7 @@ model User {
   interestRates       InterestRate[]
   scenarios           Scenario[]
   cashflowSimulations CashflowSimulation[]
+  categoryPreferences UserCategoryPreference[]
 }
 
 model Credential {
@@ -216,9 +217,26 @@ model Category {
   children     Category[]            @relation("CategoryTree")
   transactions Transaction[]
   templates    TransactionTemplate[]
+  preferences  UserCategoryPreference[]
 
   @@index([userId])
   @@index([parentId])
+}
+
+// Masquage / renommage d'une catégorie globale pour un seul utilisateur (SPEC §3.2, §13.4).
+// Ligne absente = valeurs par défaut (visible, nom d'origine).
+model UserCategoryPreference {
+  userId     String   @db.Uuid
+  categoryId String   @db.Uuid
+  hidden     Boolean  @default(false)
+  customName String?
+  updatedAt  DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([userId, categoryId])
+  @@index([categoryId])
 }
 
 // Unicité (userId, lower(name)) : index sur expression en migration.

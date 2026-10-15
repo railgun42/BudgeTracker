@@ -39,6 +39,7 @@ describe('Shell', () => {
       ['Comptes', '/accounts'],
       ['Historique', '/history'],
       ['Récurrences', '/recurrences'],
+      ['Catégories', '/categories'],
       ['Statistiques', '/stats'],
       ['Simulations', '/simulations'],
       ['Mon compte', '/me'],

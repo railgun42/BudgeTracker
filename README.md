@@ -251,6 +251,14 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Sauvegarde (`POST`/`PATCH /cashflow-simulations`, `version` ⇒ 409 « rechargez »), réouverture = suivi via `GET /cashflow-simulations/:id/result` (dépenses réelles, reliquat réparti), suppression. Une simulation déjà commencée que l'on recalcule ou réenregistre repart d'aujourd'hui (l'API refuse un début passé).
 - Tests : `npm test -w web` (`features/simulations/cashflow-page.spec.ts`).
 
+## Catégories personnalisables (E36)
+
+- `PUT /api/v1/categories/:id/preference` `{ hidden, customName? }` : masquer et/ou renommer une catégorie **globale** pour soi seul (table `UserCategoryPreference`, une ligne par utilisateur et catégorie, supprimée quand on revient aux valeurs par défaut). Catégorie perso ⇒ **422** (la modifier par `PATCH`), d'un autre ⇒ **404**. `GET /categories` renvoie toutes les catégories, masquées comprises, avec `hidden` et `customName` de l'utilisateur.
+- Un masquage ne touche ni aux transactions existantes, ni aux stats, ni aux autres utilisateurs ; seules les listes de saisie du front l'excluent (`categoryOptions`). `categoryLabel` affiche le nom personnalisé partout (historique, stats, saisie).
+- Page `/categories` ([categories-page.ts](apps/web/src/app/features/categories/categories-page.ts), lien « Catégories ») : arbre globales/perso (techniques exclues), création (y compris sous une globale), renommage, masquage/affichage, retour au nom d'origine, suppression d'une perso avec réaffectation (409 ⇒ choisir une cible).
+- Export RGPD : section `UserCategoryPreference` ; supprimée avec le compte (cascade).
+- Tests : `test/e2e/category-preferences.e2e-spec.ts`, registre d'isolation, `features/categories/categories-page.spec.ts`, `shared-ui/labels.spec.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -295,7 +303,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E33 — Simulation de trésorerie : moteur et API | ✅ |
 | E34 — Plafond minimum et enveloppe dépensable | ✅ |
 | E35 — Simulation : interface | ✅ |
-| E36 → E43 | ⏳ Évolutions après essai local (catégories), administration et communication, tableau de bord, style |
+| E36 — Catégories personnalisables par l'utilisateur | ✅ |
+| E37 → E43 | ⏳ Administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

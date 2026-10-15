@@ -54,6 +54,7 @@ export class GdprService {
         p.transfer.findMany({ where: mine }),
         p.transaction.findMany({ where: mine, orderBy: [{ date: 'asc' }, { id: 'asc' }] }),
         p.category.findMany({ where: mine }),
+        p.userCategoryPreference.findMany({ where: mine }),
         p.tag.findMany({ where: mine }),
         p.transactionTag.findMany({ where: { transaction: mine } }),
         // Clé S3 : détail interne de stockage, pas une donnée de l'utilisateur.
@@ -68,7 +69,7 @@ export class GdprService {
       ],
       { isolationLevel: 'RepeatableRead' },
     );
-    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'Tag', 'TransactionTag', 'Attachment', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation'];
+    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation'];
     return Object.fromEntries(names.map((name, i) => [name, (tables[i] as object[]).map(plain)]));
   }
 

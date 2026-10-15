@@ -50,17 +50,19 @@ export const CATEGORY_LABELS: Record<string, string> = {
   'income.refund': 'Remboursement',
 };
 
-export const categoryLabel = (c: CategoryDto): string => c.name ?? CATEGORY_LABELS[c.nameKey ?? ''] ?? c.nameKey ?? '';
+/** Nom choisi par l'utilisateur pour une catégorie système, sinon nom perso, sinon libellé traduit. */
+export const categoryLabel = (c: CategoryDto): string => c.customName ?? c.name ?? CATEGORY_LABELS[c.nameKey ?? ''] ?? c.nameKey ?? '';
 
 /** Libellé d'une transaction ou d'une ligne de stats sans catégorie. */
 export const NO_CATEGORY_LABEL = 'Sans catégorie';
 
 // Catégories techniques posées par le serveur (intérêts, virement vers portefeuille, solde de départ, virement) : jamais proposées à la saisie.
 const TECHNICAL = new Set(['interest', 'cash', 'opening_balance', 'transfer']);
+export const isTechnical = (c: CategoryDto): boolean => TECHNICAL.has(c.nameKey ?? '');
 
-/** Choix d'une liste de saisie : racines (`parentId` null) ou sous-catégories de `parentId`, hors techniques, triés. */
+/** Choix d'une liste de saisie : racines (`parentId` null) ou sous-catégories de `parentId`, hors techniques et masquées, triés. */
 export const categoryOptions = (all: CategoryDto[], parentId: string | null): { id: string; label: string }[] =>
   all
-    .filter((c) => c.parentId === parentId && !TECHNICAL.has(c.nameKey ?? ''))
+    .filter((c) => c.parentId === parentId && !isTechnical(c) && !c.hidden)
     .map((c) => ({ id: c.id, label: categoryLabel(c) }))
     .sort((a, b) => a.label.localeCompare(b.label, 'fr'));
