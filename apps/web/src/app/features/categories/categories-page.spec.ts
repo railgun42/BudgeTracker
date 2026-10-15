@@ -2,7 +2,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { CategoryDto } from '@budgetracker/shared';
+import { CategoryDto, CategorySuggestionDto } from '@budgetracker/shared';
 import { routes } from '../../app.routes';
 import { Session } from '../../core/auth/session';
 import { provideApiHttp } from '../../core/http';
@@ -42,10 +42,11 @@ function type(id: string, value: string): void {
   input.dispatchEvent(new Event(input instanceof HTMLSelectElement ? 'change' : 'input'));
 }
 
-async function open(list: CategoryDto[] = ALL): Promise<void> {
+async function open(list: CategoryDto[] = ALL, suggestions: CategorySuggestionDto[] = []): Promise<void> {
   harness = await RouterTestingHarness.create('/categories');
   el = harness.routeNativeElement!;
   http.expectOne('/api/v1/categories').flush(list);
+  http.expectOne('/api/v1/categories/suggestions').flush(suggestions);
   await stable();
 }
 
@@ -154,5 +155,50 @@ describe('Mes catégories', () => {
     button('Supprimer Vélo').click();
     await stable();
     expect(options('reassign-p1')).not.toContain('Ancienne');
+  });
+
+  it('« proposer à tous » : envoie suggest et recharge mes suggestions ; sous une perso, case désactivée et rien d’envoyé', async () => {
+    const PERSO = cat('p3', { system: false, name: 'Atelier' });
+    const ACCEPTED: CategorySuggestionDto = { id: 's1', name: 'Escalade', parentId: 'c1', status: 'ACCEPTED', createdAt: '2026-10-15T08:00:00.000Z', treatedAt: '2026-10-15T09:00:00.000Z' };
+    const PENDING: CategorySuggestionDto = { id: 's2', name: '<b>Yoga</b>', parentId: null, status: 'PENDING', createdAt: '2026-10-15T10:00:00.000Z', treatedAt: null };
+    await open([...ALL, PERSO], [ACCEPTED]);
+    const suggestions = () => [...el.querySelectorAll('[aria-label="Mes suggestions"] li')].map((li) => clean(li.textContent));
+    expect(suggestions()).toEqual(['Escalade dans « Sport » · Acceptée']);
+    const box = el.querySelector<HTMLInputElement>('#cat-suggest')!;
+    expect(box.checked).toBe(false); // facultative
+
+    type('cat-name', '<b>Yoga</b>');
+    box.click();
+    el.querySelector<HTMLFormElement>('form.form')!.dispatchEvent(new Event('submit'));
+    const req = http.expectOne({ method: 'POST', url: '/api/v1/categories' });
+    expect(req.request.body).toEqual({ name: '<b>Yoga</b>', suggest: true });
+    req.flush(cat('p4', { system: false, name: '<b>Yoga</b>' }));
+    http.expectOne('/api/v1/categories').flush([...ALL, PERSO]);
+    http.expectOne('/api/v1/categories/suggestions').flush([PENDING, ACCEPTED]);
+    await stable();
+    expect(suggestions()).toEqual(['<b>Yoga</b> · En attente', 'Escalade dans « Sport » · Acceptée']); // texte brut
+    expect(el.querySelector('[aria-label="Mes suggestions"] b')).toBeNull();
+    expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('Catégorie « <b>Yoga</b> » créée et proposée à tous.');
+    expect(box.checked).toBe(false); // formulaire remis à zéro
+
+    // Sous une catégorie personnelle : non proposable.
+    box.click();
+    type('cat-name', 'Établi');
+    type('cat-parent', 'p3');
+    await stable();
+    expect(box.disabled).toBe(true);
+    expect(clean(el.querySelector('#cat-suggest-hint')?.textContent)).toMatch(/^Impossible sous une de vos catégories personnelles/);
+    const body = await act(() => el.querySelector<HTMLFormElement>('form.form')!.dispatchEvent(new Event('submit')), 'POST', '/api/v1/categories', PERSO, [...ALL, PERSO]);
+    expect(body).toEqual({ name: 'Établi', parentId: 'p3' });
+  });
+
+  it('trop de suggestions en attente (429) : message explicite', async () => {
+    await open();
+    type('cat-name', 'Yoga');
+    el.querySelector<HTMLInputElement>('#cat-suggest')!.click();
+    el.querySelector<HTMLFormElement>('form.form')!.dispatchEvent(new Event('submit'));
+    http.expectOne({ method: 'POST', url: '/api/v1/categories' }).flush(null, { status: 429, statusText: 'Too Many Requests' });
+    await stable();
+    expect(clean(el.querySelector('[role="alert"]')?.textContent)).toMatch(/^Vous avez déjà beaucoup de suggestions en attente/);
   });
 });

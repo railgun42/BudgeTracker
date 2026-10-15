@@ -74,6 +74,7 @@ export class LegalNoticePage {
         <li>Pièces jointes : justificatifs (images ou PDF) que vous choisissez d’ajouter.</li>
         <li>Retours : type et texte des messages que vous envoyez depuis « Donner mon avis », avec leur date et leur statut de traitement. L’administrateur les lit sans voir votre adresse e-mail.</li>
         <li>Notifications : messages que l’administrateur vous adresse personnellement et date à laquelle vous avez lu chaque notification ou annonce.</li>
+        <li>Suggestions de catégorie : nom et emplacement des catégories que vous proposez à tous, avec leur date et la décision de l’administrateur, qui les lit sans voir votre adresse e-mail.</li>
         <li>Données techniques : cookies de session et adresse IP utilisée pour limiter les tentatives de connexion. Les journaux techniques ne contiennent ni adresse e-mail ni montant.</li>
       </ul>
       <p>Aucun numéro de téléphone ni aucune donnée bancaire de connexion n’est demandé.</p>
@@ -83,8 +84,8 @@ export class LegalNoticePage {
         <li>Fournir le service (historique, statistiques, simulations) : exécution du contrat (CGU).</li>
         <li>Envoyer les e-mails nécessaires (vérification de l’adresse, réinitialisation du mot de passe) : exécution du contrat.</li>
         <li>Sécuriser le service (limitation des tentatives, prévention des abus, sauvegardes) : intérêt légitime.</li>
-        <li>Lire vos retours pour améliorer le service et corriger les problèmes signalés : intérêt légitime.</li>
-        <li>Vous informer dans l’application (annonces, réponses à vos retours, évolution des CGU) : exécution du contrat.</li>
+        <li>Lire vos retours et vos suggestions de catégorie pour améliorer le service et corriger les problèmes signalés : intérêt légitime.</li>
+        <li>Vous informer dans l’application (annonces, réponses à vos retours et à vos suggestions, évolution des CGU) : exécution du contrat.</li>
       </ul>
       <p>Pas de publicité, pas de revente, pas de profilage, pas de cookie tiers ni de mesure d’audience.</p>
 
@@ -104,6 +105,7 @@ export class LegalNoticePage {
         <li>Adresse IP pour la limitation des tentatives : en mémoire, 1 heure au plus.</li>
         <li>Retours (« Donner mon avis ») : 30 jours après leur traitement, 90 jours au plus s’ils ne sont jamais traités.</li>
         <li>Notifications et état de lecture des annonces : jusqu’à la suppression de votre compte.</li>
+        <li>Suggestions de catégorie : jusqu’à la suppression de votre compte.</li>
       </ul>
 
       <h2>Sécurité</h2>

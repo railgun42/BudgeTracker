@@ -1,10 +1,17 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { CategoryDto, CategoryPreferenceInput, CreateCategoryInput } from '@budgetracker/shared';
+import { CategoryDto, CategoryPreferenceInput, CategorySuggestionDto, CategorySuggestionStatus, CreateCategoryInput } from '@budgetracker/shared';
 import { ApiClient } from '../../core/api-client';
 import { CATEGORY_LABELS, categoryLabel, categoryOptions, isTechnical } from '../../shared-ui/labels';
 import { errorMessage } from '../auth/auth-form';
+
+export const SUGGESTION_STATUS_LABELS: Record<CategorySuggestionStatus, string> = {
+  PENDING: 'En attente',
+  ACCEPTED: 'Acceptée',
+  REJECTED: 'Refusée',
+  TREATED: 'Traitée',
+};
 
 interface Row {
   category: CategoryDto;
@@ -14,6 +21,7 @@ interface Row {
 
 // E36 (SPEC §13.4) : catégories globales (masquer / renommer pour soi seul) et personnelles
 // (créer, y compris sous une globale, renommer, supprimer avec réaffectation). Les techniques n'y figurent pas.
+// E41 (SPEC §13.5) : à la création, case facultative « proposer cette catégorie à tous » et suivi de ses suggestions.
 @Component({
   selector: 'app-categories-page',
   imports: [ReactiveFormsModule, NgTemplateOutlet],
@@ -114,8 +122,34 @@ interface Row {
           }
         </select>
       </div>
+      <div class="field">
+        <label class="checkbox" for="cat-suggest">
+          <input id="cat-suggest" type="checkbox" formControlName="suggest" [attr.disabled]="personalParent() ? '' : null" aria-describedby="cat-suggest-hint" />
+          Proposer cette catégorie à tous
+        </label>
+        <p id="cat-suggest-hint" class="field-hint">
+          @if (personalParent()) {
+            Impossible sous une de vos catégories personnelles : choisissez une catégorie globale ou aucune.
+          } @else {
+            Facultatif. L'administrateur pourra l'ajouter pour tous les utilisateurs et vous répondre par une notification ;
+            il ne voit pas votre adresse e-mail.
+          }
+        </p>
+      </div>
       <button class="button" type="submit" [disabled]="pending()">Créer la catégorie</button>
     </form>
+
+    @if (suggestions().length) {
+      <h2>Mes suggestions</h2>
+      <ul class="tree" aria-label="Mes suggestions">
+        @for (s of suggestions(); track s.id) {
+          <li class="card">
+            <strong>{{ s.name }}</strong>@if (parentLabel(s.parentId); as parent) {<span class="muted"> dans « {{ parent }} »</span>}
+            · {{ statusLabel[s.status] }}
+          </li>
+        }
+      </ul>
+    }
   `,
   styles: `
     .tree {
@@ -156,6 +190,8 @@ export class CategoriesPage {
   protected readonly pending = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly status = signal('');
+  protected readonly suggestions = signal<CategorySuggestionDto[]>([]);
+  protected readonly statusLabel = SUGGESTION_STATUS_LABELS;
 
   protected readonly tree = computed(() => {
     const visible = this.all().filter((c) => !isTechnical(c));
@@ -179,12 +215,29 @@ export class CategoriesPage {
   protected readonly form = this.fb.group({
     name: ['', [Validators.required, Validators.maxLength(100), Validators.pattern(/\S/)]],
     parentId: [''],
+    suggest: [false],
   });
   protected readonly renameForm = this.fb.group({ name: [''] });
   protected readonly deleteForm = this.fb.group({ reassignTo: [''] });
 
   constructor() {
     this.reload();
+    this.reloadSuggestions();
+  }
+
+  private reloadSuggestions(): void {
+    this.api.get<CategorySuggestionDto[]>('/categories/suggestions').subscribe({ next: (list) => this.suggestions.set(list), error: (e) => this.error.set(errorMessage(e)) });
+  }
+
+  /** Une catégorie sous une perso n'est pas proposable à tous (son parent n'existe que pour soi). */
+  protected personalParent(): boolean {
+    const parentId = this.form.controls.parentId.value;
+    return this.all().some((c) => c.id === parentId && !c.system);
+  }
+
+  protected parentLabel(id: string | null): string | null {
+    const parent = this.all().find((c) => c.id === id);
+    return parent ? categoryLabel(parent) : null;
   }
 
   private reload(): void {
@@ -265,17 +318,25 @@ export class CategoriesPage {
       return;
     }
     const { name, parentId } = this.form.getRawValue();
-    const body: CreateCategoryInput = { name: name.trim(), ...(parentId ? { parentId } : {}) };
+    const suggest = this.form.controls.suggest.value && !this.personalParent();
+    const body: CreateCategoryInput = { name: name.trim(), ...(parentId ? { parentId } : {}), ...(suggest ? { suggest } : {}) };
     this.pending.set(true);
     this.api.post<CategoryDto>('/categories', body).subscribe({
       next: () => {
         this.pending.set(false);
         this.form.reset();
-        this.done(`Catégorie « ${body.name} » créée.`);
+        this.done(`Catégorie « ${body.name} » créée${suggest ? ' et proposée à tous' : ''}.`);
+        if (suggest) this.reloadSuggestions();
       },
       error: (e) => {
         this.pending.set(false);
-        this.error.set(errorMessage(e, { 404: 'La catégorie parente n’existe plus.', 422: 'Deux niveaux de catégories au maximum.' }));
+        this.error.set(
+          errorMessage(e, {
+            404: 'La catégorie parente n’existe plus.',
+            422: 'Deux niveaux de catégories au maximum.',
+            429: 'Vous avez déjà beaucoup de suggestions en attente : attendez que l’administrateur les traite.',
+          }),
+        );
       },
     });
   }

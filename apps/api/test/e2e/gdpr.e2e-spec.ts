@@ -45,7 +45,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
     const account = (await user.call('post', '/api/v1/accounts').send({ name: 'Courant', trackingType: 'NORMAL' }).expect(201)).body;
     const savings = (await user.call('post', '/api/v1/accounts').send({ name: 'Livret', trackingType: 'WITH_INTEREST' }).expect(201)).body;
     await user.call('post', `/api/v1/accounts/${savings.id}/interest-rates`).send({ rateBp: 300, effectiveDate: '2026-01-01' }).expect(201);
-    const category = (await user.call('post', '/api/v1/categories').send({ name: 'Perso', color: '#123456' }).expect(201)).body;
+    const category = (await user.call('post', '/api/v1/categories').send({ name: 'Perso', color: '#123456', suggest: true }).expect(201)).body;
     const groceries = (await prisma.category.findUniqueOrThrow({ where: { nameKey: 'groceries' } })).id;
     await user.call('put', `/api/v1/categories/${groceries}/preference`).send({ hidden: true, customName: 'Épicerie' }).expect(200);
     const tag = (await user.call('post', '/api/v1/tags').send({ name: `tag-${randomUUID()}` }).expect(201)).body;
@@ -108,6 +108,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(data.Attachment).toEqual([expect.objectContaining({ transactionId: a.txId, mime: 'application/pdf' })]);
       expect(data.Notification).toEqual([expect.objectContaining({ userId: users.a.id, message: 'Bienvenue', readAt: null })]);
       expect(data.AnnouncementRead).toEqual([expect.objectContaining({ userId: users.a.id, announcementId: expect.any(String) })]);
+      expect(data.CategorySuggestion).toEqual([expect.objectContaining({ userId: users.a.id, name: 'Perso', status: 'PENDING' })]);
       expect(data.Feedback).toEqual([expect.objectContaining({ userId: users.a.id, type: 'IDEA', message: 'Un mode sombre', treatedAt: null })]);
 
       const text = JSON.stringify(data);

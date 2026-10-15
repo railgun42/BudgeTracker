@@ -36,6 +36,8 @@ export const adminRoutes = [
   'POST /api/v1/admin/feedback/:id/treat',
   'POST /api/v1/admin/announcements',
   'POST /api/v1/admin/notifications',
+  'GET /api/v1/admin/category-suggestions',
+  'POST /api/v1/admin/category-suggestions/:id/resolve',
 ];
 
 // Compte créé par B ; vérifie ensuite qu'il est resté intact pour B.
@@ -248,6 +250,12 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await intact();
     const { body } = await users.a.call('post', '/api/v1/categories').send({ name: 'Catégorie de A' }).expect(201);
     expect((await users.b.call('get', '/api/v1/categories').expect(200)).body.map((c: { id: string }) => c.id)).not.toContain(body.id);
+  },
+  // Suggestions : celle de B n'apparaît que chez B.
+  'GET /api/v1/categories/suggestions': async ({ a, b }) => {
+    await b.call('post', '/api/v1/categories').send({ name: 'Suggestion de B', suggest: true }).expect(201);
+    expect((await a.call('get', '/api/v1/categories/suggestions').expect(200)).body).toEqual([]);
+    expect((await b.call('get', '/api/v1/categories/suggestions').expect(200)).body).toEqual([expect.objectContaining({ name: 'Suggestion de B', status: 'PENDING' })]);
   },
   'PATCH /api/v1/categories/:id': async (users) => {
     const { id, intact } = await categoryOfB(users);

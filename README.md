@@ -294,6 +294,14 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Front : cloche avec pastille dans l'en-tête ([notification-bell.ts](apps/web/src/app/features/notifications/notification-bell.ts), relue à chaque navigation), page `/notifications` ; page `/admin/notifications` liée depuis `/admin` : annonce à tous (rappel que l'e-mail RGPD reste obligatoire ; case « Modification des CGU » qui préremplit le message avec un préavis de 30 jours, `TERMS_NOTICE_DAYS`, sans ré-acceptation) et notification à un utilisateur par son e-mail. Texte brut partout.
 - Tests : `test/e2e/notifications.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `test/e2e/gdpr.e2e-spec.ts`, `features/notifications/notifications.spec.ts`, `features/admin/notifications/admin-notifications-page.spec.ts`, `app.spec.ts`.
 
+## Suggestions de catégorie et réponse à l'auteur (E41)
+
+- `POST /api/v1/categories` accepte `suggest: true` (case facultative « Proposer cette catégorie à tous ») : la catégorie perso et une `CategorySuggestion` sont créées ensemble. Proposable seulement en catégorie principale ou sous une globale (sous une perso ⇒ 422) ; 20 suggestions en attente au plus par utilisateur (⇒ 429, `CATEGORY_SUGGESTION_MAX_PENDING`). `GET /api/v1/categories/suggestions` : les siennes seulement.
+- `GET /api/v1/admin/category-suggestions?status` (en attente d'abord, sans auteur ni e-mail) et `POST /api/v1/admin/category-suggestions/:id/resolve` `{ decision: ACCEPTED|REJECTED|TREATED, reply? }` (`adminRoutes`). Tout ou rien : `ACCEPTED` crée la catégorie globale (règles E38 : doublon ⇒ 409, parent archivé ⇒ 422, la suggestion reste alors en attente) ; `reply` part en notification personnelle à l'auteur (E40). Déjà traitée ⇒ 409 (décisions concurrentes comprises). Journal : `CATEGORY_SUGGESTION_*`, `CATEGORY_CREATED`, `NOTIFICATION_SENT`.
+- Table `CategorySuggestion` (migration `category_suggestions`, CHECK statut ⇔ `treatedAt`) : export RGPD, suppression en cascade avec le compte, politique de confidentialité et `docs/privacy` mises à jour.
+- Front : case et liste « Mes suggestions » sur `/categories` ; page `/admin/suggestions` ([admin-suggestions-page.ts](apps/web/src/app/features/admin/suggestions/admin-suggestions-page.ts)), liée depuis `/admin` : filtre par statut, accepter / refuser / marquer comme traitée avec une réponse préremplie modifiable (« J'ai vu ta suggestion de la catégorie X, je l'ai ajoutée, merci ! »), envoi facultatif. Texte brut partout.
+- Tests : `test/e2e/category-suggestions.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `test/e2e/gdpr.e2e-spec.ts`, `features/categories/categories-page.spec.ts`, `features/admin/suggestions/admin-suggestions-page.spec.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -343,7 +351,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E38 — Administration : catégories globales | ✅ |
 | E39 — Retours utilisateurs et boîte de réception admin | ✅ |
 | E40 — Notifications (cloche) et annonces | ✅ |
-| E41 → E43 | ⏳ Suggestions, tableau de bord, style |
+| E41 — Suggestion de catégorie et réponse à l'auteur | ✅ |
+| E42 → E43 | ⏳ Tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

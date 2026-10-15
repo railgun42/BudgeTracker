@@ -1,8 +1,8 @@
-import { ConflictException, ForbiddenException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { CategoryDto } from '@budgetracker/shared';
-import { Category, UserCategoryPreference } from '../generated/prisma/client';
+import { ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
+import { CATEGORY_SUGGESTION_MAX_PENDING, CategoryDto, CategorySuggestionDto } from '@budgetracker/shared';
+import { Category, CategorySuggestion, UserCategoryPreference } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { CategoryPreferenceDto, CreateCategoryDto, UpdateCategoryDto } from './categories.dto';
+import { CategoryPreferenceDto, CreateUserCategoryDto, UpdateCategoryDto } from './categories.dto';
 
 // `preferences` : celles de l'utilisateur courant seulement (0 ou 1 ligne).
 type WithPreferences = Category & { preferences?: UserCategoryPreference[] };
@@ -17,6 +17,15 @@ export const toCategoryDto = ({ preferences: [pref] = [], ...c }: WithPreference
   hidden: pref?.hidden ?? false,
   customName: pref?.customName ?? null,
   archived: c.archivedAt !== null,
+});
+
+export const toSuggestionDto = ({ id, name, parentId, status, createdAt, treatedAt }: CategorySuggestion): CategorySuggestionDto => ({
+  id,
+  name,
+  parentId,
+  status,
+  createdAt: createdAt.toISOString(),
+  treatedAt: treatedAt?.toISOString() ?? null,
 });
 
 // Visibles : catégories système (userId NULL) + catégories perso de l'utilisateur.
@@ -52,19 +61,36 @@ export class CategoriesService {
 
   // 2 niveaux max : le parent doit être une racine. Rien de nouveau sous une globale archivée (E38).
   // ponytail: vérifié en service sans verrou ; deux reparentages simultanés croisés peuvent créer un 3e niveau (trigger SQL si besoin).
-  private async checkParent(userId: string, parentId: string): Promise<void> {
+  private async checkParent(userId: string, parentId: string): Promise<Category> {
     const parent = await this.visible(userId, parentId);
     if (parent.parentId) throw new UnprocessableEntityException('2 niveaux de catégories maximum');
     if (parent.archivedAt) throw new UnprocessableEntityException('Catégorie archivée');
+    return parent;
   }
 
   private async hasChildren(userId: string, id: string): Promise<boolean> {
     return (await this.prisma.category.count({ where: { parentId: id, userId } })) > 0;
   }
 
-  async create(userId: string, { name, parentId, color }: CreateCategoryDto): Promise<Category> {
-    if (parentId) await this.checkParent(userId, parentId);
-    return this.prisma.category.create({ data: { userId, name, parentId, color } });
+  // `suggest` : la catégorie perso et sa suggestion (SPEC §13.5) sont créées ensemble ou pas du tout.
+  // Proposable à tous : catégorie principale ou sous une globale (une perso n'existe que pour son auteur).
+  // Verrou consultatif par utilisateur : deux envois simultanés ne dépassent pas la limite de suggestions en attente.
+  async create(userId: string, { name, parentId, color, suggest }: CreateUserCategoryDto): Promise<Category> {
+    const parent = parentId ? await this.checkParent(userId, parentId) : null;
+    const data = { userId, name, parentId, color };
+    if (!suggest) return this.prisma.category.create({ data });
+    if (parent?.userId) throw new UnprocessableEntityException('Seule une catégorie principale ou placée sous une catégorie globale peut être proposée à tous');
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`suggestion:${userId}`}::text, 0))`;
+      if ((await tx.categorySuggestion.count({ where: { userId, status: 'PENDING' } })) >= CATEGORY_SUGGESTION_MAX_PENDING)
+        throw new HttpException(`${CATEGORY_SUGGESTION_MAX_PENDING} suggestions en attente au plus`, HttpStatus.TOO_MANY_REQUESTS);
+      await tx.categorySuggestion.create({ data: { userId, name, parentId } });
+      return tx.category.create({ data });
+    });
+  }
+
+  suggestions(userId: string): Promise<CategorySuggestion[]> {
+    return this.prisma.categorySuggestion.findMany({ where: { userId }, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] });
   }
 
   async update(userId: string, id: string, { name, parentId, color }: UpdateCategoryDto): Promise<Category> {

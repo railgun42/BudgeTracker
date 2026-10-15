@@ -72,10 +72,11 @@ export class GdprService {
         p.notification.findMany({ where: mine }),
         // Annonces lues (l'annonce elle-même est commune à tous, pas une donnée de l'utilisateur).
         p.announcementRead.findMany({ where: mine }),
+        p.categorySuggestion.findMany({ where: mine }),
       ],
       { isolationLevel: 'RepeatableRead' },
     );
-    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation', 'AdminAuditLog', 'Feedback', 'Notification', 'AnnouncementRead'];
+    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation', 'AdminAuditLog', 'Feedback', 'Notification', 'AnnouncementRead', 'CategorySuggestion'];
     return Object.fromEntries(names.map((name, i) => [name, (tables[i] as object[]).map(plain)]));
   }
 

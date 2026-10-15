@@ -86,6 +86,7 @@ model User {
   feedbacks           Feedback[]
   notifications       Notification[]
   announcementReads   AnnouncementRead[]
+  categorySuggestions CategorySuggestion[]
 }
 
 // Journal des actions d'administration (SPEC §13.1) : qui, quoi, quand ; jamais de donnée financière ni d'e-mail.
@@ -252,6 +253,7 @@ model Category {
   transactions Transaction[]
   templates    TransactionTemplate[]
   preferences  UserCategoryPreference[]
+  suggestions  CategorySuggestion[]
 
   @@index([userId])
   @@index([parentId])
@@ -485,4 +487,29 @@ model Notification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+enum CategorySuggestionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  TREATED
+}
+
+// Suggestion de catégorie globale (SPEC §13.5), posée à la création d'une catégorie perso. Parent : globale ou aucun.
+// L'administrateur la lit sans l'auteur ; sa réponse part en notification personnelle (Notification).
+model CategorySuggestion {
+  id        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String                   @db.Uuid
+  name      String
+  parentId  String?                  @db.Uuid
+  status    CategorySuggestionStatus @default(PENDING)
+  treatedAt DateTime?                @db.Timestamptz(3)
+  createdAt DateTime                 @default(now()) @db.Timestamptz(3)
+
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent Category? @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }

@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { CategoryDto } from '@budgetracker/shared';
+import { CategoryDto, CategorySuggestionDto } from '@budgetracker/shared';
 import { AuthUser, CurrentUser, JwtAuthGuard } from '../common/jwt-auth.guard';
-import { CategoryPreferenceDto, CreateCategoryDto, DeleteCategoryQueryDto, UpdateCategoryDto } from './categories.dto';
-import { CategoriesService, toCategoryDto } from './categories.service';
+import { CategoryPreferenceDto, CreateUserCategoryDto, DeleteCategoryQueryDto, UpdateCategoryDto } from './categories.dto';
+import { CategoriesService, toCategoryDto, toSuggestionDto } from './categories.service';
 
 @Controller('v1/categories')
 @UseGuards(JwtAuthGuard)
@@ -15,8 +15,14 @@ export class CategoriesController {
   }
 
   @Post()
-  async create(@CurrentUser() { id }: AuthUser, @Body() dto: CreateCategoryDto): Promise<CategoryDto> {
+  async create(@CurrentUser() { id }: AuthUser, @Body() dto: CreateUserCategoryDto): Promise<CategoryDto> {
     return toCategoryDto(await this.categories.create(id, dto));
+  }
+
+  // Ses propres suggestions seulement (SPEC §13.5).
+  @Get('suggestions')
+  async suggestions(@CurrentUser() { id }: AuthUser): Promise<CategorySuggestionDto[]> {
+    return (await this.categories.suggestions(id)).map(toSuggestionDto);
   }
 
   @Patch(':id')

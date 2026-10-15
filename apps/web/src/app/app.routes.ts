@@ -104,6 +104,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/admin/notifications/admin-notifications-page').then((m) => m.AdminNotificationsPage),
   },
   {
+    path: 'admin/suggestions',
+    title: 'Suggestions de catégorie',
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () => import('./features/admin/suggestions/admin-suggestions-page').then((m) => m.AdminSuggestionsPage),
+  },
+  {
     path: 'login',
     title: 'Connexion',
     loadComponent: () => import('./features/auth/login-page').then((m) => m.LoginPage),

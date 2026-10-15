@@ -1,11 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { NotificationDto, NotificationsDto, SentMessageDto } from '@budgetracker/shared';
+import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 // ponytail: 100 dernières de chaque sorte, sans pagination ni purge ; paginer si les annonces s'accumulent.
 const TAKE = 100;
 
 const sent = ({ id, message, createdAt }: { id: string; message: string; createdAt: Date }): SentMessageDto => ({ id, message, createdAt: createdAt.toISOString() });
+
+// Notification personnelle dans la transaction de l'appelant (sert aussi à répondre à une suggestion de catégorie).
+// Journal : la notification, jamais le destinataire ni son e-mail.
+export async function notifyUser(tx: Prisma.TransactionClient, adminId: string, userId: string, message: string): Promise<SentMessageDto> {
+  const notification = await tx.notification.create({ data: { userId, message } });
+  await tx.adminAuditLog.create({ data: { adminId, action: 'NOTIFICATION_SENT', targetId: notification.id } });
+  return sent(notification);
+}
 
 // Notifications (SPEC §13.6) : annonces à tous (lues par utilisateur, visibles des seuls inscrits avant leur création)
 // et notifications personnelles (filtrées par userId). Envois réservés à l'admin et journalisés.
@@ -55,14 +64,10 @@ export class NotificationsService {
     });
   }
 
-  // Destinataire inconnu ⇒ 404. Journal : la notification, jamais le destinataire ni son e-mail.
+  // Destinataire inconnu ⇒ 404.
   async notify(adminId: string, email: string, message: string): Promise<SentMessageDto> {
     const user = await this.prisma.user.findUnique({ where: { email }, select: { id: true } });
     if (!user) throw new NotFoundException('Aucun utilisateur avec cet e-mail');
-    return this.prisma.$transaction(async (tx) => {
-      const notification = await tx.notification.create({ data: { userId: user.id, message } });
-      await tx.adminAuditLog.create({ data: { adminId, action: 'NOTIFICATION_SENT', targetId: notification.id } });
-      return sent(notification);
-    });
+    return this.prisma.$transaction((tx) => notifyUser(tx, adminId, user.id, message));
   }
 }

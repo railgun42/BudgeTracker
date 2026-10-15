@@ -8,6 +8,8 @@ import { AdminCategoriesController } from './admin/categories.controller';
 import { AdminCategoriesService } from './admin/categories.service';
 import { AdminFeedbackController } from './admin/feedback.controller';
 import { AdminNotificationsController } from './admin/notifications.controller';
+import { AdminSuggestionsController } from './admin/suggestions.controller';
+import { AdminSuggestionsService } from './admin/suggestions.service';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { AuthModule } from './auth/auth.module';
 import { BalanceModule } from './balance/balance.module';
@@ -41,8 +43,8 @@ import { UsersController } from './users/users.controller';
 
 @Module({
   imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule, RecurrencesModule, InterestModule, StorageModule, AttachmentsModule, StatsModule],
-  controllers: [HealthController, AdminController, AdminCategoriesController, AdminFeedbackController, AdminNotificationsController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, FeedbackController, NotificationsController, GdprController],
+  controllers: [HealthController, AdminController, AdminCategoriesController, AdminFeedbackController, AdminNotificationsController, AdminSuggestionsController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, FeedbackController, NotificationsController, GdprController],
   // CSRF global : toute nouvelle route non sûre est protégée par défaut.
-  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, AdminService, AdminCategoriesService, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, FeedbackService, NotificationsService, GdprService],
+  providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, AdminService, AdminCategoriesService, AdminSuggestionsService, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, FeedbackService, NotificationsService, GdprService],
 })
 export class AppModule {}

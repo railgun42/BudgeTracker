@@ -38,6 +38,7 @@ const JOBS: { key: keyof AdminStatsDto['api']['jobs']; label: string }[] = [
       <a routerLink="/admin/categories">Catégories globales</a>
       <a routerLink="/admin/feedback">Retours utilisateurs</a>
       <a routerLink="/admin/notifications">Notifications et annonces</a>
+      <a routerLink="/admin/suggestions">Suggestions de catégorie</a>
     </nav>
 
     @if (error()) {

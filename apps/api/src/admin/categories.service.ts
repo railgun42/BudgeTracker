@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { TECHNICAL_CATEGORY_KEYS } from '@budgetracker/shared';
+import { CreateCategoryInput, TECHNICAL_CATEGORY_KEYS } from '@budgetracker/shared';
 import { Category, Prisma } from '../generated/prisma/client';
-import { AdminUpdateCategoryDto, CreateCategoryDto } from '../categories/categories.dto';
+import { AdminUpdateCategoryDto } from '../categories/categories.dto';
 import { PrismaService } from '../prisma/prisma.service';
 
 const GLOBAL = { userId: null };
@@ -23,27 +23,28 @@ export class AdminCategoriesService {
   }
 
   // Globale non technique ; une catégorie perso est indiscernable d'une absente (404).
-  private async editable(id: string): Promise<Category> {
-    const category = await this.prisma.category.findFirst({ where: { id, ...GLOBAL } });
+  private async editable(id: string, db: Prisma.TransactionClient = this.prisma): Promise<Category> {
+    const category = await db.category.findFirst({ where: { id, ...GLOBAL } });
     if (!category) throw new NotFoundException();
     if (TECHNICAL_CATEGORY_KEYS.includes(category.nameKey ?? '')) throw new UnprocessableEntityException('Catégorie technique non modifiable');
     return category;
   }
 
   // ponytail: doublon vérifié sur `name` seulement ; les libellés du seed sont traduits côté front, qui les compare avant envoi.
-  async create(adminId: string, { name, parentId, color }: CreateCategoryDto): Promise<Category> {
+  create(adminId: string, dto: CreateCategoryInput): Promise<Category> {
+    return this.prisma.$transaction((tx) => this.createIn(tx, adminId, dto));
+  }
+
+  // Dans la transaction de l'appelant : sert aussi à accepter une suggestion (admin/suggestions.service.ts).
+  async createIn(tx: Prisma.TransactionClient, adminId: string, { name, parentId, color }: CreateCategoryInput): Promise<Category> {
     if (parentId) {
-      const parent = await this.editable(parentId);
+      const parent = await this.editable(parentId, tx);
       if (parent.parentId) throw new UnprocessableEntityException('2 niveaux de catégories maximum');
       if (parent.archivedAt) throw new UnprocessableEntityException('Catégorie archivée');
     }
-    return this.prisma
-      .$transaction(async (tx) => {
-        const category = await tx.category.create({ data: { name, parentId, color } });
-        await tx.adminAuditLog.create({ data: { adminId, action: 'CATEGORY_CREATED', targetId: category.id } });
-        return category;
-      })
-      .catch(duplicate);
+    const category = await tx.category.create({ data: { name, parentId, color } }).catch(duplicate);
+    await tx.adminAuditLog.create({ data: { adminId, action: 'CATEGORY_CREATED', targetId: category.id } });
+    return category;
   }
 
   // Archiver ne touche ni aux transactions ni aux modèles de récurrence : seules les listes de saisie l'excluent.
