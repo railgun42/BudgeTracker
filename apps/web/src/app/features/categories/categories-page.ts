@@ -58,7 +58,7 @@ interface Row {
           <p>
             <strong>{{ r.label }}</strong>
             <span class="muted">
-              ({{ r.category.system ? 'globale' : 'personnelle' }}@if (r.category.customName) {, d'origine « {{ originalLabel(r.category) }} »}@if (r.category.hidden) {, masquée})
+              ({{ r.category.system ? 'globale' : 'personnelle' }}@if (r.category.customName) {, d'origine « {{ originalLabel(r.category) }} »}@if (r.category.hidden) {, masquée}@if (r.category.archived) {, archivée})
             </span>
           </p>
           <div class="actions">
@@ -168,11 +168,11 @@ export class CategoriesPage {
   });
   /** Parents possibles d'une nouvelle catégorie : racines proposées à la saisie (2 niveaux max). */
   protected readonly parents = computed(() => categoryOptions(this.all(), null));
-  /** Cibles de réaffectation : toute catégorie non technique sauf celle supprimée. */
+  /** Cibles de réaffectation : toute catégorie non technique ni archivée sauf celle supprimée. */
   protected readonly targets = computed(() =>
     this.tree()
       .flatMap((r) => [r, ...r.children.map((k) => ({ ...k, label: `${r.label} › ${k.label}` }))])
-      .filter((r) => r.category.id !== this.deleting()?.id)
+      .filter((r) => r.category.id !== this.deleting()?.id && !r.category.archived)
       .map((r) => ({ id: r.category.id, label: r.label })),
   );
 
@@ -197,8 +197,9 @@ export class CategoriesPage {
     this.reload();
   }
 
+  /** Nom global, avant renommage pour soi : celui de l'admin, sinon la traduction du seed. */
   protected originalLabel(c: CategoryDto): string {
-    return CATEGORY_LABELS[c.nameKey ?? ''] ?? c.nameKey ?? '';
+    return c.name ?? CATEGORY_LABELS[c.nameKey ?? ''] ?? c.nameKey ?? '';
   }
 
   protected nameInvalid(): boolean {

@@ -268,6 +268,15 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Export RGPD : section `AdminAuditLog` (actions dont l'utilisateur est l'auteur) ; à la suppression du compte, l'entrée reste sans auteur.
 - Tests : `test/e2e/admin.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `features/admin/admin-page.spec.ts`, `app.spec.ts`.
 
+## Administration : catégories globales (E38)
+
+- `GET/POST /api/v1/admin/categories`, `PATCH /api/v1/admin/categories/:id` (`JwtAuthGuard` + `AdminGuard`, dans `adminRoutes`) : l'admin crée des catégories et sous-catégories globales (nom libre, `userId` NULL), les renomme (y compris celles du seed : `name` remplace alors la traduction de `nameKey`, conservée) et les archive / restaure (`archived: true|false`). Pas de suppression. Catégories techniques (`TECHNICAL_CATEGORY_KEYS` de `shared`) ⇒ 422 ; catégorie perso ou inconnue ⇒ 404.
+- Colonne `Category.archivedAt` (migration `global_categories`) : une globale archivée reste servie par `GET /categories` (`archived: true`) et sur les transactions existantes ; les listes de saisie du front l'excluent, et aucune sous-catégorie (perso ou globale) ne peut plus y être créée (422).
+- Deux niveaux max, parent = racine globale ni technique ni archivée ; doublon de nom entre sœurs globales refusé (409) par un index unique `(parentId, lower(name))` ; les libellés traduits du seed sont comparés côté front avant envoi.
+- Journal `AdminAuditLog` : `CATEGORY_CREATED`, `CATEGORY_UPDATED`, `CATEGORY_ARCHIVED`, `CATEGORY_RESTORED` (auteur, cible, date).
+- Front : page `/admin/categories` ([admin-categories-page.ts](apps/web/src/app/features/admin/categories/admin-categories-page.ts)), liée depuis `/admin`.
+- Tests : `test/e2e/admin-categories.e2e-spec.ts`, `test/e2e/isolation-meta.e2e-spec.ts`, `features/admin/categories/admin-categories-page.spec.ts`, `features/categories/categories-page.spec.ts`, `shared-ui/labels.spec.ts`.
+
 ## État actuel
 
 Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
@@ -314,7 +323,8 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E35 — Simulation : interface | ✅ |
 | E36 — Catégories personnalisables par l'utilisateur | ✅ |
 | E37 — Rôle administrateur et statistiques | ✅ |
-| E38 → E43 | ⏳ Administration et communication, tableau de bord, style |
+| E38 — Administration : catégories globales | ✅ |
+| E39 → E43 | ⏳ Administration et communication, tableau de bord, style |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |
 
 Concrètement : l'API gère l'inscription, la connexion, la session, le reset de mot de passe, la connexion Google, les comptes, les catégories, les tags, les transactions, les virements et le calcul du solde, avec purge automatique des suppressions logiques après 30 jours, sur un schéma de base complet. Un harnais garantit que chaque route a son test d'isolation entre utilisateurs. Le front (`apps/web`) permet de s'inscrire, de se connecter, de gérer son mot de passe, de créer/modifier/supprimer ses comptes et de saisir une dépense ou un virement ; de consulter l'historique paginé et filtré, d'annuler une suppression et de corriger une transaction.

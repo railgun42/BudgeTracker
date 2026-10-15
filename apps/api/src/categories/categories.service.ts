@@ -16,6 +16,7 @@ export const toCategoryDto = ({ preferences: [pref] = [], ...c }: WithPreference
   color: c.color,
   hidden: pref?.hidden ?? false,
   customName: pref?.customName ?? null,
+  archived: c.archivedAt !== null,
 });
 
 // Visibles : catégories système (userId NULL) + catégories perso de l'utilisateur.
@@ -49,10 +50,12 @@ export class CategoriesService {
     return category;
   }
 
-  // 2 niveaux max : le parent doit être une racine.
+  // 2 niveaux max : le parent doit être une racine. Rien de nouveau sous une globale archivée (E38).
   // ponytail: vérifié en service sans verrou ; deux reparentages simultanés croisés peuvent créer un 3e niveau (trigger SQL si besoin).
   private async checkParent(userId: string, parentId: string): Promise<void> {
-    if ((await this.visible(userId, parentId)).parentId) throw new UnprocessableEntityException('2 niveaux de catégories maximum');
+    const parent = await this.visible(userId, parentId);
+    if (parent.parentId) throw new UnprocessableEntityException('2 niveaux de catégories maximum');
+    if (parent.archivedAt) throw new UnprocessableEntityException('Catégorie archivée');
   }
 
   private async hasChildren(userId: string, id: string): Promise<boolean> {

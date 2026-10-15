@@ -1,4 +1,4 @@
-import { CategoryPreferenceInput, CreateCategoryInput, DeleteCategoryQuery, UpdateCategoryInput } from '@budgetracker/shared';
+import { AdminUpdateCategoryInput, CategoryPreferenceInput, CreateCategoryInput, DeleteCategoryQuery, UpdateCategoryInput } from '@budgetracker/shared';
 import { Transform, TransformFnParams } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
 
@@ -52,4 +52,21 @@ export class CategoryPreferenceDto implements CategoryPreferenceInput {
   @IsString()
   @Length(1, 100)
   customName?: string | null;
+}
+
+// PATCH /admin/categories/:id : pas de reparentage ; `name` jamais null.
+export class AdminUpdateCategoryDto implements AdminUpdateCategoryInput {
+  @ValidateIf((_, value) => value !== undefined)
+  @Transform(trim)
+  @IsString()
+  @Length(1, 100)
+  name?: string;
+
+  @IsOptional()
+  @Matches(COLOR)
+  color?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  archived?: boolean;
 }

@@ -59,6 +59,7 @@ describe('AdminPage', () => {
     expect(v['Génération des récurrences']).toMatch(/réussie$/);
     expect(v['Crédit des intérêts']).toBe('pas encore exécutée depuis le démarrage');
     expect(v['Purge des suppressions']).toMatch(/en échec$/);
+    expect(clean(el.querySelector('a[href="/admin/categories"]')?.textContent)).toBe('Catégories globales');
   });
 
   it('Actualiser relance la requête ; une erreur s’affiche dans une alerte', async () => {

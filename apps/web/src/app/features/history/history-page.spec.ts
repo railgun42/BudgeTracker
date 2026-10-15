@@ -13,9 +13,9 @@ const ACCOUNTS: AccountDto[] = [
   { id: 'a2', name: 'Livret', trackingType: TrackingType.WITH_INTEREST, openingDate: null, version: 1 },
 ];
 const CATEGORIES: CategoryDto[] = [
-  { id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null, hidden: false, customName: null },
-  { id: 'c2', parentId: 'c1', system: true, nameKey: 'groceries.food', name: null, color: null, hidden: false, customName: null },
-  { id: 'c3', parentId: null, system: true, nameKey: 'transfer', name: null, color: null, hidden: false, customName: null },
+  { id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null, hidden: false, customName: null, archived: false },
+  { id: 'c2', parentId: 'c1', system: true, nameKey: 'groceries.food', name: null, color: null, hidden: false, customName: null, archived: false },
+  { id: 'c3', parentId: null, system: true, nameKey: 'transfer', name: null, color: null, hidden: false, customName: null, archived: false },
 ];
 const TAGS = [{ id: 'g1', name: 'Vacances' }];
 const tx = (id: string, over: Partial<TransactionDto> = {}): TransactionDto => ({

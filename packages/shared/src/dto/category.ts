@@ -11,7 +11,12 @@ export interface CategoryDto {
   hidden: boolean;
   /** Renommage d'une catégorie système pour cet utilisateur seul ; prioritaire sur `nameKey`. */
   customName: string | null;
+  /** Catégorie globale archivée par l'administrateur : exclue des listes de saisie, reste affichée sur les transactions. */
+  archived: boolean;
 }
+
+/** Catégories système posées par le code (intérêts, retrait d'espèces, solde de départ, virement) : jamais proposées à la saisie ni modifiables par l'administrateur. */
+export const TECHNICAL_CATEGORY_KEYS: readonly string[] = ['interest', 'cash', 'opening_balance', 'transfer'];
 
 /** Valeur du filtre `categoryId` de GET /transactions : transactions sans catégorie. */
 export const UNCATEGORIZED = 'none';

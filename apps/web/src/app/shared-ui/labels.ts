@@ -1,4 +1,4 @@
-import { CategoryDto, IntervalUnit, TrackingType } from '@budgetracker/shared';
+import { CategoryDto, IntervalUnit, TECHNICAL_CATEGORY_KEYS, TrackingType } from '@budgetracker/shared';
 
 // Libellés UI des enums du domaine ; le Record impose un libellé pour chaque valeur.
 export const TRACKING_TYPE_LABELS: Record<TrackingType, string> = {
@@ -15,7 +15,8 @@ export const UNIT_LABELS: Record<IntervalUnit, string> = {
   [IntervalUnit.YEAR]: 'an(s)',
 };
 
-// Catégories système (nameKey seedé par apps/api/prisma/seed.ts) ; les perso portent leur propre `name`.
+// Catégories système (nameKey seedé par apps/api/prisma/seed.ts) ; les perso et les globales créées par l'admin portent leur `name`
+// (un `name` posé par l'admin sur une catégorie seedée remplace sa traduction).
 export const CATEGORY_LABELS: Record<string, string> = {
   interest: 'Intérêts',
   cash: 'Espèces',
@@ -57,12 +58,11 @@ export const categoryLabel = (c: CategoryDto): string => c.customName ?? c.name 
 export const NO_CATEGORY_LABEL = 'Sans catégorie';
 
 // Catégories techniques posées par le serveur (intérêts, virement vers portefeuille, solde de départ, virement) : jamais proposées à la saisie.
-const TECHNICAL = new Set(['interest', 'cash', 'opening_balance', 'transfer']);
-export const isTechnical = (c: CategoryDto): boolean => TECHNICAL.has(c.nameKey ?? '');
+export const isTechnical = (c: CategoryDto): boolean => TECHNICAL_CATEGORY_KEYS.includes(c.nameKey ?? '');
 
-/** Choix d'une liste de saisie : racines (`parentId` null) ou sous-catégories de `parentId`, hors techniques et masquées, triés. */
+/** Choix d'une liste de saisie : racines (`parentId` null) ou sous-catégories de `parentId`, hors techniques, masquées et archivées, triés. */
 export const categoryOptions = (all: CategoryDto[], parentId: string | null): { id: string; label: string }[] =>
   all
-    .filter((c) => c.parentId === parentId && !isTechnical(c) && !c.hidden)
+    .filter((c) => c.parentId === parentId && !isTechnical(c) && !c.hidden && !c.archived)
     .map((c) => ({ id: c.id, label: categoryLabel(c) }))
     .sort((a, b) => a.label.localeCompare(b.label, 'fr'));

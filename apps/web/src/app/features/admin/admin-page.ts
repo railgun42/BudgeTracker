@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { AdminStatsDto, JobRunDto } from '@budgetracker/shared';
 import { ApiClient } from '../../core/api-client';
 import { errorMessage } from '../auth/auth-form';
@@ -29,9 +30,13 @@ const JOBS: { key: keyof AdminStatsDto['api']['jobs']; label: string }[] = [
 // Administration (SPEC §13.2) : agrégats seulement, jamais de donnée d'un utilisateur. Route réservée aux admins.
 @Component({
   selector: 'app-admin-page',
+  imports: [RouterLink],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1>Administration</h1>
+    <nav aria-label="Administration">
+      <a routerLink="/admin/categories">Catégories globales</a>
+    </nav>
 
     @if (error()) {
       <p class="alert alert-error" role="alert">{{ error() }}</p>

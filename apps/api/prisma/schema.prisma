@@ -225,18 +225,20 @@ model Transaction {
 
 // userId NULL = catégorie système (nameKey traduisible) ; sinon perso (name).
 model Category {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String?  @db.Uuid
-  parentId  String?  @db.Uuid
-  nameKey   String?  @unique
-  name      String?
-  color     String?
-  createdAt DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String?   @db.Uuid
+  parentId   String?   @db.Uuid
+  nameKey    String?   @unique
+  name       String?
+  color      String?
+  // Catégorie globale archivée par l'administrateur (SPEC §13.3) : hors des listes de saisie, reste sur les transactions.
+  archivedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
 
-  user         User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parent       Category?             @relation("CategoryTree", fields: [parentId], references: [id], onDelete: NoAction)
-  children     Category[]            @relation("CategoryTree")
+  user         User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent       Category?                @relation("CategoryTree", fields: [parentId], references: [id], onDelete: NoAction)
+  children     Category[]               @relation("CategoryTree")
   transactions Transaction[]
   templates    TransactionTemplate[]
   preferences  UserCategoryPreference[]

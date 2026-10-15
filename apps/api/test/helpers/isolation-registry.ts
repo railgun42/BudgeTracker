@@ -27,7 +27,12 @@ export const publicRoutes = [
 // Routes d'administration (SPEC §13.1) : JwtAuthGuard + AdminGuard, jamais dans isolationRegistry. Le test méta
 // exige que toute route /api/v1/admin/* soit ici, puis vérifie 401 sans session et 403 pour A et B (non admins).
 // Le 200 pour un admin et l'absence d'e-mail/montant sont testés par route (test/e2e/admin.e2e-spec.ts).
-export const adminRoutes = ['GET /api/v1/admin/stats'];
+export const adminRoutes = [
+  'GET /api/v1/admin/stats',
+  'GET /api/v1/admin/categories',
+  'POST /api/v1/admin/categories',
+  'PATCH /api/v1/admin/categories/:id',
+];
 
 // Compte créé par B ; vérifie ensuite qu'il est resté intact pour B.
 const accountOfB = async ({ b }: TwoUsers) => {

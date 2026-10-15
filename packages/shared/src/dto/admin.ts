@@ -36,3 +36,13 @@ export interface AdminStatsDto {
     jobs: Record<'recurrences' | 'interest' | 'purge', JobRunDto | null>;
   };
 }
+
+// Catégories globales (SPEC §13.3). GET /admin/categories : toutes les globales, archivées comprises (CategoryDto,
+// `hidden`/`customName` sans objet). POST /admin/categories : CreateCategoryInput (parent = racine globale non
+// technique ni archivée, sinon 422 ; nom déjà pris par une sœur globale, casse ignorée ⇒ 409).
+// PATCH /admin/categories/:id : renommer, recolorer, archiver (`archived: true`) ou restaurer ; technique ⇒ 422.
+export interface AdminUpdateCategoryInput {
+  name?: string;
+  color?: string | null;
+  archived?: boolean;
+}

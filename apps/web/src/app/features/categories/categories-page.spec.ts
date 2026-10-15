@@ -17,6 +17,7 @@ const cat = (id: string, over: Partial<CategoryDto> = {}): CategoryDto => ({
   color: null,
   hidden: false,
   customName: null,
+  archived: false,
   ...over,
 });
 const SPORT = cat('c1', { nameKey: 'sport' });
@@ -140,5 +141,18 @@ describe('Mes catégories', () => {
     await act(confirm, 'DELETE', '/api/v1/categories/p1?reassignTo=c2', null, [SPORT, LICENCE, HOUSING]);
     expect(el.querySelector('.tree')?.textContent).not.toContain('Vélo');
     expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('Catégorie « Vélo » supprimée.');
+  });
+
+  it('globales de l’admin : nom d’origine = nom de l’admin ; archivée signalée, ni parent ni cible de réaffectation', async () => {
+    const AIDE = cat('a1', { name: 'Aide sociale', customName: 'Aides' });
+    const OLD = cat('a2', { name: 'Ancienne', archived: true });
+    await open([...ALL, AIDE, OLD]);
+    const rows = [...el.querySelectorAll('.card p')].map((p) => clean(p.textContent));
+    expect(rows).toContain('Aides (globale, d\'origine « Aide sociale »)');
+    expect(rows).toContain('Ancienne (globale, archivée)');
+    expect(options('cat-parent')).toEqual(['Aucune : catégorie principale', 'Aides', 'Sport']);
+    button('Supprimer Vélo').click();
+    await stable();
+    expect(options('reassign-p1')).not.toContain('Ancienne');
   });
 });

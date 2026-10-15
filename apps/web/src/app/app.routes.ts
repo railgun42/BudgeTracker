@@ -74,6 +74,12 @@ export const routes: Routes = [
     loadComponent: () => import('./features/admin/admin-page').then((m) => m.AdminPage),
   },
   {
+    path: 'admin/categories',
+    title: 'Catégories globales',
+    canActivate: [authGuard, adminGuard],
+    loadComponent: () => import('./features/admin/categories/admin-categories-page').then((m) => m.AdminCategoriesPage),
+  },
+  {
     path: 'login',
     title: 'Connexion',
     loadComponent: () => import('./features/auth/login-page').then((m) => m.LoginPage),

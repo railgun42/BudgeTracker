@@ -21,6 +21,7 @@ const cat = (id: string, nameKey: string | null, parentId: string | null = null,
   color: null,
   hidden: false,
   customName: null,
+  archived: false,
 });
 const CATEGORIES = [
   cat('c1', 'groceries'),

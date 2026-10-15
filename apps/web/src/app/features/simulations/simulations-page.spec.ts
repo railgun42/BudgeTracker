@@ -12,7 +12,7 @@ const ACCOUNTS: AccountDto[] = [
   { id: 'a1', name: 'Courant', trackingType: TrackingType.NORMAL, openingDate: null, version: 1 },
   { id: 'a2', name: 'Portefeuille', trackingType: TrackingType.NOT_TRACKED, openingDate: null, version: 1 },
 ];
-const CATEGORIES: CategoryDto[] = [{ id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null, hidden: false, customName: null }];
+const CATEGORIES: CategoryDto[] = [{ id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null, hidden: false, customName: null, archived: false }];
 const SCENARIOS: ScenarioDto[] = [
   { id: 's1', name: 'Économe', params: { changes: [{ kind: 'CATEGORY', categoryId: 'c1', monthlyDeltaCents: -10_000 }] }, version: 1 },
   {
