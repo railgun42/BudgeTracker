@@ -61,7 +61,11 @@ export class StorageService implements OnModuleInit {
   }
 
   // Content-Type imposé par le serveur (détecté à l'upload), jamais celui annoncé par le client.
-  signedUrl(key: string, contentType: string): Promise<string> {
-    return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: key, ResponseContentType: contentType }), { expiresIn: SIGNED_URL_SECONDS });
+  // `downloadName` ⇒ Content-Disposition attachment (nom encodé RFC 5987, jamais interprété).
+  signedUrl(key: string, contentType: string, downloadName?: string): Promise<string> {
+    const disposition = downloadName && `attachment; filename*=UTF-8''${encodeURIComponent(downloadName).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`)}`;
+    return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.bucket, Key: key, ResponseContentType: contentType, ResponseContentDisposition: disposition }), {
+      expiresIn: SIGNED_URL_SECONDS,
+    });
   }
 }

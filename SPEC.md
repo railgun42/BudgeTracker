@@ -79,6 +79,7 @@ Un virement est **une opération, deux transactions** jumelées par `transferId`
 - **Quota par utilisateur** (200 Mo) pour limiter l'abus.
 - Offre payante à quota élevé : **non implémentée**, mais le quota est une valeur par utilisateur (pas une constante) pour l'autoriser plus tard.
 - Supprimées avec la transaction (après purge) et avec le compte.
+- **Coffre-fort** (`/me/coffre`, amendé le 2026-10-19) : tous les documents de l'utilisateur au même endroit, c'est-à-dire les pièces de ses transactions et les documents **déposés directement** (sans transaction ; mêmes types, taille et quota). Pour chacun : nom, type, taille, date d'ajout, transaction liée (lien vers l'historique filtré), tags. Tri (date, nom, taille, type), filtres par type et par tag, recherche par nom. Tags = les tags de l'utilisateur (communs aux transactions) ; plusieurs par document ; création, renommage et suppression depuis le coffre. Actions : aperçu (image en modale, PDF dans la visionneuse du navigateur), téléchargement sous le nom d'origine, gestion des tags, suppression (fichier effacé ; la transaction liée reste, sans justificatif). Les pièces des transactions à la corbeille n'y figurent pas mais comptent dans le quota jusqu'à leur purge.
 
 ## 5. Authentification et sécurité
 - Email + mot de passe (**Argon2id**) et **connexion Google (OAuth)**. Liaison de comptes par email vérifié uniquement.
@@ -95,12 +96,13 @@ Un virement est **une opération, deux transactions** jumelées par `transferId`
 
 ### Statistiques
 Répartition par catégorie/tag, évolution mensuelle revenus/dépenses, par compte ou global. Les `TRANSFER` sont exclus. Calcul en SQL agrégé.
+Filtre facultatif par catégorie (`categoryId`, les trois agrégats) : une catégorie racine inclut ses sous-catégories, `none` ⇒ sans catégorie ; catégorie invisible pour l'utilisateur ⇒ 404 (même règle que l'historique). Sert au détail d'une catégorie (sous-catégories, tags).
 
 ### Simulations (calcul serveur)
 Fonctions **pures**, testées unitairement, indépendantes de la BDD :
 1. **Projection du solde** : solde actuel + récurrences futures + rythme moyen de dépenses non récurrentes (fenêtre configurable).
 2. **Simulation de trésorerie** : « combien me restera-t-il au jour X ». Entre une date de début (aujourd'hui par défaut, modifiable) et une date de fin, le solde projeté et le détail des dépenses de la période, à partir des récurrences enregistrées (**cochables/décochables** pour la simulation), de récurrences supplémentaires et de dépenses ou revenus ponctuels anticipés propres à la simulation. Rien n'est écrit dans les vraies données. L'utilisateur peut fixer un **solde plancher** : l'application en déduit le montant dépensable par mois ou par semaine sans passer sous ce plancher. La simulation est **sauvegardable** et suivie dans le temps : les dépenses réelles de la période sont déduites de l'enveloppe en cours, et le reliquat d'une période écoulée est réparti sur les périodes restantes (ex. 100 €/mois, 50 € dépensés le premier mois ⇒ 125 €/mois sur les deux suivants).
-3. **Scénarios « et si »** (coexistent avec la simulation de trésorerie, tranché en E33 ; un remplacement ne s'envisagera qu'une fois l'interface de simulation en place, E35) : un `Scenario` sauvegardé = paramètres JSON (ex. −100 €/mois sur une catégorie, nouvel abonnement, achat à crédit) appliqués à une **copie virtuelle** du compte ; les vraies données ne sont jamais modifiées. Comparaison de scénarios côte à côte.
+3. **Scénarios « et si »** (coexistent avec la simulation de trésorerie, tranché en E33 ; un remplacement ne s'envisagera qu'une fois l'interface de simulation en place, E35) : un `Scenario` sauvegardé = paramètres JSON (ex. −100 €/mois sur une catégorie, nouvel abonnement, achat à crédit) appliqués à une **copie virtuelle** du compte ; les vraies données ne sont jamais modifiées. Comparaison de scénarios côte à côte. **Interface retirée le 2026-10-16** : seule la simulation de trésorerie est proposée dans l'application (`/simulations`) ; l'API et les données des scénarios sont conservées.
 4. **Objectifs d'épargne** : « X € dans N mois » ⇒ effort mensuel requis et progression.
 5. **Calculateurs crédit / placement** : mensualités, coût total, intérêts composés, inflation. Aucun accès aux transactions.
 
@@ -120,6 +122,8 @@ Fonctions **pures**, testées unitairement, indépendantes de la BDD :
 ## 8. RGPD et légal
 - **Suppression de compte réelle** : efface utilisateur, transactions, fichiers ; les sauvegardes expirent sous un délai documenté (ex. 30 jours).
 - **Export** de toutes les données de l'utilisateur en JSON et CSV.
+- **Réinitialisation** (sans supprimer le compte) : efface définitivement comptes, transactions, virements, récurrences, taux, pièces jointes (dépôts directs du coffre compris), scénarios et simulations ; garde profil, catégories, préférences, tags, retours, notifications et suggestions. Confirmée par la saisie de `RÉINITIALISER`.
+- Mon compte affiche la date d'inscription, la dernière connexion et le stockage de pièces jointes utilisé sur le quota.
 - Pages **mentions légales, politique de confidentialité, CGU** (hébergeur OVH, contact, finalités, durées de conservation) avant l'ouverture publique.
 - Minimisation : `phoneNumber` supprimé ; seules les données utiles sont collectées.
 

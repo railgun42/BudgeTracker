@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import {
   AccountDto,
   AttachmentDto,
@@ -64,7 +64,7 @@ function monday(date: string): string {
     }
 
     <!-- Repliable sur mobile ; toujours déplié dès 768 px (voir styles). -->
-    <details class="filters-panel">
+    <details class="filters-panel" [open]="linked">
       <summary>Filtres</summary>
       <form class="filters" [formGroup]="filters" (ngSubmit)="search()" aria-label="Filtres">
         <div class="field">
@@ -388,6 +388,9 @@ function monday(date: string): string {
 export class HistoryPage {
   private readonly api = inject(ApiClient);
   private readonly fb = inject(NonNullableFormBuilder);
+  // Lien entrant (ex. coffre-fort : ?from=…&to=…&accountId=…) : filtres préremplis, panneau déplié.
+  private readonly linkedFilters = inject(ActivatedRoute).snapshot.queryParamMap;
+  protected readonly linked = ['from', 'to', 'accountId'].some((k) => this.linkedFilters.has(k));
 
   protected readonly CREDIT = TransactionType.CREDIT;
   protected readonly UNCATEGORIZED = UNCATEGORIZED;
@@ -481,6 +484,9 @@ export class HistoryPage {
       },
       error: (e) => this.fail(e),
     });
+    const q = this.linkedFilters;
+    this.filters.patchValue({ from: q.get('from') ?? '', to: q.get('to') ?? '', accountId: q.get('accountId') ?? '' }, { emitEvent: false });
+    this.applied = this.query();
     this.fetch();
     // Filtres appliqués dès qu'ils changent ; le délai évite une requête par chiffre tapé dans une date.
     // Nouvelle catégorie ⇒ l'ancienne sous-catégorie n'a plus de sens.

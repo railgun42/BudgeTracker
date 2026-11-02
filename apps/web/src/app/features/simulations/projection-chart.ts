@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { ScenarioComparisonDto } from '@budgetracker/shared';
-import { EurPipe } from '../../core/money';
+import { EurPipe, SignedEurPipe } from '../../core/money';
 
 // Palette catégorielle validée (dataviz, validate_palette.js, mode clair) : emplacements 1 à 5 dans cet ordre fixe,
 // un par scénario selon sa position dans la comparaison. La base est une ligne grise neutre de référence.
@@ -13,7 +13,7 @@ const H = 240;
 const PAD = { top: 20, right: 8, bottom: 24, left: 8 };
 
 /** Pas « rond » (1, 2 ou 5 × 10ⁿ centimes) pour environ 4 graduations. */
-function niceStep(range: number): number {
+export function niceStep(range: number): number {
   const raw = Math.max(range, 100) / 4;
   const pow = 10 ** Math.floor(Math.log10(raw));
   return [1, 2, 5, 10].map((m) => m * pow).find((s) => s >= raw)!;
@@ -22,7 +22,7 @@ function niceStep(range: number): number {
 // Courbes du solde projeté, une par série ; survol ou flèches du clavier ⇒ valeurs du mois dans une infobulle.
 @Component({
   selector: 'app-projection-chart',
-  imports: [EurPipe],
+  imports: [EurPipe, SignedEurPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <ul class="legend" aria-label="Légende">
@@ -46,6 +46,12 @@ function niceStep(range: number): number {
         }
         @if (chart().zeroY !== null) {
           <line class="zero" [attr.x1]="PAD.left" [attr.x2]="W - PAD.right" [attr.y1]="chart().zeroY" [attr.y2]="chart().zeroY" />
+        }
+        @if (chart().floorY !== null) {
+          <line class="floor" [attr.x1]="PAD.left" [attr.x2]="W - PAD.right" [attr.y1]="chart().floorY" [attr.y2]="chart().floorY" />
+          <text class="tick floor-label" text-anchor="end" [attr.x]="W - PAD.right" [attr.y]="chart().floorY! - 4">
+            Plancher {{ floorCents()! < 0 ? (floorCents()! | signedEur) : (floorCents() | eur) }}
+          </text>
         }
         <text class="tick" [attr.x]="PAD.left" [attr.y]="H - 6">{{ chart().first }}</text>
         <text class="tick" text-anchor="end" [attr.x]="W - PAD.right" [attr.y]="H - 6">{{ chart().last }}</text>
@@ -129,6 +135,17 @@ function niceStep(range: number): number {
       stroke-linecap: round;
       vector-effect: non-scaling-stroke;
     }
+    /* Solde plancher : pointillé et libellé écrit (la couleur ne porte pas seule l'information). */
+    .floor {
+      stroke: var(--color-warning);
+      stroke-width: 1.5;
+      stroke-dasharray: 6 4;
+      vector-effect: non-scaling-stroke;
+    }
+    .floor-label {
+      fill: var(--color-warning);
+      font-weight: var(--weight-bold);
+    }
     .cursor {
       stroke: var(--color-text-muted);
       stroke-width: 1;
@@ -161,6 +178,8 @@ export class ProjectionChart {
   readonly data = input.required<ScenarioComparisonDto>();
   /** Nom de la série de base (trésorerie : une seule courbe). */
   readonly baselineName = input('Sans changement');
+  /** Solde plancher (trésorerie) : ligne pointillée « Plancher … », comprise dans l'échelle. */
+  readonly floorCents = input<number | null>(null);
 
   protected readonly W = W;
   protected readonly H = H;
@@ -178,7 +197,8 @@ export class ProjectionChart {
   protected readonly chart = computed(() => {
     const series = this.series();
     const n = series[0].points.length;
-    const values = series.flatMap((s) => s.points.map((p) => p.balanceCents));
+    const floor = this.floorCents();
+    const values = [...series.flatMap((s) => s.points.map((p) => p.balanceCents)), ...(floor === null ? [] : [floor])];
     const step = niceStep(Math.max(...values) - Math.min(...values));
     const lo = Math.floor(Math.min(...values) / step) * step;
     const hi = Math.max(lo + step, Math.ceil(Math.max(...values) / step) * step);
@@ -191,6 +211,7 @@ export class ProjectionChart {
       x,
       ticks,
       zeroY: lo < 0 && hi > 0 ? y(0) : null,
+      floorY: floor === null ? null : y(floor),
       first: series[0].points[0].date,
       last: series[0].points[n - 1].date,
       lines: series.map((s) => {

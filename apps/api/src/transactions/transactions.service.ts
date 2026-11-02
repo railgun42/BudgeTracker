@@ -30,7 +30,7 @@ export const toTransactionDto = (t: TransactionRow): TransactionDto => ({
 });
 
 // Visible : à l'utilisateur, non supprimée, sur un compte non supprimé (PLAN §5 hyp. 11).
-const live = (userId: string) => ({ userId, deletedAt: null, account: { deletedAt: null } }) satisfies Prisma.TransactionWhereInput;
+export const live = (userId: string) => ({ userId, deletedAt: null, account: { deletedAt: null } }) satisfies Prisma.TransactionWhereInput;
 
 // Le jour du solde de départ, compter ou non la transaction est un choix explicite (SPEC §3.3) ;
 // avant, elle est hors solde, après, dedans (balance.service). `except` : le solde de départ lui-même.

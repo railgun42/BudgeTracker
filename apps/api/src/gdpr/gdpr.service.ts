@@ -59,6 +59,7 @@ export class GdprService {
         p.transactionTag.findMany({ where: { transaction: mine } }),
         // Clé S3 : détail interne de stockage, pas une donnée de l'utilisateur.
         p.attachment.findMany({ where: mine, omit: { s3Key: true } }),
+        p.attachmentTag.findMany({ where: { attachment: mine } }),
         p.recurrence.findMany({ where: mine }),
         p.transactionTemplate.findMany({ where: { recurrence: mine } }),
         p.templateTag.findMany({ where: { template: { recurrence: mine } } }),
@@ -76,8 +77,28 @@ export class GdprService {
       ],
       { isolationLevel: 'RepeatableRead' },
     );
-    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation', 'AdminAuditLog', 'Feedback', 'Notification', 'AnnouncementRead', 'CategorySuggestion'];
+    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'AttachmentTag', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation', 'AdminAuditLog', 'Feedback', 'Notification', 'AnnouncementRead', 'CategorySuggestion'];
     return Object.fromEntries(names.map((name, i) => [name, (tables[i] as object[]).map(plain)]));
+  }
+
+  // Réinitialisation : suppression réelle des comptes (cascade : transactions, tags de transaction, pièces jointes,
+  // récurrences, taux, crédits d'intérêts), virements, documents du coffre sans transaction, scénarios et simulations,
+  // puis des objets S3.
+  // Gardés : profil, sessions, catégories perso, préférences, tags, retours, notifications, suggestions.
+  async resetData(userId: string): Promise<void> {
+    const mine = { where: { userId } };
+    await this.prisma.$transaction([
+      this.prisma.transfer.deleteMany(mine),
+      this.prisma.account.deleteMany(mine),
+      this.prisma.attachment.deleteMany(mine),
+      this.prisma.scenario.deleteMany(mine),
+      this.prisma.cashflowSimulation.deleteMany(mine),
+    ]);
+    await this.storage.deletePrefix(`attachments/${userId}/`).catch((e: Error) =>
+      // ponytail: lignes déjà effacées ; objets restants journalisés, à retirer à la main (préfixe dans le log).
+      this.logger.error(`Réinitialisation : objets S3 attachments/${userId}/ non supprimés : ${e.message}`),
+    );
+    this.logger.log(`Compte ${userId} réinitialisé`);
   }
 
   // Cascade BDD (schéma) : sessions, identités, données métier, lignes de pièces jointes, en une requête.

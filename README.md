@@ -170,6 +170,14 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 - Purge (E13) : les objets des pièces dont la ligne a été purgée sont supprimés de S3.
 - S3 : `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` (`S3_REGION` facultatif), obligatoires en production. En dev, à défaut, MinIO de `docker-compose.dev.yml` (identifiants `MINIO_ROOT_*`) ; bucket créé au démarrage s'il manque. La CI lance un conteneur MinIO.
 - Front : sur chaque ligne de l'historique, joindre / ouvrir / retirer le justificatif ([attachment-control.ts](apps/web/src/app/features/transactions/attachment-control.ts)).
+
+## Coffre-fort (E41b)
+
+- `GET /api/v1/documents` : tous les documents de l'utilisateur (`DocumentDto` : nom, type, taille, `createdAt`, `tagIds`, transaction liée ou `null`) ; pièces des transactions à la corbeille exclues.
+- `POST /api/v1/documents` (multipart, champ `file`) : dépôt sans transaction, mêmes règles que la pièce d'une transaction (signature, 5 Mo, quota). `Attachment.transactionId` est facultatif.
+- `GET /api/v1/documents/:id/url` ⇒ `{ url }` signée 5 min ; `?download=1` ajoute `Content-Disposition: attachment` avec le nom d'origine encodé (RFC 5987).
+- `PUT /api/v1/documents/:id/tags` `{ tagIds }` remplace les tags (table `AttachmentTag`, tags communs aux transactions) ; `DELETE /api/v1/documents/:id` efface ligne et objet S3.
+- Front : `/me/coffre` ([vault-page.ts](apps/web/src/app/features/my-account/vault-page.ts)), lien depuis Mon compte ; l'historique accepte `?from=&to=&accountId=`.
 - Tests : `npm test -w api` (`test/e2e/attachments.e2e-spec.ts`, contre MinIO), `npm test -w web` (`attachment-control.spec.ts`).
 
 ## Statistiques (E24)
@@ -198,14 +206,16 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 
 - `GET|POST /api/v1/scenarios`, `GET|PATCH|DELETE /api/v1/scenarios/:id` : `params = { changes: [...] }`, union discriminée par `kind` (`CATEGORY` : ±X €/mois sur une catégorie et ses sous-catégories, baisse plafonnée à la dépense réelle de la fenêtre ; `SUBSCRIPTION` : abonnement mensuel ; `LOAN` : achat à crédit via le calculateur E25). `version` périmée ⇒ 409, catégorie d'un autre ⇒ 404.
 - `GET /api/v1/scenarios/compare?accountId&ids=id1,id2&months&windowMonths&today` : projection de base + une série par scénario (1 à 5), calculées sur une copie virtuelle de l'entrée de projection ([scenario.ts](apps/api/src/simulations/engine/scenario.ts)) ; aucune écriture en base.
-- Front : page `/simulations` : liste, création et modification (version ⇒ 409 « rechargez »), comparaison côte à côte en courbes SVG (survol ou flèches du clavier ⇒ valeurs du mois) et en tableau.
-- Tests : `src/simulations/engine/scenario.spec.ts`, `test/e2e/scenarios.e2e-spec.ts` (dont comptage des lignes de toutes les tables avant/après), registre d'isolation, `features/simulations/simulations-page.spec.ts`.
+- Front : **page retirée le 2026-10-16** (seule la simulation de trésorerie reste, sur `/simulations`) ; l'API est conservée sans interface.
+- Tests : `src/simulations/engine/scenario.spec.ts`, `test/e2e/scenarios.e2e-spec.ts` (dont comptage des lignes de toutes les tables avant/après), registre d'isolation.
 
 ## Export et suppression de compte (E28)
 
 - `GET /api/v1/me/export?format=json|csv` : toutes les tables de l'utilisateur (lignes supprimées logiquement comprises), en un instantané cohérent ; exclus : secrets d'authentification (`Credential`, `EmailToken`, `RefreshToken`) et clés S3. CSV : une section par table (titre, en-tête, lignes), séparateur `;`, UTF-8 avec BOM ([gdpr.service.ts](apps/api/src/gdpr/gdpr.service.ts)).
 - `DELETE /api/v1/me` (CSRF exigé) : suppression réelle par cascade BDD (sessions comprises), puis de tout le préfixe S3 `attachments/<userId>/` (orphelins compris) ; cookies effacés. `JwtAuthGuard` refuse le jeton d'accès d'un utilisateur qui n'existe plus (401).
-- Front : page `/me` « Mon compte » : export JSON/CSV, suppression confirmée par la saisie de `SUPPRIMER`.
+- `POST /api/v1/me/reset` (CSRF exigé, 204) : réinitialisation, suppression réelle des comptes (cascade : transactions, pièces jointes, récurrences, taux, crédits d'intérêts), virements, scénarios et simulations, puis du préfixe S3 ; profil, session, catégories, préférences, tags, retours, notifications et suggestions gardés.
+- `GET /api/v1/me/storage` : `{ usedBytes, quotaBytes }` des pièces jointes (même somme que le contrôle de quota). `GET /me` expose aussi `createdAt` (inscription).
+- Front : page `/me` « Mon compte » : profil (initiales, inscription, dernière connexion, stockage), export JSON/CSV, réinitialisation confirmée par `RÉINITIALISER` (accent facultatif) et suppression confirmée par `SUPPRIMER`, toutes deux en modale.
 - Tests : `test/e2e/gdpr.e2e-spec.ts` (toutes les tables exportées, rien d'un autre ; après suppression, comptage SQL à 0 sur toutes les tables portant `userId`, objets S3 absents, cookies invalides), registre d'isolation, `features/my-account/my-account-page.spec.ts`.
 
 ## Pages légales (E29)
@@ -246,7 +256,7 @@ Règle : un utilisateur ne voit ni ne modifie jamais les données d'un autre. Ch
 
 ## Simulation de trésorerie : interface (E35)
 
-- Page `/simulations/tresorerie` ([cashflow-page.ts](apps/web/src/app/features/simulations/cashflow-page.ts)), liée depuis `/simulations` : comptes avec solde à cocher, dates de début (aujourd'hui au plus tôt) et de fin, récurrences enregistrées des comptes cochés à décocher (un résultat affiché est recalculé aussitôt), récurrences et dépenses/revenus ponctuels propres à la simulation, plancher facultatif (négatif = découvert) par mois ou par semaine.
+- Page `/simulations` ([cashflow-page.ts](apps/web/src/app/features/simulations/cashflow-page.ts)), l'ancienne adresse `/simulations/tresorerie` y redirige : comptes avec solde à cocher, dates de début (aujourd'hui au plus tôt) et de fin, récurrences enregistrées des comptes cochés à décocher (un résultat affiché est recalculé aussitôt), récurrences et dépenses/revenus ponctuels propres à la simulation, plancher facultatif (négatif = découvert) par mois ou par semaine.
 - Résultat : solde au jour X, totaux, enveloppe de la période en cours (déjà dépensé, reste, alerte sous le plancher), courbe (graphique des scénarios réutilisé) avec tableau jour par jour, détail par ligne (récurrences décochées barrées, hors solde).
 - Sauvegarde (`POST`/`PATCH /cashflow-simulations`, `version` ⇒ 409 « rechargez »), réouverture = suivi via `GET /cashflow-simulations/:id/result` (dépenses réelles, reliquat réparti), suppression. Une simulation déjà commencée que l'on recalcule ou réenregistre repart d'aujourd'hui (l'API refuse un début passé).
 - Tests : `npm test -w web` (`features/simulations/cashflow-page.spec.ts`).
@@ -360,6 +370,7 @@ Avancement selon [PLAN.md](PLAN.md) (E0 à E46, plus E29b/E29c) :
 | E39 — Retours utilisateurs et boîte de réception admin | ✅ |
 | E40 — Notifications (cloche) et annonces | ✅ |
 | E41 — Suggestion de catégorie et réponse à l'auteur | ✅ |
+| E41b — Coffre-fort (`/me/coffre` : documents, tags, dépôt direct) | ✅ |
 | E42 | ⏳ Tableau de bord |
 | E43 — Style (charte, connexion, inscription) | 🔄 charte posée ; autres écrans à refaire |
 | E44 → E46 | ⏳ Déploiement, sauvegardes, supervision |

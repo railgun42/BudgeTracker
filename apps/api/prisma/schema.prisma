@@ -289,6 +289,7 @@ model Tag {
   user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions TransactionTag[]
   templates    TemplateTag[]
+  attachments  AttachmentTag[]
 }
 
 model TransactionTag {
@@ -305,8 +306,8 @@ model TransactionTag {
 model Attachment {
   id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId        String   @db.Uuid
-  // Unique ⇒ 0..1 pièce par transaction.
-  transactionId String   @unique @db.Uuid
+  // Unique ⇒ 0..1 pièce par transaction ; NULL = document déposé directement dans le coffre (plusieurs NULL admis).
+  transactionId String?  @unique @db.Uuid
   // Clé générée serveur ; originalName sert à l'affichage seulement.
   s3Key         String   @unique
   originalName  String
@@ -314,10 +315,23 @@ model Attachment {
   sizeBytes     Int
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
 
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transaction Transaction?    @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tags        AttachmentTag[]
 
   @@index([userId])
+}
+
+// Tags (les mêmes que ceux des transactions) posés sur un document du coffre.
+model AttachmentTag {
+  attachmentId String @db.Uuid
+  tagId        String @db.Uuid
+
+  attachment Attachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  tag        Tag        @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([attachmentId, tagId])
+  @@index([tagId])
 }
 
 model Recurrence {

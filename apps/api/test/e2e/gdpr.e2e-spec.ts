@@ -56,6 +56,9 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
         .expect(201)
     ).body;
     await user.call('post', `/api/v1/transactions/${tx.id}/attachment`).attach('file', PDF, 'ticket.pdf').expect(201);
+    // Document déposé directement dans le coffre, tagué.
+    const doc = (await user.call('post', '/api/v1/documents').attach('file', PDF, 'contrat.pdf').expect(201)).body;
+    await user.call('put', `/api/v1/documents/${doc.id}/tags`).send({ tagIds: [tag.id] }).expect(200);
     await user.call('post', '/api/v1/transfers').send({ fromAccountId: account.id, toAccountId: savings.id, amountCents: 500, date: '2026-03-02' }).expect(201);
     const recurrence = (
       await user
@@ -76,7 +79,8 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
     await prisma.adminAuditLog.create({ data: { adminId: user.id, action: 'TEST' } });
     await prisma.user.update({ where: { id: user.id }, data: { termsAcceptedAt: new Date('2026-10-14T08:00:00Z'), termsVersion: '2026-10-14' } });
     const s3Key = (await prisma.attachment.findUniqueOrThrow({ where: { transactionId: tx.id } })).s3Key;
-    return { accountId: account.id as string, savingsId: savings.id as string, txId: tx.id as string, recurrenceId: recurrence.id as string, tagId: tag.id as string, s3Key };
+    const docKey = (await prisma.attachment.findUniqueOrThrow({ where: { id: doc.id } })).s3Key;
+    return { accountId: account.id as string, savingsId: savings.id as string, txId: tx.id as string, recurrenceId: recurrence.id as string, tagId: tag.id as string, s3Key, docId: doc.id as string, docKey };
   }
 
   describe('export', () => {
@@ -105,7 +109,10 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(data.TransactionTemplate).toEqual([expect.objectContaining({ recurrenceId: a.recurrenceId, amountCents: 900 })]);
       expect(data.InterestCredit).toEqual([expect.objectContaining({ accountId: a.savingsId, year: 2025 })]);
       expect(data.UserCategoryPreference).toEqual([expect.objectContaining({ hidden: true, customName: 'Épicerie' })]);
-      expect(data.Attachment).toEqual([expect.objectContaining({ transactionId: a.txId, mime: 'application/pdf' })]);
+      expect(data.Attachment).toEqual(
+        expect.arrayContaining([expect.objectContaining({ transactionId: a.txId, mime: 'application/pdf' }), expect.objectContaining({ id: a.docId, transactionId: null, originalName: 'contrat.pdf' })]),
+      );
+      expect(data.AttachmentTag).toEqual([{ attachmentId: a.docId, tagId: a.tagId }]);
       expect(data.Notification).toEqual([expect.objectContaining({ userId: users.a.id, message: 'Bienvenue', readAt: null })]);
       expect(data.AnnouncementRead).toEqual([expect.objectContaining({ userId: users.a.id, announcementId: expect.any(String) })]);
       expect(data.CategorySuggestion).toEqual([expect.objectContaining({ userId: users.a.id, name: 'Perso', status: 'PENDING' })]);
@@ -113,7 +120,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
 
       const text = JSON.stringify(data);
       for (const id of [users.b.id, b.accountId, b.savingsId, b.txId, b.recurrenceId, b.tagId]) expect(text).not.toContain(id);
-      for (const secret of ['s3Key', 'passwordHash', 'tokenHash', a.s3Key]) expect(text).not.toContain(secret);
+      for (const secret of ['s3Key', 'passwordHash', 'tokenHash', a.s3Key, a.docKey]) expect(text).not.toContain(secret);
     });
 
     it('CSV : une section par table, champs échappés, rien de l’autre utilisateur', async () => {
@@ -136,6 +143,43 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
     it('format inconnu ⇒ 400 ; sans session ⇒ 401', async () => {
       await users.a.call('get', '/api/v1/me/export?format=xml').expect(400);
       await request(app.getHttpServer()).get('/api/v1/me/export').expect(401);
+    });
+  });
+
+  describe('POST /me/reset et GET /me/storage', () => {
+    let pair: TwoUsers;
+    beforeAll(async () => (pair = await createTwoUsers(app)));
+    afterAll(() => pair?.cleanup());
+
+    it('efface les données financières et les objets S3 ; garde profil, session, catégories, tags et le reste ; B intact', async () => {
+      const { a: userA, b: userB } = pair;
+      const a = await populate(userA);
+      const b = await populate(userB);
+      const quota = Number((await prisma.user.findUniqueOrThrow({ where: { id: userA.id } })).storageQuotaBytes);
+      expect((await userA.call('get', '/api/v1/me/storage').expect(200)).body).toEqual({ usedBytes: 2 * PDF.length, quotaBytes: quota });
+      const me = (await userA.call('get', '/api/v1/me').expect(200)).body;
+      expect(me.createdAt).toMatch(/Z$/);
+      const bExportBefore = (await userB.call('get', '/api/v1/me/export').expect(200)).body;
+
+      await userA.call('post', '/api/v1/me/reset').expect(204);
+
+      const data = (await userA.call('get', '/api/v1/me/export').expect(200)).body as Record<string, unknown[]>;
+      for (const table of ['Account', 'Transfer', 'Transaction', 'TransactionTag', 'Attachment', 'AttachmentTag', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation'])
+        expect([table, data[table].length]).toEqual([table, 0]);
+      for (const table of ['User', 'OAuthIdentity', 'Category', 'UserCategoryPreference', 'Tag', 'Feedback', 'Notification', 'AnnouncementRead', 'CategorySuggestion', 'AdminAuditLog'])
+        expect([table, data[table].length]).not.toEqual([table, 0]);
+      expect(data.Tag).toContainEqual(expect.objectContaining({ id: a.tagId }));
+      expect(await storage.exists(a.s3Key)).toBe(false);
+      expect(await storage.exists(a.docKey)).toBe(false);
+      expect(await storage.exists(b.s3Key)).toBe(true);
+      expect((await userA.call('get', '/api/v1/me/storage').expect(200)).body).toEqual({ usedBytes: 0, quotaBytes: quota });
+      expect((await userA.call('get', '/api/v1/me').expect(200)).body).toEqual(me);
+
+      expect((await userB.call('get', '/api/v1/me/export').expect(200)).body).toEqual(bExportBefore);
+    });
+
+    it('sans session ⇒ 401', async () => {
+      await request(app.getHttpServer()).get('/api/v1/me/storage').expect(401);
     });
   });
 
@@ -180,12 +224,14 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(await prisma.user.count({ where: { id: userA.id } })).toBe(0);
       expect(await prisma.transactionTag.count({ where: { tagId: a.tagId } })).toBe(0);
       expect(await prisma.transactionTemplate.count({ where: { recurrenceId: a.recurrenceId } })).toBe(0);
+      expect(await prisma.attachmentTag.count({ where: { attachmentId: a.docId } })).toBe(0);
       expect(await prisma.interestCredit.count({ where: { accountId: a.savingsId } })).toBe(0);
       // Journal d'administration : l'entrée reste (quoi, quand), son auteur supprimé n'y figure plus.
       expect(await prisma.adminAuditLog.count({ where: { adminId: userA.id } })).toBe(0);
 
       // Objets S3 effacés (pièce jointe et orphelin) ; ceux de B restent.
       expect(await storage.exists(a.s3Key)).toBe(false);
+      expect(await storage.exists(a.docKey)).toBe(false);
       expect(await storage.exists(orphan)).toBe(false);
       expect(await storage.exists(b.s3Key)).toBe(true);
 

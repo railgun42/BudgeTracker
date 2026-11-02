@@ -132,6 +132,19 @@ describe('Historique : liste et pagination', () => {
   });
 });
 
+describe('Historique : lien entrant', () => {
+  it('?from&to&accountId (coffre-fort) : filtres préremplis, panneau déplié, première requête filtrée', async () => {
+    harness = await RouterTestingHarness.create('/history?from=2026-06-01&to=2026-06-01&accountId=a2');
+    el = harness.routeNativeElement!;
+    http.expectOne('/api/v1/accounts').flush(ACCOUNTS);
+    http.expectOne('/api/v1/categories').flush(CATEGORIES);
+    http.expectOne('/api/v1/tags').flush(TAGS);
+    expect(params(await page([tx('t1', { accountId: 'a2', date: '2026-06-01' })]))).toEqual({ from: '2026-06-01', to: '2026-06-01', accountId: 'a2' });
+    expect(el.querySelector<HTMLDetailsElement>('details.filters-panel')!.open).toBe(true);
+    expect(el.querySelector<HTMLInputElement>('#f-from')!.value).toBe('2026-06-01');
+  });
+});
+
 describe('Historique : regroupement', () => {
   it('par jour, semaine (lundi) ou mois, avec le solde signé de chaque groupe', async () => {
     await open([

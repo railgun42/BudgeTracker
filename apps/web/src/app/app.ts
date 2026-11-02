@@ -4,7 +4,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { Role } from '@budgetracker/shared';
 import { filter, finalize } from 'rxjs';
-import { Session } from './core/auth/session';
+import { initialsOf, Session } from './core/auth/session';
 import { QuickEntry } from './core/quick-entry';
 import { NotificationBell } from './features/notifications/notification-bell';
 import { TransactionFormPage } from './features/transactions/transaction-form-page';
@@ -52,15 +52,7 @@ export class App {
     this.session.user()?.role === Role.ADMIN ? [...this.baseLinks, { path: '/admin', label: 'Administration', exact: false }] : this.baseLinks,
   );
 
-  protected readonly initials = computed(() => {
-    const user = this.session.user();
-    const words = (user?.name || user?.email || '?').trim().split(/\s+/);
-    return words
-      .slice(0, 2)
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase();
-  });
+  protected readonly initials = computed(() => initialsOf(this.session.user()));
 
   protected readonly themes = [
     { value: 'auto', label: 'Auto' },

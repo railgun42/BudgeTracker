@@ -9,7 +9,7 @@ import { Session } from './core/auth/session';
 import { provideApiHttp } from './core/http';
 import { today } from './core/today';
 
-const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null, role: 'USER' };
+const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null, createdAt: '2026-10-01T08:00:00.000Z', role: 'USER' };
 const ADMIN = { ...USER, role: 'ADMIN' };
 
 // compileComponents : la coquille contient des blocs @defer (modale de saisie rapide).
@@ -60,7 +60,7 @@ describe('Shell', () => {
     // Cloche hors de la navigation principale, alimentée par GET /notifications.
     TestBed.inject(HttpTestingController).match('/api/v1/notifications').forEach((r) => r.flush({ unreadCount: 2, items: [] }));
     await fixture.whenStable();
-    expect(el.querySelector('header a[href="/notifications"]')?.getAttribute('aria-label')).toBe('Notifications (2 non lues)');
+    expect(el.querySelector('header button[popovertarget="notifications-panel"]')?.getAttribute('aria-label')).toBe('Notifications (2 non lues)');
   });
 
   it('lien Administration : absent pour un utilisateur ordinaire, présent pour un admin', async () => {
@@ -262,7 +262,7 @@ describe('Routes', () => {
     ['/transfers/new', 'Nouveau virement'],
     ['/history', 'Historique des transactions'],
     ['/stats', 'Statistiques'],
-    ['/simulations', 'Simulations'],
+    ['/simulations', 'Simulation de trésorerie'],
     ['/me', 'Mon compte'],
     ['/feedback', 'Donner mon avis'],
     ['/notifications', 'Notifications'],
@@ -282,11 +282,12 @@ describe('Routes', () => {
   });
 
   it('toutes les routes sont en lazy loading', () => {
-    expect(routes.every((r) => r.loadComponent && !r.component)).toBe(true);
+    // Une redirection n'est pas un écran : sa cible est vérifiée comme les autres.
+    expect(routes.filter((r) => !r.redirectTo).every((r) => r.loadComponent && !r.component)).toBe(true);
   });
 
   it('seuls les écrans d’auth, les pages légales et la 404 sont publics', () => {
-    const publicPaths = routes.filter((r) => !r.canActivate).map((r) => r.path);
+    const publicPaths = routes.filter((r) => !r.canActivate && !r.redirectTo).map((r) => r.path);
     expect(publicPaths).toEqual([
       'login',
       'signup',

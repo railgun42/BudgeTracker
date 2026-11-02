@@ -147,6 +147,21 @@ const attachmentOfB = async (users: TwoUsers) => {
   };
 };
 
+// Document déposé par B dans son coffre, tagué ; intact = toujours listé tel quel et lisible par B.
+const documentOfB = async (users: TwoUsers) => {
+  const { b } = users;
+  const tag = await tagOfB(users);
+  const { body: doc } = await b.call('post', '/api/v1/documents').attach('file', PDF, 'b.pdf').expect(201);
+  const { body } = await b.call('put', `/api/v1/documents/${doc.id}/tags`).send({ tagIds: [tag.id] }).expect(200);
+  return {
+    id: doc.id as string,
+    intact: async () => {
+      expect((await b.call('get', '/api/v1/documents').expect(200)).body).toContainEqual(body);
+      await b.call('get', `/api/v1/documents/${doc.id}/url`).expect(200);
+    },
+  };
+};
+
 // Stats : une transaction de B ne change rien aux agrégats de A ; le compte de B en filtre ⇒ 404.
 const statsOfB =
   (path: string): IsolationCheck =>
@@ -379,6 +394,41 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
   'DELETE /api/v1/transactions/:id/attachment': async (users) => {
     const { id, intact } = await attachmentOfB(users);
     await users.a.call('delete', `/api/v1/transactions/${id}/attachment`).expect(404);
+    await intact();
+  },
+
+  'GET /api/v1/documents': async (users) => {
+    const { id, intact } = await documentOfB(users);
+    const { id: txId } = await attachmentOfB(users);
+    const ids = (await users.a.call('get', '/api/v1/documents').expect(200)).body.map((d: { id: string; transaction: { id: string } | null }) => d.transaction?.id ?? d.id);
+    expect(ids).not.toContain(id);
+    expect(ids).not.toContain(txId);
+    await intact();
+  },
+  'POST /api/v1/documents': async (users) => {
+    const { body } = await users.a.call('post', '/api/v1/documents').attach('file', PDF, 'a.pdf').expect(201);
+    expect((await users.b.call('get', '/api/v1/documents').expect(200)).body.map((d: { id: string }) => d.id)).not.toContain(body.id);
+    await users.b.call('get', `/api/v1/documents/${body.id}/url`).expect(404);
+  },
+  'GET /api/v1/documents/:id/url': async (users) => {
+    const { id, intact } = await documentOfB(users);
+    await users.a.call('get', `/api/v1/documents/${id}/url`).expect(404);
+    await users.a.call('get', `/api/v1/documents/${id}/url?download=1`).expect(404);
+    await intact();
+  },
+  'PUT /api/v1/documents/:id/tags': async (users) => {
+    const { id, intact } = await documentOfB(users);
+    await users.a.call('put', `/api/v1/documents/${id}/tags`).send({ tagIds: [] }).expect(404);
+    // Tag de B posé sur un document de A ⇒ 404.
+    const tag = await tagOfB(users);
+    const { body: own } = await users.a.call('post', '/api/v1/documents').attach('file', PDF, 'a.pdf').expect(201);
+    await users.a.call('put', `/api/v1/documents/${own.id}/tags`).send({ tagIds: [tag.id] }).expect(404);
+    await intact();
+    await tag.intact();
+  },
+  'DELETE /api/v1/documents/:id': async (users) => {
+    const { id, intact } = await documentOfB(users);
+    await users.a.call('delete', `/api/v1/documents/${id}`).expect(404);
     await intact();
   },
 
@@ -615,6 +665,19 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
       for (const other of [users.b.id, id, accountId]) expect(text).not.toContain(other);
       expect((await users.b.call('get', `/api/v1/me/export?format=${format}`).expect(200)).text).toContain(id);
     }
+    await intact();
+  },
+  // Stockage : seules les pièces jointes de l'utilisateur comptent.
+  'GET /api/v1/me/storage': async (users) => {
+    const before = (await users.a.call('get', '/api/v1/me/storage').expect(200)).body;
+    await attachmentOfB(users);
+    expect((await users.a.call('get', '/api/v1/me/storage').expect(200)).body).toEqual(before);
+    expect((await users.b.call('get', '/api/v1/me/storage').expect(200)).body.usedBytes).toBeGreaterThan(0);
+  },
+  // Réinitialisation de A : la transaction de B (et son compte) reste intacte.
+  'POST /api/v1/me/reset': async (users) => {
+    const { intact } = await transactionOfB(users);
+    await users.a.call('post', '/api/v1/me/reset').expect(204);
     await intact();
   },
   // En dernier : A n'existe plus ensuite (toute entrée ajoutée après échouerait en 401).

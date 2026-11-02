@@ -16,7 +16,7 @@ const CATEGORY_ICONS: Record<string, string> = {
   opening_balance: 'M6 21V4M6 4h11l-2.5 4L17 12H6',
 };
 /** Catégorie perso ou créée par l'admin (sans nameKey). */
-const TAG_ICON = 'M3.5 12.5V4h8.5l8.5 8.5-8 8zM8 8.5h.01';
+export const TAG_ICON = 'M3.5 12.5V4h8.5l8.5 8.5-8 8zM8 8.5h.01';
 /** Transaction sans catégorie. */
 export const NO_CATEGORY_ICON = 'M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18zM8 12h8';
 

@@ -19,7 +19,7 @@ describe('Statistiques (e2e)', () => {
     await app.init();
     const prisma = app.get(PrismaService);
     await seed(prisma);
-    for (const key of ['groceries.food', 'housing.rent', 'cash'])
+    for (const key of ['groceries', 'groceries.food', 'housing.rent', 'cash'])
       ids[key] = (await prisma.category.findUniqueOrThrow({ where: { nameKey: key } })).id;
     users = await createTwoUsers(app);
     a = users.a;
@@ -68,6 +68,7 @@ describe('Statistiques (e2e)', () => {
     const { body: accountOfB } = await users.b.call('post', '/api/v1/accounts').send({ name: 'B', trackingType: 'NORMAL' }).expect(201);
     await users.b.call('post', '/api/v1/transactions').send({ accountId: accountOfB.id, categoryId: food, amountCents: 99_999, date: '2026-01-15' }).expect(201);
     ids.accountOfB = accountOfB.id;
+    ids.categoryOfB = (await users.b.call('post', '/api/v1/categories').send({ name: 'Perso de B' }).expect(201)).body.id;
   });
 
   afterAll(async () => {
@@ -125,7 +126,29 @@ describe('Statistiques (e2e)', () => {
     }
   });
 
+  it('par catégorie : une racine inclut ses sous-catégories, « sans catégorie » à part', async () => {
+    const groceries = `?categoryId=${ids.groceries}`;
+    expect(await get('by-tag', groceries)).toEqual([
+      { tagId: ids.t2, incomeCents: 0, expenseCents: 4_567 + 1_233 },
+      { tagId: ids.t1, incomeCents: 0, expenseCents: 4_567 }, // le salaire tagué T1 n'est pas une course
+    ]);
+    expect(await get('by-category', groceries)).toEqual([{ categoryId: ids['groceries.food'], incomeCents: 0, expenseCents: 7_600 }]);
+    expect(await get('monthly', `?categoryId=${ids['groceries.food']}&from=2026-02-01`)).toEqual([
+      { month: '2026-02', incomeCents: 0, expenseCents: 1_233 + 1_500 },
+      { month: '2026-03', incomeCents: 0, expenseCents: 300 },
+    ]);
+    expect(await get('by-category', '?categoryId=none')).toEqual([]);
+  });
+
+  it('catégorie inconnue ou personnelle d’un autre utilisateur ⇒ 404', async () => {
+    for (const path of ['by-category', 'by-tag', 'monthly']) {
+      await a.call('get', `/api/v1/stats/${path}?categoryId=${ids.categoryOfB}`).expect(404);
+      await a.call('get', `/api/v1/stats/${path}?categoryId=00000000-0000-4000-8000-000000000000`).expect(404);
+    }
+  });
+
   it.each([
+    ['categoryId non UUID', 'categoryId=abc'],
     ['from invalide', 'from=2026-02-30'],
     ['to au mauvais format', 'to=01/02/2026'],
     ['accountId non UUID', 'accountId=abc'],

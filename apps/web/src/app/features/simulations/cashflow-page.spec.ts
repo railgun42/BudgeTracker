@@ -1,6 +1,6 @@
 import { HttpTestingController, provideHttpClientTesting, TestRequest } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import {
   AccountDto,
@@ -15,6 +15,7 @@ import { routes } from '../../app.routes';
 import { Session } from '../../core/auth/session';
 import { provideApiHttp } from '../../core/http';
 import { today } from '../../core/today';
+import { RECALC_DELAY_MS } from './cashflow-page';
 
 const USER = { id: 'u1', email: 'alice@example.com', name: 'Alice', lastConnection: null };
 const ACCOUNTS: AccountDto[] = [
@@ -34,6 +35,7 @@ const recurrence = (id: string, accountId: string, name: string, amountCents: nu
 });
 const RECURRENCES = [recurrence('r1', 'a1', 'Loyer', 70_000), recurrence('r2', 'a1', 'Salaire', 200_000, TransactionType.CREDIT), recurrence('r3', 'a3', 'Épargne', 5_000)];
 const TODAY = today();
+const day = (d: string) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${d}T00:00:00Z`));
 const RESULT: CashflowDto = {
   startDate: TODAY,
   endDate: '2030-03-31',
@@ -75,6 +77,15 @@ const SAVED: CashflowSimulationDto = {
   },
 };
 
+// jsdom n'implémente pas <dialog> : ouverture/fermeture minimales (attribut open + événement close).
+HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+  this.setAttribute('open', '');
+};
+HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
+  this.removeAttribute('open');
+  this.dispatchEvent(new Event('close'));
+};
+
 let harness: RouterTestingHarness;
 let http: HttpTestingController;
 let el: HTMLElement;
@@ -83,6 +94,7 @@ const stable = () => harness.fixture.whenStable();
 const text = (node: Element) => node.textContent!.replace(/\s+/g, ' ').trim();
 const button = (label: string) => [...el.querySelectorAll('button')].find((b) => text(b) === label)!;
 const checkbox = (label: string) => [...el.querySelectorAll('label')].find((l) => text(l).startsWith(label))!.querySelector('input')!;
+const afterDelay = () => new Promise((r) => setTimeout(r, RECALC_DELAY_MS + 50)).then(stable);
 const cashflowCall = () => http.expectOne((r) => r.method === 'POST' && r.url === '/api/v1/simulations/cashflow');
 
 async function type(id: string, value: string): Promise<void> {
@@ -93,7 +105,7 @@ async function type(id: string, value: string): Promise<void> {
 }
 
 async function open(saved: CashflowSimulationDto[] = []): Promise<void> {
-  harness = await RouterTestingHarness.create('/simulations/tresorerie');
+  harness = await RouterTestingHarness.create('/simulations');
   el = harness.routeNativeElement!;
   http.expectOne('/api/v1/accounts').flush(ACCOUNTS);
   http.expectOne('/api/v1/recurrences').flush(RECURRENCES);
@@ -111,6 +123,8 @@ async function fill(): Promise<void> {
   await type('cf-o-name-0', 'Vacances');
   await type('cf-o-amount-0', '12,34');
   await type('cf-o-date-0', '2030-02-10');
+  button('Ajouter la ponctuelle').click();
+  await stable();
   await type('cf-floor', '200');
 }
 
@@ -164,9 +178,10 @@ describe('Simulation de trésorerie', () => {
     req.flush(RESULT);
     await stable();
 
-    expect(text(el.querySelector('.end')!)).toBe('Solde au 2030-03-31 : 500,00 €');
+    expect(text(el.querySelector('.end')!)).toBe('Solde au 31 mars 2030 : +500,00 €');
+    expect([...el.querySelectorAll('.stat')].map((c) => [...c.children].map(text).join(' '))).toEqual([`Départ le ${day(TODAY)} +1 000,00 €`, 'Revenus +4 000,00 €', 'Dépenses −4 500,00 €']);
     expect([...el.querySelectorAll('.allowance dt, .allowance dd')].map(text)).toEqual([
-      'Enveloppe du mois (du 2030-02-01 au 2030-02-28)',
+      'Enveloppe du mois (du 1 févr. 2030 au 28 févr. 2030)',
       '125,00 €',
       'Déjà dépensé',
       '50,00 €',
@@ -174,7 +189,11 @@ describe('Simulation de trésorerie', () => {
       '75,00 €',
     ]);
     expect(el.textContent).toContain('Période 2 sur 3');
+    // Jauge : 75 € restants sur 125 €.
+    expect(el.querySelector<HTMLElement>('.gauge-fill')!.style.width).toBe('60%');
+    expect(el.textContent).toContain("60 % de l'enveloppe reste à dépenser");
     expect(el.querySelectorAll('app-projection-chart polyline')).toHaveLength(1);
+    expect(text(el.querySelector('app-projection-chart .floor-label')!)).toBe('Plancher 200,00 €');
     expect(text(el.querySelector('app-projection-chart .legend')!)).toBe('Solde projeté');
     expect([...el.querySelectorAll('table.items tbody tr')].map((tr) => [...tr.children].map(text).join(' | '))).toEqual([
       'Loyer | Récurrence | 2 | −1 400,00 €',
@@ -247,6 +266,9 @@ describe('Simulation de trésorerie', () => {
 
     expect(el.querySelector('h2:not([id])')!.textContent).toContain('Simulation « Été »');
     expect(el.querySelector<HTMLInputElement>('#cf-end')!.value).toBe('2030-03-31');
+    expect(text(el.querySelector('.sim-row')!)).toContain('Vacances : −12,34 €, le 10 févr. 2030');
+    button('Modifier la ponctuelle 1').click();
+    await stable();
     expect(el.querySelector<HTMLInputElement>('#cf-o-amount-0')!.value).toBe('12,34');
     expect(el.querySelector<HTMLInputElement>('#cf-floor')!.value).toBe('200,00');
     expect(checkbox('Courant').checked).toBe(true);
@@ -277,6 +299,16 @@ describe('Simulation de trésorerie', () => {
     expect(el.textContent).toContain('Aucune simulation sauvegardée.');
   });
 
+  it('l’ancienne adresse /simulations/tresorerie mène à la page', async () => {
+    harness = await RouterTestingHarness.create('/simulations/tresorerie');
+    http.expectOne('/api/v1/accounts').flush(ACCOUNTS);
+    http.expectOne('/api/v1/recurrences').flush(RECURRENCES);
+    http.expectOne('/api/v1/cashflow-simulations').flush([]);
+    await stable();
+    expect(TestBed.inject(Router).url).toBe('/simulations');
+    expect(harness.routeNativeElement!.querySelector('h1')!.textContent).toBe('Simulation de trésorerie');
+  });
+
   it('formulaires accessibles : chaque champ a un libellé', async () => {
     await open();
     checkbox('Courant').click();
@@ -290,6 +322,61 @@ describe('Simulation de trésorerie', () => {
       const labelled = f.closest('label') ?? (f.id && el.querySelector(`label[for="${f.id}"]`));
       expect(labelled, f.outerHTML).toBeTruthy();
     }
-    expect([...el.querySelectorAll('fieldset legend')].map(text)).toContain('Récurrence simulée 1');
+    expect(text(el.querySelector('#cf-x-title')!)).toBe('Récurrence simulée 1');
+  });
+
+  it('recalcule seul quand un paramètre change après un premier calcul', async () => {
+    await open();
+    (await calculate()).flush(RESULT);
+    await stable();
+    await afterDelay();
+
+    await type('cf-floor', '300');
+    await afterDelay();
+    const req = cashflowCall();
+    expect(req.request.body.floor).toEqual({ floorCents: 30_000, period: 'MONTH' });
+    req.flush(RESULT);
+  });
+
+  it('modale de ligne simulée : montant invalide refusé, modification enregistrée dans la ligne', async () => {
+    await open();
+    button('Ajouter une récurrence simulée').click();
+    await stable();
+    await type('cf-x-name-0', 'Netflix');
+    await type('cf-x-amount-0', '0');
+    button('Ajouter la récurrence simulée').click();
+    await stable();
+    expect(el.querySelector('#cf-x-amount-0')!.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelectorAll('.sim-row')).toHaveLength(0);
+
+    await type('cf-x-amount-0', '13,49');
+    button('Ajouter la récurrence simulée').click();
+    await stable();
+    expect(el.querySelector('dialog[open]')).toBeNull();
+    expect(text(el.querySelector('.sim-row')!)).toContain('Netflix : −13,49 €,');
+
+    button('Modifier la récurrence simulée 1').click();
+    await stable();
+    button('Revenu').click();
+    button('Enregistrer la récurrence simulée').click();
+    await stable();
+    expect(text(el.querySelector('.sim-row')!)).toContain('Netflix : +13,49 €,');
+  });
+
+  it('assistant : étapes accessibles, retour à l’étape à compléter', async () => {
+    await open();
+    const shown = () => [...el.querySelectorAll<HTMLElement>('.step')].findIndex((s) => !s.hidden);
+    expect(el.querySelector('.steps [aria-current=step]')!.textContent).toContain('Période');
+    button('Suivant').click();
+    await stable();
+    expect(shown()).toBe(1);
+    button('3Plancher').click();
+    await stable();
+    expect(shown()).toBe(2);
+    expect(el.querySelector('.steps [aria-current=step]')!.textContent).toContain('Plancher');
+
+    button('Calculer').click();
+    await stable();
+    expect(shown()).toBe(0);
   });
 });

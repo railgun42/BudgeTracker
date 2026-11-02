@@ -5,6 +5,7 @@ import { PrismaService } from '../../src/prisma/prisma.service';
 const CHILD_TABLES: Record<string, string> = {
   User: 'SELECT count(*) FROM "User" WHERE id = $1::uuid',
   TransactionTag: 'SELECT count(*) FROM "TransactionTag" x JOIN "Transaction" t ON t.id = x."transactionId" WHERE t."userId" = $1::uuid',
+  AttachmentTag: 'SELECT count(*) FROM "AttachmentTag" x JOIN "Attachment" a ON a.id = x."attachmentId" WHERE a."userId" = $1::uuid',
   TransactionTemplate: 'SELECT count(*) FROM "TransactionTemplate" x JOIN "Recurrence" r ON r.id = x."recurrenceId" WHERE r."userId" = $1::uuid',
   TemplateTag:
     'SELECT count(*) FROM "TemplateTag" x JOIN "TransactionTemplate" tt ON tt.id = x."templateId" JOIN "Recurrence" r ON r.id = tt."recurrenceId" WHERE r."userId" = $1::uuid',

@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CategoryStatDto, MonthlyStatDto, StatsQuery, StatTotals, TagStatDto } from '@budgetracker/shared';
+import { CategoryStatDto, MonthlyStatDto, StatsQuery, StatTotals, TagStatDto, UNCATEGORIZED } from '@budgetracker/shared';
 import { Prisma } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -10,9 +10,17 @@ type Row = { key: string | null; income: bigint; expense: bigint };
 // - jambes de virement exclues ; le virement vers un portefeuille, sans transferId, reste une dépense « Espèces » ;
 // - « Solde de départ » exclu : ni revenu ni dépense (NOT EXISTS : garde les transactions sans catégorie,
 //   qu'un NOT IN écarterait puisque NULL NOT IN (…) n'est pas vrai) ;
-// - compte NOT_TRACKED : dépenses seulement (un compte peut l'être devenu après avoir reçu des CREDIT).
+// - compte NOT_TRACKED : dépenses seulement (un compte peut l'être devenu après avoir reçu des CREDIT) ;
+// - categoryId : la catégorie et ses sous-catégories (comme GET /transactions) ; UNCATEGORIZED ⇒ sans catégorie.
 // SUM(bigint) est un numeric : recasté en bigint, puis number (centimes ≤ 9·10¹⁵).
-export const statsSql = (userId: string, { from, to, accountId }: StatsQuery, key: Prisma.Sql, join: Prisma.Sql, orderBy: Prisma.Sql) => Prisma.sql`
+const categoryFilter = (categoryId?: string) =>
+  !categoryId
+    ? Prisma.empty
+    : categoryId === UNCATEGORIZED
+      ? Prisma.sql`AND t."categoryId" IS NULL`
+      : Prisma.sql`AND t."categoryId" IN (SELECT c."id" FROM "Category" c WHERE c."id" = ${categoryId}::uuid OR c."parentId" = ${categoryId}::uuid)`;
+
+export const statsSql = (userId: string, { from, to, accountId, categoryId }: StatsQuery, key: Prisma.Sql, join: Prisma.Sql, orderBy: Prisma.Sql) => Prisma.sql`
   SELECT ${key} AS "key",
     COALESCE(SUM(t."amountCents") FILTER (WHERE t."type" = 'CREDIT'), 0)::bigint AS "income",
     COALESCE(SUM(t."amountCents") FILTER (WHERE t."type" = 'DEBIT'), 0)::bigint AS "expense"
@@ -27,6 +35,7 @@ export const statsSql = (userId: string, { from, to, accountId }: StatsQuery, ke
     ${from ? Prisma.sql`AND t."date" >= ${from}::date` : Prisma.empty}
     ${to ? Prisma.sql`AND t."date" <= ${to}::date` : Prisma.empty}
     ${accountId ? Prisma.sql`AND t."accountId" = ${accountId}::uuid` : Prisma.empty}
+    ${categoryFilter(categoryId)}
   GROUP BY 1
   ORDER BY ${orderBy}`;
 
@@ -40,6 +49,13 @@ export class StatsService {
     // Compte d'un autre utilisateur ou supprimé ⇒ 404, comme /transactions.
     if (query.accountId && !(await this.prisma.account.count({ where: { id: query.accountId, userId, deletedAt: null } })))
       throw new NotFoundException('Compte introuvable');
+    // Catégorie visible : globale ou personnelle de l'utilisateur (comme GET /transactions).
+    if (
+      query.categoryId &&
+      query.categoryId !== UNCATEGORIZED &&
+      !(await this.prisma.category.count({ where: { id: query.categoryId, OR: [{ userId: null }, { userId }] } }))
+    )
+      throw new NotFoundException('Catégorie introuvable');
     const rows = await this.prisma.$queryRaw<Row[]>(statsSql(userId, query, key, join, orderBy));
     return rows.map(({ key, income, expense }) => ({ key, totals: { incomeCents: Number(income), expenseCents: Number(expense) } satisfies StatTotals }));
   }

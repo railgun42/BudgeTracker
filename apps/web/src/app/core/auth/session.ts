@@ -3,6 +3,16 @@ import { UserDto } from '@budgetracker/shared';
 import { finalize, firstValueFrom, Observable, tap } from 'rxjs';
 import { ApiClient } from '../api-client';
 
+/** Initiales de l'avatar (2 lettres au plus, nom sinon e-mail). */
+export function initialsOf(user: UserDto | null): string {
+  const words = (user?.name || user?.email || '?').trim().split(/\s+/);
+  return words
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
+}
+
 // État de session côté front : uniquement l'utilisateur renvoyé par l'API. Les jetons restent dans des cookies httpOnly.
 @Injectable({ providedIn: 'root' })
 export class Session {

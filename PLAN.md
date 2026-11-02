@@ -91,7 +91,8 @@ Conventions : ids `uuid` ; `createdAt/updatedAt` UTC ; montants `amountCents BIG
 | **Transaction** | accountId, name, date (DATE), amountCents, type (`DEBIT`/`CREDIT`), details, categoryId, transferId?, recurrenceId?, occurrenceDate?, version, deletedAt | `CHECK (amountCents > 0)` (SQL brut dans la migration) ; index (accountId, date) ; index (userId, date DESC, id) pour la pagination curseur ; **unique (recurrenceId, occurrenceDate)**, non partiel (les lignes supprimées logiquement comptent) |
 | **Category** | userId? (NULL = système), parentId?, nameKey? (système, traduisible), name? (perso), color | 2 niveaux max (parent doit être racine, vérifié en service) ; système non modifiable/supprimable ; perso : suppression = réaffectation préalable |
 | **Tag** / **TransactionTag** | userId, name | unique (userId, lower(name)) |
-| **Attachment** | userId, transactionId (unique ⇒ 0..1), s3Key, originalName (affichage seul), mime, sizeBytes | quota = `SUM(sizeBytes)` par utilisateur |
+| **Attachment** | userId, transactionId (unique ⇒ 0..1, **nullable** : document déposé dans le coffre), s3Key, originalName (affichage seul), mime, sizeBytes | quota = `SUM(sizeBytes)` par utilisateur |
+| **AttachmentTag** | attachmentId, tagId | PK composite, cascade des deux côtés (E41b) |
 | **Recurrence** | accountId, interval, unit (`DAY`/`WEEK`/`MONTH`/`YEAR`), startDate, endDate?, anchorDay, lastGeneration?, version, deletedAt | |
 | **TransactionTemplate** | recurrenceId (1-1), name, amountCents, type, categoryId, details, tags | lu **au moment de la génération** ⇒ « futur seulement » par défaut ; `scope: 'all'` réécrit aussi les occurrences passées non supprimées (SPEC §3.6, amendée le 2026-10-15) |
 | **InterestRate** | accountId, rateBp (taux annuel en points de base), effectiveDate | unique (accountId, effectiveDate) |
@@ -381,6 +382,14 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 ### Phase 10 — Finalisation fonctionnelle
 
 > E42 est bloquée tant que le tableau de bord n'est pas décrit : la sauter si besoin, elle ne bloque pas la suite. E43 se fait en dernier, une fois toutes les fonctionnalités présentes.
+
+**E41b — Coffre-fort (`/me/coffre`)** ✅ (2026-10-19)
+- Objectif : liste de tous les documents (pièces de transactions + dépôts directs), tri / filtres / recherche côté client, tags (réutilise `Tag`), aperçu, téléchargement, suppression, espace utilisé (SPEC §4).
+- Migration `20261019084908_vault` (additive) : `Attachment.transactionId` facultatif, table `AttachmentTag`.
+- API `/v1/documents` : `GET` (liste, corbeille exclue), `POST` (dépôt direct, mêmes contrôles qu'une pièce), `GET :id/url[?download=1]` (URL signée 5 min ; `download=1` ⇒ `Content-Disposition: attachment; filename*=UTF-8''…`), `PUT :id/tags`, `DELETE :id`. Les cinq routes sont au registre d'isolation. RGPD : `AttachmentTag` exporté ; la réinitialisation supprime aussi les dépôts directs.
+- Front : `features/my-account/vault-page.ts` (route lazy), carte « Coffre-fort » dans `/me`, l'historique lit `?from&to&accountId` (lien « transaction liée »).
+- Vérif : `test/e2e/documents.e2e-spec.ts` (liste, corbeille, dépôt 415/400/422, URL et nom téléchargé encodé, tags remplacés / dédoublonnés / tag supprimé, suppression base + S3), isolation, `gdpr.e2e-spec.ts` (export, reset, suppression) ; `vault-page.spec.ts`, `history-page.spec.ts` (lien entrant).
+- Non fait : rattacher un dépôt direct à une transaction, pagination de la liste (supportable jusqu'à quelques milliers de documents), vignettes.
 
 **E42 — Tableau de bord**
 - **Bloquée : attentes à décrire par l'utilisateur.** Ne pas démarrer avant la rédaction du besoin (contenu, indicateurs, comptes concernés) ; l'ajouter alors à SPEC §7 et détailler l'étape. Dépend d'E30, E31 et E34 pour ses chiffres.

@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, HttpCode, Query, Res, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { IsIn, IsOptional } from 'class-validator';
 import { Response } from 'express';
 import { clearSession } from '../auth/auth.controller';
@@ -22,6 +22,13 @@ export class GdprController {
     const data = await this.gdpr.export(id);
     res.attachment(`budgetracker-export.${format}`);
     return format === 'csv' ? toCsv(data) : data;
+  }
+
+  // Réinitialisation : données financières effacées, compte, catégories et tags gardés. Confirmation dans l'UI.
+  @Post('reset')
+  @HttpCode(204)
+  reset(@CurrentUser() { id }: AuthUser): Promise<void> {
+    return this.gdpr.resetData(id);
   }
 
   // Irréversible : la confirmation se fait dans l'UI ; CSRF exigé comme pour toute requête non GET.

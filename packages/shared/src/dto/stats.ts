@@ -4,10 +4,13 @@ import type { LocalDate } from '../local-date';
 // Périmètre : transactions non supprimées de comptes non supprimés, hors jambes de virement et hors
 // « Solde de départ ». Le virement vers un portefeuille (catégorie « Espèces ») est une dépense ;
 // un compte NOT_TRACKED ne compte que des dépenses. Compte d'un autre utilisateur ⇒ 404.
+// `categoryId` : comme GET /transactions, une catégorie racine inclut ses sous-catégories, `UNCATEGORIZED` ⇒ sans
+// catégorie ; catégorie inconnue ou personnelle d'un autre utilisateur ⇒ 404.
 export interface StatsQuery {
   from?: LocalDate;
   to?: LocalDate;
   accountId?: string;
+  categoryId?: string;
 }
 
 /** Totaux en centimes (≥ 0) : revenus = CREDIT, dépenses = DEBIT. */

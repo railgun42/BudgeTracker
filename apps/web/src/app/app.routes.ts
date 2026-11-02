@@ -51,21 +51,23 @@ export const routes: Routes = [
   },
   {
     path: 'simulations',
-    title: 'Simulations',
-    ...authed,
-    loadComponent: () => import('./features/simulations/simulations-page').then((m) => m.SimulationsPage),
-  },
-  {
-    path: 'simulations/tresorerie',
     title: 'Simulation de trésorerie',
     ...authed,
     loadComponent: () => import('./features/simulations/cashflow-page').then((m) => m.CashflowPage),
   },
+  // Ancienne adresse (avant le retrait de la page des scénarios « et si »).
+  { path: 'simulations/tresorerie', redirectTo: 'simulations' },
   {
     path: 'me',
     title: 'Mon compte',
     ...authed,
     loadComponent: () => import('./features/my-account/my-account-page').then((m) => m.MyAccountPage),
+  },
+  {
+    path: 'me/coffre',
+    title: 'Coffre-fort',
+    ...authed,
+    loadComponent: () => import('./features/my-account/vault-page').then((m) => m.VaultPage),
   },
   {
     path: 'feedback',

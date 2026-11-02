@@ -1,6 +1,6 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
-import { CategoryStatDto, LocalDate, MonthlyStatDto, StatsQuery, TagStatDto } from '@budgetracker/shared';
-import { IsOptional, IsUUID } from 'class-validator';
+import { CategoryStatDto, LocalDate, MonthlyStatDto, StatsQuery, TagStatDto, UNCATEGORIZED } from '@budgetracker/shared';
+import { IsOptional, IsUUID, ValidateIf } from 'class-validator';
 import { IsLocalDate } from '../common/is-local-date';
 import { AuthUser, CurrentUser, JwtAuthGuard } from '../common/jwt-auth.guard';
 import { StatsService } from './stats.service';
@@ -17,6 +17,11 @@ export class StatsQueryDto implements StatsQuery {
   @IsOptional()
   @IsUUID()
   accountId?: string;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== UNCATEGORIZED)
+  @IsUUID()
+  categoryId?: string;
 }
 
 @Controller('v1/stats')
