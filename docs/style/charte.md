@@ -41,6 +41,19 @@
 | `--color-warning-bg` | `#fdf1df` | `#35290f` | fond bandeau avertissement |
 | `--color-overlay` | encre 45 % | noir 60 % | voile derrière tiroir/modale |
 
+**Graphiques catégoriels** (parts d'un donut, une teinte par entité, ordre fixe, jamais recyclé ; au-delà de 5, regrouper en « Autres ») :
+
+| Token | Clair | Sombre |
+|---|---|---|
+| `--chart-1` (bleu) | `#2a78d6` | `#3987e5` |
+| `--chart-2` (orange) | `#eb6834` | `#d95926` |
+| `--chart-3` (aqua) | `#1baf7a` | `#199e70` |
+| `--chart-4` (jaune) | `#eda100` | `#c98500` |
+| `--chart-5` (magenta) | `#e87ba4` | `#d55181` |
+| `--chart-other` (« Autres ») | `--color-border-strong` | `--color-border-strong` |
+
+Palette validée au daltonisme (outil dataviz `validate_palette.js`, paires adjacentes : ΔE CVD ≥ 8,4, vision normale ≥ 19,3, clair et sombre). Pas de vert ni de rouge : ils signifient revenu et dépense. Les teintes ne servent qu'aux marques (parts, pastilles de légende), jamais au texte. Revenus / dépenses d'un histogramme : `--color-credit` / `--color-debit`.
+
 Le rouge n'est **jamais** une couleur de marque : il signifie dépense, solde négatif ou erreur.
 
 ### Contrastes mesurés (WCAG 2.x, seuil AA)
@@ -58,6 +71,7 @@ Seuil 4,5:1 pour le texte, 3:1 pour les composants non textuels (contour de cham
 | primaire / surface | 9,48 | 7,75 |
 | primaire / fond | 8,68 | 8,67 |
 | primaire / primaire-soft (lien actif) | 7,91 | 6,16 |
+| marque « Non lue », point et filet (primaire / surface) | 9,48 | 7,75 |
 | texte sur primaire | 9,48 | 8,24 |
 | texte sur primaire survolé | 11,95 | 10,21 |
 | revenu / surface | 6,74 | 8,94 |
@@ -70,14 +84,23 @@ Seuil 4,5:1 pour le texte, 3:1 pour les composants non textuels (contour de cham
 | succès / fond succès | 5,88 | 7,56 |
 | texte / fond succès | 14,33 | 11,45 |
 | erreur / fond erreur | 5,60 | 7,22 |
+| texte du bouton danger (surface / erreur) | 6,57 | 7,78 |
 | texte / fond erreur | 13,99 | 12,56 |
-| avertissement / fond avertissement | 6,10 | 8,49 |
+| avertissement / fond avertissement (bandeau, pastille `.health-warn`) | 6,10 | 8,49 |
 | texte / fond avertissement | 14,70 | 11,77 |
 | contour de champ / surface (≥ 3) | 3,64 | 3,91 |
 | focus / surface (≥ 3) | 9,48 | 7,75 |
 | focus / fond (≥ 3) | 8,68 | 8,67 |
+| `--chart-1` / surface (≥ 3) | 4,42 | 4,50 |
+| `--chart-2` / surface (≥ 3) | 3,20 | 4,21 |
+| `--chart-3` / surface (≥ 3) | **2,82** | 4,80 |
+| `--chart-4` / surface (≥ 3) | **2,17** | 5,33 |
+| `--chart-5` / surface (≥ 3) | **2,69** | 4,15 |
+| `--chart-other` / surface (≥ 3) | 3,64 | 3,91 |
+| jauge : primaire / surface-2 (≥ 3) | 8,14 | 6,85 |
+| plancher de courbe : avertissement / surface (texte 11 px) ; filet « Bientôt supprimé » (≥ 3) ; `.field-warning` | 6,80 | 9,76 |
 
-Tous les couples passent AA. Ajouter une couleur ⇒ mesurer ses couples dans les deux thèmes et compléter ce tableau.
+Tous les couples passent AA, sauf trois teintes de graphique en thème clair (en gras) : comme pour le graphique des simulations, l'identité et la valeur de chaque part sont **écrites** dans la légende et dans le tableau équivalent, obligatoires avec ces teintes. Ajouter une couleur ⇒ mesurer ses couples dans les deux thèmes et compléter ce tableau.
 
 ### Typographie
 
@@ -106,7 +129,7 @@ Pas de texte en capitales, pas de mot isolé mis en couleur dans un titre.
 ### Animations
 
 `--duration-fast` 120 ms (survol, appui), `--duration` 200 ms (menus, bandeaux), `--duration-slow` 320 ms (tiroir, entrée de page, confirmation) ; courbe `--ease-out`.
-Images clés disponibles : `enter-up`, `enter-down`, `pop`, `confirm`. Sous `prefers-reduced-motion: reduce`, toutes les durées tombent à ~0.
+Images clés disponibles : `enter-up`, `enter-down`, `pop`, `confirm`, `grow-x` (barre horizontale qui pousse depuis la gauche, `.bar`), `grow-y` (colonne d'histogramme SVG, avec `transform-box: fill-box; transform-origin: bottom`). Sous `prefers-reduced-motion: reduce`, toutes les durées tombent à ~0.
 
 ## 3. Thème clair / sombre
 
@@ -135,6 +158,8 @@ Images clés disponibles : `enter-up`, `enter-down`, `pop`, `confirm`. Sous `pre
 | `.button.button-secondary` | Modifier, Supprimer, Annuler, Filtrer en second plan |
 | `.link-button` | action légère dans un texte (« Recharger », « Retirer… ») |
 
+`.button.button-danger` : confirmation d'une action irréversible, **dans une modale** après la saisie d'un mot de confirmation (Supprimer définitivement mon compte, Réinitialiser mon compte). Fond `--color-error`, texte `--color-surface` (6,57 clair, 7,78 sombre) ; au survol, fond `--color-error-bg` et texte `--color-error` (5,60 / 7,22). Le libellé dit l'action : la couleur ne porte pas seule l'information. Le bouton qui **ouvre** la modale reste secondaire.
+
 Hauteur minimale de 44 px, léger enfoncement à l'appui, `:disabled` à 55 % d'opacité. Libellé = verbe d'action (« Enregistrer le taux », pas « Valider »). Ne pas ajouter de flèche « → ».
 
 ### Champs de formulaire
@@ -155,6 +180,7 @@ Hauteur minimale de 44 px, léger enfoncement à l'appui, `:disabled` à 55 % d'
 
 - `.form` : une colonne, 448 px au maximum ; `.field` : libellé au-dessus.
 - Champ invalide : `aria-invalid="true"` ⇒ contour rouge doublé. Erreur dans `.field-error`, reliée par `aria-describedby`.
+- Avertissement non bloquant sous un champ (l'envoi reste possible : préavis court, limite de caractères proche) : `<p id="…" class="field-warning"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3zM12 10v5M12 18v.01" /></svg> Préavis inférieur à 30 jours.</p>`, relié par `aria-describedby`, **sans** `aria-invalid`. Texte `--color-warning` en graisse moyenne, triangle au trait : le texte et l'icône portent l'avertissement, **jamais rouge**. Contrastes : avertissement / surface 6,80 (clair) et 9,76 (sombre). Première utilisation : Notifications et annonces (§4.4).
 - Désactivé : fond `--color-surface-2`, texte atténué.
 - Montants : `inputmode="decimal"` ⇒ chiffres tabulaires automatiques.
 - Case à cocher et bouton radio : `.checkbox` sur le `<label>` (texte à droite, couleur `accent-color` primaire).
@@ -177,6 +203,8 @@ Hauteur minimale de 44 px, léger enfoncement à l'appui, `:disabled` à 55 % d'
 ```
 
 Surface blanche, bordure 1 px, `--shadow-1`, marge intérieure 16/24 px. Ne pas imbriquer de cartes.
+
+**Zone « danger »** (action irréversible) : `<section class="card danger">` avec un titre `<h2 class="card-title danger-title"><svg aria-hidden="true">…</svg> Supprimer mon compte</h2>`. Contour `--color-error` et filet gauche de 4 px ; titre et icône (trait 2 px, `currentColor`) en `--color-error`. Contrastes : erreur / surface 6,57 (clair) et 7,78 (sombre), ≥ 3:1 pour le filet et ≥ 4,5:1 pour le titre. Le fond reste `--color-surface` (texte courant inchangé). Le titre écrit et l'icône portent l'information, pas la couleur seule. Première utilisation : Mon compte.
 
 ### Bandeaux d'alerte
 
@@ -215,6 +243,46 @@ Composant `<app-undo-banner [message]="…" (undo)="…">` (`shared-ui/undo-bann
 
 Compact (8/16 px), en-tête sur `--color-surface-2`, survol de ligne, chiffres tabulaires. `.num` aligne à droite. `.scroll` assure le défilement horizontal sur mobile.
 
+### Cartes chiffrées (synthèse)
+
+```html
+<ul class="stat-grid">
+  <li class="card stat">
+    <p class="stat-label">Solde net</p>
+    <p class="stat-value amount credit">+404,33 €</p>
+    <p class="stat-hint muted">−595,67 € par rapport à la période précédente</p>
+  </li>
+</ul>
+```
+
+`.stat-grid` : grille auto (cartes de 9rem minimum : 2 colonnes à 360 px, 4 sur bureau). `.stat-value` : 22 px gras, chiffres tabulaires, montant signé (`signedEur`) en `.credit` / `.debit`. Aide en `--text-xs` atténué (6,90:1 clair, 7,21:1 sombre). Première utilisation : statistiques.
+
+Variante liste de définitions (nom → valeur, ex. Administration) : `<dl class="stat-grid"><div class="card stat"><dt class="stat-label">Total</dt><dd class="stat-value">1 234</dd><dd class="stat-hint muted">81 % des inscrits</dd></div></dl>` (marges des `dd` remises à zéro par `.stat`).
+
+### Barres de proportion
+
+```html
+<span class="bars" aria-hidden="true">
+  <span class="bar credit" [style.width.%]="income / max * 100"></span>
+  <span class="bar debit" [style.width.%]="expense / max * 100"></span>
+</span>
+```
+
+Deux barres de 6 px sous un libellé, échelle commune à la liste ; apparition en `grow-x`. **Décoratives** : le montant signé est écrit dans la même ligne. Contrastes (≥ 3:1) : revenu / surface 6,74 (clair) et 8,94 (sombre), dépense / surface 6,57 et 7,78. Première utilisation : statistiques.
+
+### Jauge
+
+```html
+<div class="gauge" aria-hidden="true"><span class="gauge-fill" [style.width.%]="remainingPct"></span></div>
+<p class="muted">60 % de l'enveloppe reste à dépenser</p>
+```
+
+Barre de 16 px (pilule) : part restante d'un total, remplie en `--color-primary` sur une piste `--color-surface-2` bordée de `--color-border-strong` ; apparition en `grow-x`. **Décorative** : le pourcentage et les montants sont écrits à côté. Contrastes (≥ 3:1) : remplissage / piste 8,14 (clair) et 6,85 (sombre) ; bordure / surface 3,64 et 3,91. Première utilisation : enveloppe de la simulation de trésorerie.
+
+### Courbe du solde : marqueur de plancher
+
+`<app-projection-chart [floorCents]="…">` trace le solde plancher en pointillé `--color-warning` avec le libellé écrit « Plancher 200,00 € » (gras, 6,80:1 clair, 9,76:1 sombre) ; l'échelle l'inclut toujours. Le pointillé et le texte portent l'information, pas la couleur seule.
+
 ### Montants
 
 | Classe | Effet |
@@ -233,8 +301,23 @@ Pipe `signedEur` (`core/money.ts`) : `{{ cents | signedEur }}` → « −54,20 �
 
 - `.badge` : compteur (« 3 », « 99+ »), pilule primaire, apparition en `pop`.
 - `.badge.badge-neutral` : statut (« archivée », « En attente », « Acceptée »).
+- `.badge.badge-neutral.health` + `.health-ok` / `.health-warn` / `.health-error` : **état de santé écrit** (« OK », « Réussie » / « Lente » / « En échec », « À examiner »), icône au trait (`<svg aria-hidden="true">`, coche, horloge, croix, triangle) devant le texte ; sans variante, neutre (« En attente »). Le texte et l'icône portent l'état, la couleur le double ; **rouge réservé à l'échec et aux erreurs**. Contrastes (texte ≥ 4,5:1) : succès / fond succès 5,88 (clair) et 7,56 (sombre) ; avertissement / fond avertissement 6,10 et 8,49 ; erreur / fond erreur 5,60 et 7,22 ; neutre (atténué / surface-2) 5,92 et 6,37. Première utilisation : Administration (état de l'API).
 - `.category-dot` : pastille ronde de 12 px devant un libellé, couleur de la catégorie (`[style.background-color]`, sinon celle du parent), neutre (`--color-border-strong`) sans couleur. Décorative : `aria-hidden="true"`, le nom de la catégorie reste écrit à côté. Première utilisation : historique.
 - `.category-icon` : icône de catégorie racine, `<svg class="category-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="…" /></svg>` ; carré de 32 px (`--space-5`), fond `--color-primary-soft`, trait 2 px `--color-primary` (7,91 / 6,16:1). Tracés dans `shared-ui/category-icons.ts` (`categoryIcon(c)` par `nameKey` seedé, y compris les techniques Virement / Espèces / Intérêts / Solde de départ ; étiquette pour les perso et celles de l'admin ; `NO_CATEGORY_ICON` sans catégorie). Une sous-catégorie prend l'icône de son parent. Décorative, le nom reste écrit. Utilisée dans Mes catégories et l'historique (à la place de `.category-dot`).
+
+### Non lu
+
+```html
+<li class="row unread-row">
+  <p class="row-head">… <span class="visually-hidden"> · </span><span class="unread-mark">Non lue</span></p>
+</li>
+```
+
+`.unread-row` : filet primaire de 3 px à gauche de la ligne (box-shadow inset, ne décale rien). `.unread-mark` : « Non lue » écrit en gras primaire, précédé d'un point de 8 px. Une ligne lue n'a ni filet, ni point, ni texte : la différence ne repose pas sur la couleur. Contrastes : primaire / surface 9,48 (clair) et 7,75 (sombre), valables pour le texte (≥ 4,5:1), le point et le filet (≥ 3:1). Première utilisation : notifications (page et panneau de la cloche).
+
+### Panneau de notifications (cloche)
+
+La cloche de l'en-tête est un `<button popovertarget="notifications-panel">` (icône SVG au trait `currentColor`, pastille `.badge` « 3 » / « 99+ » détourée de 2 px `--color-surface`, nom accessible « Notifications (N non lues) »). Elle ouvre un `.menu` élargi (24rem au plus) ancré sous l'en-tête : titre, nombre de non lues, les 5 premières notifications (non lues d'abord, message tronqué à 3 lignes), puis « Voir toutes les notifications » (bouton secondaire pleine largeur, ferme le panneau). Échap, clic extérieur et retour du focus sont natifs.
 
 ### Menu déroulant
 
@@ -243,6 +326,19 @@ Pipe `signedEur` (`core/money.ts`) : `{{ cents | signedEur }}` → « −54,20 �
 ### Sélecteur segmenté
 
 `.segmented` contenant des `<button aria-pressed>` (44 px de haut) : thème, **Dépense / Revenu** dans la saisie de transaction (dans un `fieldset.field` avec la légende « Sens »). Le bouton pressé est plein primaire.
+
+### Puces de choix
+
+```html
+<fieldset class="field" id="feedback-type">
+  <legend>Type</legend>
+  <div class="chips">
+    <label class="chip"><input type="radio" name="type" value="IDEA" /><svg viewBox="0 0 24 24" aria-hidden="true"><path d="…" /></svg> Idée de fonctionnalité</label>
+  </div>
+</fieldset>
+```
+
+Choix unique parmi quelques options aux libellés longs (là où `.segmented` déborderait à 360 px). Pilule de 44 px, contour `--color-border-strong`, icône au trait facultative (décorative, le libellé reste écrit). Les puces passent à la ligne. Puce cochée : contour primaire doublé, fond `--color-primary-soft`, texte primaire gras ; **le rond radio natif reste visible**, la couleur ne porte pas seule la sélection. Clavier natif des radios (flèches), focus global sur le rond. Contrastes : primaire / primaire-soft 7,91 (clair) et 6,16 (sombre) ; contour / surface 3,64 et 3,91 ; contour coché primaire / surface 9,48 et 7,75 ; texte / surface-2 au survol 14,09 et 11,97. Première utilisation : Donner mon avis (type).
 
 ### Confirmation
 
@@ -259,7 +355,7 @@ Pipe `signedEur` (`core/money.ts`) : `{{ cents | signedEur }}` → « −54,20 �
 ## 7. À reprendre dans les sessions pages (hors périmètre E43)
 
 - Supprimer les styles locaux qui redéfinissent `.card`, `.cards`, `.actions`, `.scroll`, `.negative`, `.balance`… dès qu'ils doublonnent la charte (le style local l'emporte sur le global).
-- Cloche (`features/notifications/notification-bell.ts`) : remplacer l'emoji 🔔 par une icône SVG `currentColor` ; la pastille peut utiliser `.badge`.
+- ~~Cloche (`features/notifications/notification-bell.ts`) : remplacer l'emoji 🔔 par une icône SVG `currentColor` ; la pastille peut utiliser `.badge`.~~ Fait (§3.13, 2026-10-16).
 - Signe moins : le format actuel affiche « -720,00 € » (trait d'union) ; viser « −720,00 € » (U+2212) et « +» explicite partout. Pipe `signedEur` disponible ; fait dans l'historique (§3.5).
 - ~~Historique : les boutons Filtrer / Effacer s'étirent dans la grille de filtres ; les regrouper dans une ligne `.actions`.~~ Fait (§3.5, 2026-10-15).
 - ~~Saisie de transaction : sens Dépense / Revenu en `.segmented`, bien visible.~~ Fait (§3.3, 2026-10-15).

@@ -30,7 +30,7 @@ let harness: RouterTestingHarness;
 
 const stable = () => harness.fixture.whenStable();
 const clean = (s: string | null | undefined) => s?.replace(/\s+/g, ' ').trim();
-const cards = () => [...el.querySelectorAll('ul[aria-label="Retours"] li.card')];
+const cards = () => [...el.querySelectorAll('ul[aria-label="Retours"] li.row')];
 const buttons = () => [...el.querySelectorAll('button')].map((b) => clean(b.textContent));
 
 function select(id: string, value: string): void {
@@ -47,14 +47,18 @@ beforeEach(async () => {
   await restored;
   harness = await RouterTestingHarness.create('/admin/feedback');
   el = harness.routeNativeElement!;
-  http.expectOne(`${URL}?sort=date`).flush([NEW, OLD, DONE]);
-  await stable();
 });
+
+async function load(list: AdminFeedbackDto[] = [NEW, OLD, DONE]): Promise<void> {
+  http.expectOne(`${URL}?sort=date`).flush(list);
+  await stable();
+}
 
 afterEach(() => http.verify());
 
 describe('Administration : retours utilisateurs', () => {
-  it('liste : type, statut, texte brut, avertissement pour les retours bientôt supprimés', () => {
+  it('liste : type, statut, texte brut, avertissement pour les retours bientôt supprimés', async () => {
+    await load();
     expect(cards().map((c) => clean(c.querySelector('p')?.textContent)?.replace(/ · .+ · /, ' · '))).toEqual([
       'Idée de fonctionnalité · Nouveau',
       'Problème · Nouveau',
@@ -71,6 +75,7 @@ describe('Administration : retours utilisateurs', () => {
   });
 
   it('filtres type et statut, tri : la liste est redemandée avec les paramètres', async () => {
+    await load();
     select('filter-type', 'PROBLEM');
     http.expectOne(`${URL}?type=PROBLEM&sort=date`).flush([OLD]);
     select('filter-status', 'NEW');
@@ -86,12 +91,86 @@ describe('Administration : retours utilisateurs', () => {
   });
 
   it('marquer comme traité : POST puis rechargement', async () => {
-    (el.querySelector('li.card button') as HTMLButtonElement).click();
+    await load();
+    (el.querySelector('li.row button') as HTMLButtonElement).click();
     const req = http.expectOne({ method: 'POST', url: `${URL}/f1/treat` });
     req.flush({ ...NEW, status: 'TREATED', treatedAt: '2026-10-15T10:00:00.000Z' });
     http.expectOne(`${URL}?sort=date`).flush([{ ...NEW, status: 'TREATED' }, OLD, DONE]);
     await stable();
     expect(clean(el.querySelector('[aria-live]')?.textContent)).toBe('Retour marqué comme traité.');
     expect(buttons().filter((b) => b?.startsWith('Marquer comme traité'))).toHaveLength(1);
+  });
+
+  it('pastilles : statut avec icône, « Bientôt supprimé » écrit en avertissement, dates lisibles', async () => {
+    await load();
+    const [first, old] = cards();
+    expect(clean(first.querySelector('.status')?.textContent)).toBe('Nouveau');
+    expect(first.querySelector('.status svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(first.querySelector('.health')).toBeNull();
+    const warn = old.querySelector('.health.health-warn');
+    expect(clean(warn?.textContent)).toBe('Bientôt supprimé');
+    expect(warn?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(old.classList).toContain('expiring');
+    expect(first.querySelector('time')?.getAttribute('datetime')).toBe(NEW.createdAt);
+    expect(clean(first.querySelector('time')?.textContent)).toMatch(/^15 oct\. 2026, \d{2}:\d{2}$/);
+    expect(first.querySelector(`time[datetime="${NEW.expiresAt}"]`)?.textContent).toMatch(/^1[34] janv\. 2027$/);
+    expect(el.querySelector('.alert-warning[role="status"]')).not.toBeNull();
+  });
+
+  it("compteurs de la liste affichée dans l'en-tête", async () => {
+    await load();
+    expect(clean(el.querySelector('.counts')?.textContent)).toBe('3 retours affichés, dont 2 nouveaux');
+    select('filter-type', 'OPINION');
+    http.expectOne(`${URL}?type=OPINION&sort=date`).flush([DONE]);
+    await stable();
+    expect(clean(el.querySelector('.counts')?.textContent)).toBe('1 retour affiché, dont 0 nouveau');
+  });
+
+  it('« Chargement… » puis liste vide ; liste filtrée vide', async () => {
+    expect(clean(el.querySelector('[role="status"]')?.textContent)).toBe('Chargement…');
+    await load([]);
+    expect(el.textContent).not.toContain('Chargement…');
+    expect(clean(el.querySelector('.empty')?.textContent)).toBe('Aucun retour.');
+    expect(el.querySelector('.counts')).toBeNull();
+    select('filter-status', 'TREATED');
+    http.expectOne(`${URL}?status=TREATED&sort=date`).flush([]);
+    await stable();
+    expect(clean(el.querySelector('.empty')?.textContent)).toBe('Aucun retour ne correspond à ces filtres.');
+  });
+
+  it('erreur : pas de « Chargement… », « Recharger » relance la liste', async () => {
+    http.expectOne(`${URL}?sort=date`).flush(null, { status: 500, statusText: 'Erreur' });
+    await stable();
+    const alert = el.querySelector('[role="alert"]')!;
+    expect(alert).not.toBeNull();
+    expect(el.textContent).not.toContain('Chargement…');
+    (alert.querySelector('button.link-button') as HTMLButtonElement).click();
+    await load();
+    expect(el.querySelector('[role="alert"]')).toBeNull();
+    expect(cards()).toHaveLength(3);
+  });
+
+  it('marquage en cours : boutons désactivés, puis confirm-pop sur la ligne traitée seulement', async () => {
+    await load();
+    (el.querySelector('li.row button') as HTMLButtonElement).click();
+    await stable();
+    const marking = [...el.querySelectorAll<HTMLButtonElement>('li.row button')];
+    expect(marking.every((b) => b.disabled)).toBe(true);
+    expect(clean(marking[0].textContent)).toBe('Marquage en cours…');
+    http.expectOne({ method: 'POST', url: `${URL}/f1/treat` }).flush({ ...NEW, status: 'TREATED' });
+    http.expectOne(`${URL}?sort=date`).flush([{ ...NEW, status: 'TREATED' }, OLD, DONE]);
+    await stable();
+    expect(cards().map((c) => c.classList.contains('confirm-pop'))).toEqual([true, false, false]);
+    expect(el.querySelector('.alert-success')?.textContent).toContain('Retour marqué comme traité.');
+    expect([...el.querySelectorAll<HTMLButtonElement>('li.row button')].every((b) => !b.disabled)).toBe(true);
+  });
+
+  it('échec du marquage : erreur affichée, bouton réactivé', async () => {
+    await load();
+    (el.querySelector('li.row button') as HTMLButtonElement).click();
+    http.expectOne({ method: 'POST', url: `${URL}/f1/treat` }).flush(null, { status: 404, statusText: 'Introuvable' });
+    await stable();
+    expect(clean(el.querySelector('[role="alert"]')?.textContent)).toContain('Ce retour n’existe plus.');
+    expect((el.querySelector('li.row button') as HTMLButtonElement).disabled).toBe(false);
   });
 });

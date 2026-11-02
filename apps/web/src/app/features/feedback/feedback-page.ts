@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { CreateFeedbackInput, FEEDBACK_LIMITS, FEEDBACK_RETENTION, FeedbackDto, FeedbackStatus, FeedbackType } from '@budgetracker/shared';
@@ -15,6 +15,19 @@ export const feedbackStatusLabel = (status: FeedbackStatus) => (status === 'NEW'
 export const DATE_TIME = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
 
 const { maxMessageLength, perDay, maxUntreated } = FEEDBACK_LIMITS;
+// Affichage seulement : « 15 oct. 2026, 10:00 » dans le fuseau du navigateur.
+const READABLE = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+// Icônes décoratives au trait (viewBox 24) : le libellé reste écrit à côté.
+export const TYPE_ICONS: Record<FeedbackType, string> = {
+  [FeedbackType.OPINION]: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z',
+  [FeedbackType.IDEA]: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z',
+  [FeedbackType.PROBLEM]: 'M12 3 2 20h20L12 3zM12 10v4M12 17h.01',
+};
+export const STATUS_ICONS: Record<FeedbackStatus, string> = {
+  NEW: 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z',
+  TREATED: 'M5 12l5 5 9-10',
+};
+type Filter = FeedbackStatus | 'ALL';
 
 // E39 (SPEC §13.5) : retour libre vers l'administrateur et liste de ses propres retours. Texte brut (interpolation).
 @Component({
@@ -23,7 +36,7 @@ const { maxMessageLength, perDay, maxUntreated } = FEEDBACK_LIMITS;
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1>Donner mon avis</h1>
-    <p class="muted">
+    <p class="muted intro">
       Un avis, une idée de fonctionnalité, un problème : votre message est lu par l'administrateur. N'y mettez ni mot de
       passe ni donnée bancaire. Il est supprimé {{ retention.afterTreatedDays }} jours après son traitement, et au plus
       tard {{ retention.untreatedDays }} jours après son envoi.
@@ -32,64 +45,155 @@ const { maxMessageLength, perDay, maxUntreated } = FEEDBACK_LIMITS;
     @if (error()) {
       <p class="alert alert-error" role="alert">{{ error() }}</p>
     }
-    <p class="visually-hidden" aria-live="polite">{{ status() }}</p>
-
-    <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <div class="field">
-        <label for="feedback-type">Type</label>
-        <select id="feedback-type" formControlName="type">
-          @for (t of types; track t.value) {
-            <option [value]="t.value">{{ t.label }}</option>
-          }
-        </select>
-      </div>
-      <div class="field">
-        <label for="feedback-message">Message</label>
-        <textarea
-          id="feedback-message"
-          formControlName="message"
-          rows="6"
-          [attr.maxlength]="max"
-          [attr.aria-invalid]="messageInvalid()"
-          aria-describedby="feedback-message-hint"
-        ></textarea>
-        <p id="feedback-message-hint" [class]="messageInvalid() ? 'field-error' : 'field-hint'">
-          Obligatoire, {{ message().length }} / {{ max }} caractères.
-        </p>
-      </div>
-      <button class="button" type="submit" [disabled]="pending()">Envoyer</button>
-    </form>
-
-    <h2>Mes retours</h2>
-    <ul class="list" aria-label="Mes retours">
-      @for (f of list(); track f.id) {
-        <li class="card">
-          <p>
-            <strong>{{ typeLabel(f.type) }}</strong> · {{ dateTime(f.createdAt) }} · {{ statusLabel(f.status) }}
-          </p>
-          <p class="message">{{ f.message }}</p>
-        </li>
-      } @empty {
-        <li class="muted">Aucun retour envoyé.</li>
+    <div aria-live="polite">
+      @if (status()) {
+        <p class="alert alert-success confirm-pop">{{ status() }}</p>
       }
-    </ul>
+    </div>
+
+    <section class="card" aria-label="Nouveau message">
+      <form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+        <fieldset class="field" id="feedback-type">
+          <legend>Type</legend>
+          <div class="chips">
+            @for (t of types; track t.value) {
+              <label class="chip">
+                <input type="radio" name="type" formControlName="type" [id]="'feedback-type-' + t.value" [value]="t.value" />
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons[t.value]" /></svg>
+                {{ t.label }}
+              </label>
+            }
+          </div>
+        </fieldset>
+        <div class="field">
+          <label for="feedback-message">Message</label>
+          <textarea
+            id="feedback-message"
+            formControlName="message"
+            rows="6"
+            [attr.maxlength]="max"
+            [attr.aria-invalid]="messageInvalid()"
+            aria-describedby="feedback-message-hint"
+          ></textarea>
+          <p id="feedback-message-hint" [class]="messageInvalid() ? 'field-error' : 'field-hint'">
+            Obligatoire, {{ message().length }} / {{ max }} caractères.
+          </p>
+        </div>
+        <div class="actions">
+          <button class="button" type="submit" [disabled]="pending()">{{ pending() ? 'Envoi en cours…' : 'Envoyer' }}</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Mes retours</h2>
+      @if (list(); as all) {
+        @if (all.length) {
+          <div class="segmented filter" role="group" aria-label="Filtrer par statut">
+            @for (f of filters; track f.value) {
+              <button type="button" [attr.aria-pressed]="filter() === f.value" (click)="filter.set(f.value)">
+                {{ f.label }} ({{ count(f.value) }})
+              </button>
+            }
+          </div>
+          @if (shown().length) {
+            <ul class="rows" aria-label="Mes retours">
+              @for (f of shown(); track f.id) {
+                <li class="row" [class.confirm-pop]="f.id === createdId()">
+                  <p class="row-head">
+                    <svg class="icon type-icon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="icons[f.type]" /></svg>
+                    <strong>{{ typeLabel(f.type) }}</strong><span class="visually-hidden"> · </span>
+                    <time class="muted" [attr.datetime]="f.createdAt">{{ dateTime(f.createdAt) }}</time
+                    ><span class="visually-hidden"> · </span>
+                    <span class="badge badge-neutral status">
+                      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="statusIcons[f.status]" /></svg>
+                      {{ statusLabel(f.status) }}
+                    </span>
+                  </p>
+                  <p class="message">{{ f.message }}</p>
+                </li>
+              }
+            </ul>
+          } @else {
+            <p class="empty muted">Aucun retour {{ filter() === 'NEW' ? 'nouveau' : 'traité' }}.</p>
+          }
+        } @else {
+          <p class="empty muted">Aucun retour envoyé.</p>
+        }
+      } @else if (!error()) {
+        <p class="muted" role="status">Chargement…</p>
+      }
+    </section>
   `,
   styles: `
-    .list {
-      list-style: none;
-      padding: 0;
+    :host {
       display: grid;
-      gap: var(--space-2);
+      gap: var(--space-3);
+      max-width: 40rem;
     }
-    .card {
-      padding: var(--space-3);
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
+    h1,
+    .intro,
+    .alert {
+      margin: 0;
+    }
+    .form {
+      max-width: none;
+    }
+    .filter {
+      margin-block: var(--space-2) var(--space-1);
+    }
+    .rows {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    .row {
+      display: grid;
+      gap: var(--space-1);
+      padding-block: var(--space-3);
+      + .row {
+        border-top: 1px solid var(--color-border);
+      }
+      p {
+        margin: 0;
+      }
+    }
+    .row-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-1) var(--space-2);
+      font-size: var(--text-sm);
+    }
+    .icon {
+      flex: none;
+      width: 1.25em;
+      height: 1.25em;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .type-icon {
+      color: var(--color-primary);
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+      margin-left: auto;
     }
     .message {
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+    }
+    .empty {
+      margin: var(--space-2) 0 0;
+      padding: var(--space-4);
+      border: 1px dashed var(--color-border-strong);
+      border-radius: var(--radius);
+      text-align: center;
     }
   `,
 })
@@ -102,9 +206,21 @@ export class FeedbackPage {
   protected readonly retention = FEEDBACK_RETENTION;
   protected readonly typeLabel = feedbackTypeLabel;
   protected readonly statusLabel = feedbackStatusLabel;
-  protected readonly dateTime = (iso: string) => DATE_TIME.format(new Date(iso));
+  protected readonly dateTime = (iso: string) => READABLE.format(new Date(iso));
+  protected readonly icons = TYPE_ICONS;
+  protected readonly statusIcons = STATUS_ICONS;
+  protected readonly filters: { value: Filter; label: string }[] = [
+    { value: 'ALL', label: 'Tous' },
+    { value: 'NEW', label: feedbackStatusLabel('NEW') },
+    { value: 'TREATED', label: feedbackStatusLabel('TREATED') },
+  ];
 
-  protected readonly list = signal<FeedbackDto[]>([]);
+  // null tant que la liste n'est pas chargée (« Chargement… »).
+  protected readonly list = signal<FeedbackDto[] | null>(null);
+  protected readonly filter = signal<Filter>('ALL');
+  protected readonly shown = computed(() => (this.list() ?? []).filter((f) => this.filter() === 'ALL' || f.status === this.filter()));
+  protected readonly count = (v: Filter) => (this.list() ?? []).filter((f) => v === 'ALL' || f.status === v).length;
+  protected readonly createdId = signal('');
   protected readonly pending = signal(false);
   protected readonly error = signal('');
   protected readonly status = signal('');
@@ -137,8 +253,9 @@ export class FeedbackPage {
     const body: CreateFeedbackInput = { type, message: message.trim() };
     this.pending.set(true);
     this.api.post<FeedbackDto>('/feedback', body).subscribe({
-      next: () => {
+      next: (created) => {
         this.pending.set(false);
+        this.createdId.set(created.id);
         this.error.set('');
         this.form.reset();
         this.status.set('Merci, votre message a été envoyé.');
