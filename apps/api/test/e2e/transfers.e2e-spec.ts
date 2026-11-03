@@ -69,6 +69,31 @@ describe('Virements (e2e)', () => {
     expect((await a.call('get', `/api/v1/transfers/${t.id}`).expect(200)).body).toEqual(v2);
   });
 
+  it('PATCH catégorie, sous-catégorie et tags : appliqués aux deux jambes ; null rétablit « Virement »', async () => {
+    const { from, to } = await pair();
+    const { body: t } = await transfer({ fromAccountId: from, toAccountId: to }).expect(201);
+    const groceries = (await prisma.category.findUniqueOrThrow({ where: { nameKey: 'groceries' } })).id;
+    const food = (await prisma.category.findUniqueOrThrow({ where: { nameKey: 'groceries.food' } })).id;
+    const tag = (await a.call('post', '/api/v1/tags').send({ name: `Épargne ${Date.now()}` }).expect(201)).body.id as string;
+
+    const { body: v2 } = await a.call('patch', `/api/v1/transfers/${t.id}`).send({ version: 1, categoryId: groceries, subcategoryId: food, tagIds: [tag] }).expect(200);
+    expect(v2).toEqual({ ...t, version: 2, debit: { ...t.debit, categoryId: food, tagIds: [tag] }, credit: { ...t.credit, categoryId: food, tagIds: [tag] } });
+
+    // Champs absents ⇒ inchangés ; tagIds: [] vide les deux jambes ; categoryId: null ⇒ catégorie système.
+    const { body: v3 } = await a.call('patch', `/api/v1/transfers/${t.id}`).send({ version: 2, categoryId: null, tagIds: [] }).expect(200);
+    expect(v3).toEqual({ ...t, version: 3 });
+    expect((await a.call('patch', `/api/v1/transfers/${t.id}`).send({ version: 3, name: 'Seul le nom' }).expect(200)).body.debit.categoryId).toBe(transferCategory);
+  });
+
+  it('PATCH catégorie : sous-catégorie sans sa catégorie ⇒ 422, tag inconnu ⇒ 404, rien d’écrit', async () => {
+    const { from, to } = await pair();
+    const { body: t } = await transfer({ fromAccountId: from, toAccountId: to }).expect(201);
+    const food = (await prisma.category.findUniqueOrThrow({ where: { nameKey: 'groceries.food' } })).id;
+    await a.call('patch', `/api/v1/transfers/${t.id}`).send({ version: 1, subcategoryId: food }).expect(422);
+    await a.call('patch', `/api/v1/transfers/${t.id}`).send({ version: 1, tagIds: ['00000000-0000-4000-8000-000000000000'] }).expect(404);
+    expect((await a.call('get', `/api/v1/transfers/${t.id}`).expect(200)).body).toEqual(t);
+  });
+
   it('deux PATCH concurrents sur la même version ⇒ un 200, un 409 ; les jambes restent identiques', async () => {
     const { from, to } = await pair();
     const { body: t } = await transfer({ fromAccountId: from, toAccountId: to }).expect(201);

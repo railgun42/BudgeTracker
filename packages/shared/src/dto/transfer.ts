@@ -28,11 +28,17 @@ export interface CreateTransferInput {
 // PATCH /transfers/:id : appliqué aux deux jambes. `version` périmée ⇒ 409.
 // Les jambes ne se modifient pas via PATCH /transactions (422) ; DELETE et restore
 // d'une jambe via /transactions s'appliquent aux deux.
+// `categoryId` (avec `subcategoryId` éventuelle, mêmes règles que PATCH /transactions) remplace la catégorie des
+// deux jambes ; `categoryId: null` rétablit la catégorie système « Virement ». `tagIds` remplace les tags des deux jambes.
+// Les comptes et le sens d'un virement ne changent pas.
 export interface UpdateTransferInput {
   version: number;
   amountCents?: number;
   date?: LocalDate;
   name?: string;
   details?: string | null;
+  categoryId?: string | null;
+  subcategoryId?: string | null;
+  tagIds?: string[];
   countInBalance?: boolean;
 }

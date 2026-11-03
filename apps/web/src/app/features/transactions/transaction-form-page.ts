@@ -16,16 +16,15 @@ import { ApiClient } from '../../core/api-client';
 import { amountValidator } from '../../core/money';
 import { QuickEntry } from '../../core/quick-entry';
 import { today } from '../../core/today';
-import { categoryOptions } from '../../shared-ui/labels';
+import { CategoryFields } from '../../shared-ui/category-fields';
 import { TagInput } from '../../shared-ui/tag-input';
 import { errorMessage } from '../auth/auth-form';
 
 // Saisie en 3 champs (SPEC §7) : montant, catégorie, compte. Date = aujourd'hui, le reste est replié.
-// Catégorie puis sous-catégorie : deux listes liées, toutes deux facultatives (SPEC §3.2).
 // Page (/transactions/new) ou modale de la coquille (« + Transaction »), selon `modal`.
 @Component({
   selector: 'app-transaction-form-page',
-  imports: [ReactiveFormsModule, RouterLink, TagInput],
+  imports: [ReactiveFormsModule, RouterLink, CategoryFields, TagInput],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="entry-head">
@@ -78,27 +77,7 @@ import { errorMessage } from '../auth/auth-form';
         </p>
       </div>
 
-      <div class="field">
-        <label for="tx-category">Catégorie (facultatif)</label>
-        <select id="tx-category" formControlName="categoryId" (change)="form.controls.subcategoryId.setValue('')">
-          <option value="">Sans catégorie</option>
-          @for (c of categories(); track c.id) {
-            <option [value]="c.id">{{ c.label }}</option>
-          }
-        </select>
-      </div>
-
-      @if (subcategories().length) {
-        <div class="field">
-          <label for="tx-subcategory">Sous-catégorie (facultatif)</label>
-          <select id="tx-subcategory" formControlName="subcategoryId">
-            <option value="">Aucune</option>
-            @for (c of subcategories(); track c.id) {
-              <option [value]="c.id">{{ c.label }}</option>
-            }
-          </select>
-        </div>
-      }
+      <app-category-fields idPrefix="tx" [categories]="allCategories()" [category]="form.controls.categoryId" [subcategory]="form.controls.subcategoryId" />
 
       <div class="field">
         <label for="tx-account">Compte</label>
@@ -208,8 +187,7 @@ export class TransactionFormPage {
   protected readonly CREDIT = TransactionType.CREDIT;
 
   protected readonly accounts = signal<AccountDto[]>([]);
-  private readonly allCategories = signal<CategoryDto[]>([]);
-  protected readonly categories = computed(() => categoryOptions(this.allCategories(), null));
+  protected readonly allCategories = signal<CategoryDto[]>([]);
   protected readonly tags = signal<TagDto[]>([]);
   protected readonly tagIds = signal<string[]>([]);
   protected readonly pending = signal(false);
@@ -227,11 +205,6 @@ export class TransactionFormPage {
     countInBalance: [''],
   });
   private readonly value = toSignal(this.form.valueChanges, { initialValue: this.form.value });
-  /** Sous-catégories de la catégorie choisie ; aucune catégorie ⇒ liste masquée. */
-  protected readonly subcategories = computed(() => {
-    const parentId = this.value().categoryId;
-    return parentId ? categoryOptions(this.allCategories(), parentId) : [];
-  });
   // Solde de départ du compte choisi (SPEC §3.3) : avant, hors solde ; le jour même, l'API exige un choix.
   private readonly openingDate = computed(() => this.accounts().find((a) => a.id === this.value().accountId)?.openingDate ?? null);
   protected readonly onOpening = computed(() => this.openingDate() !== null && this.value().date === this.openingDate());

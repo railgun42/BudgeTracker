@@ -287,14 +287,13 @@ describe('Historique : suppression et annulation', () => {
     expect(rows()[0]).toContain('Marché');
   });
 
-  it('jambe de virement : pas de « Modifier », supprimer retire les deux jambes', async () => {
+  it('jambe de virement : supprimer retire les deux jambes', async () => {
     await open([
       tx('d1', { name: 'Épargne', transferId: 'tr1', categoryId: 'c3' }),
       tx('c1', { name: 'Épargne', transferId: 'tr1', categoryId: 'c3', accountId: 'a2', type: TransactionType.CREDIT }),
       tx('t3', { name: 'Pain' }),
     ]);
     expect(rows()[0]).toContain('Virement');
-    expect(button('Modifier Épargne')).toBeUndefined();
 
     button('Supprimer Épargne')!.click();
     http.expectOne('/api/v1/transactions/d1').flush(null, status(204));
@@ -330,10 +329,10 @@ describe('Historique : modification et conflit 409', () => {
     button('Modifier Marché')!.click();
     await stable();
     // Date inchangée, même au jour J : pas de question (l'API ne la redemande pas).
-    expect(el.querySelector('legend')).toBeNull();
+    expect(el.querySelector('.question legend')).toBeNull();
     type('e-date', '2026-10-01');
     await stable();
-    expect(el.querySelector('legend')?.textContent).toBe('Compter dans le solde ?');
+    expect(el.querySelector('.question legend')?.textContent).toBe('Compter dans le solde ?');
     expect(button('Enregistrer')!.disabled).toBe(true);
 
     const radio = el.querySelector<HTMLInputElement>('input[type="radio"][value="false"]')!;
@@ -375,6 +374,164 @@ describe('Historique : modification et conflit 409', () => {
     expect(params(reloaded)).toEqual({});
     expect(el.querySelector('[role="alert"]')).toBeNull();
     expect(el.querySelector('#e-amount')).toBeNull();
+  });
+});
+
+describe('Historique : modification complète (E41d)', () => {
+  const edit = async (label: string) => {
+    button(`Modifier ${label}`)!.click();
+    await stable();
+  };
+  const save = () => button('Enregistrer')!.click();
+  async function addTag(name: string): Promise<void> {
+    const input = el.querySelector<HTMLInputElement>('#e-tags')!;
+    input.value = name;
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
+    await stable();
+  }
+
+  it('catégorie, sous-catégorie, notes et tags préremplis ; modifiés ⇒ dans le PATCH', async () => {
+    await open([tx('t1', { name: 'Marché', details: 'bio', tagIds: ['g1'] })]);
+    await edit('Marché');
+    expect(el.querySelector<HTMLSelectElement>('#e-category')!.value).toBe('c1');
+    expect(el.querySelector<HTMLSelectElement>('#e-subcategory')!.value).toBe('c2');
+    expect(el.querySelector<HTMLTextAreaElement>('#e-details')!.value).toBe('bio');
+    expect([...el.querySelectorAll('.tag-chip > span')].map((c) => c.textContent)).toEqual(['Vacances']);
+
+    type('e-subcategory', '');
+    type('e-details', '  marché du samedi ');
+    el.querySelector<HTMLButtonElement>('.tag-chip button')!.click();
+    await stable();
+    await addTag('Courses');
+    http.expectOne('/api/v1/tags').flush({ id: 'g2', name: 'Courses' });
+    await stable();
+    save();
+
+    const req = http.expectOne('/api/v1/transactions/t1');
+    expect(req.request.body).toEqual({
+      version: 1,
+      amountCents: 1234,
+      name: 'Marché',
+      date: '2026-10-01',
+      details: 'marché du samedi',
+      categoryId: 'c1',
+      tagIds: ['g2'],
+    });
+    req.flush(tx('t1', { name: 'Marché', categoryId: 'c1', details: 'marché du samedi', tagIds: ['g2'], version: 2 }));
+    await stable();
+    expect(rows()[0]).toContain('Courant · Courses');
+  });
+
+  it('catégorie effacée ⇒ categoryId null ; notes vidées ⇒ details null', async () => {
+    await open([tx('t1', { name: 'Marché', details: 'bio' })]);
+    await edit('Marché');
+    type('e-category', '');
+    type('e-details', '');
+    await stable();
+    expect(el.querySelector('#e-subcategory')).toBeNull();
+    save();
+    expect(http.expectOne('/api/v1/transactions/t1').request.body).toMatchObject({ categoryId: null, details: null });
+  });
+
+  it('catégorie technique (non proposée) : conservée, libellée, et non envoyée tant qu’on n’y touche pas', async () => {
+    await open([tx('t1', { name: 'Divers', categoryId: 'c3' })]);
+    await edit('Divers');
+    expect(el.querySelector('#e-category option')!.textContent).toBe('Virement');
+    expect(el.querySelector<HTMLSelectElement>('#e-category')!.value).toBe('');
+    save();
+    expect(http.expectOne('/api/v1/transactions/t1').request.body).not.toHaveProperty('categoryId');
+  });
+
+  it('compte et sens modifiables : envoyés seulement s’ils changent', async () => {
+    await open([tx('t1', { name: 'Marché' })]);
+    await edit('Marché');
+    expect(el.querySelector<HTMLSelectElement>('#e-account')!.value).toBe('a1');
+    expect(el.querySelector('#e-type [aria-pressed="true"]')!.textContent!.trim()).toBe('Dépense');
+    type('e-account', 'a2');
+    [...el.querySelectorAll<HTMLButtonElement>('#e-type button')].find((b) => b.textContent!.trim() === 'Revenu')!.click();
+    await stable();
+    expect(el.querySelector('.amount-sign')!.textContent).toBe('+');
+    save();
+    expect(http.expectOne('/api/v1/transactions/t1').request.body).toMatchObject({ accountId: 'a2', type: 'CREDIT' });
+  });
+
+  it('422 (revenu sur un portefeuille non suivi) ⇒ explication, formulaire conservé', async () => {
+    await open([tx('t1', { name: 'Marché' })]);
+    await edit('Marché');
+    save();
+    http.expectOne('/api/v1/transactions/t1').flush(null, status(422));
+    await stable();
+    expect(text('[role="alert"]')).toContain('portefeuille non suivi');
+    expect(el.querySelector('#e-amount')).not.toBeNull();
+  });
+
+  it('déplacer sur le compte dont le solde de départ tombe ce jour-là redemande le choix', async () => {
+    await open([tx('t1', { name: 'Marché', date: '2026-10-01' })], null, [ACCOUNTS[0], { ...ACCOUNTS[1], openingDate: '2026-10-01' }]);
+    await edit('Marché');
+    expect(el.querySelector('.question legend')).toBeNull();
+    type('e-account', 'a2');
+    await stable();
+    expect(el.querySelector('.question legend')?.textContent).toBe('Compter dans le solde ?');
+  });
+
+  describe('virement', () => {
+    const legs = () => [
+      tx('d1', { name: 'Épargne', transferId: 'tr1', categoryId: 'c3', version: 7 }),
+      tx('k1', { name: 'Épargne', transferId: 'tr1', categoryId: 'c3', accountId: 'a2', type: TransactionType.CREDIT, version: 7 }),
+    ];
+    const transferDto = () => ({ id: 'tr1', version: 3, debit: legs()[0], credit: legs()[1] });
+
+    it('Modifier lit le virement (son verrou), cache sens et compte, PATCH /transfers aux deux jambes', async () => {
+      await open(legs());
+      button('Modifier Épargne')!.click();
+      http.expectOne('/api/v1/transfers/tr1').flush(transferDto());
+      await stable();
+
+      expect(el.querySelector('#e-account')).toBeNull();
+      expect(el.querySelector('#e-type')).toBeNull();
+      expect(el.querySelector('#e-category option')!.textContent).toBe('Virement (par défaut)');
+      type('e-category', 'c1');
+      await stable();
+      type('e-amount', '50');
+      await addTag('vacances');
+      save();
+
+      const req = http.expectOne('/api/v1/transfers/tr1');
+      expect(req.request.method).toBe('PATCH');
+      expect(req.request.body).toEqual({ version: 3, amountCents: 5000, name: 'Épargne', date: '2026-10-01', categoryId: 'c1', tagIds: ['g1'] });
+      const updated = { amountCents: 5000, categoryId: 'c1', tagIds: ['g1'] };
+      req.flush({ id: 'tr1', version: 4, debit: { ...legs()[0], ...updated }, credit: { ...legs()[1], ...updated } });
+      await stable();
+
+      expect(el.querySelector('#e-amount')).toBeNull();
+      expect(rows()).toHaveLength(2);
+      expect(rows().every((r) => r.includes('50,00 €') && r.includes('Courses'))).toBe(true);
+    });
+
+    it('409 sur le virement ⇒ message et « Recharger »', async () => {
+      await open(legs());
+      button('Modifier Épargne')!.click();
+      http.expectOne('/api/v1/transfers/tr1').flush(transferDto());
+      await stable();
+      save();
+      http.expectOne('/api/v1/transfers/tr1').flush(null, status(409));
+      await stable();
+      expect(text('[role="alert"]')).toContain('modifiée depuis un autre écran');
+      expect(button('Recharger')).toBeDefined();
+    });
+
+    it('catégorie personnalisée effacée ⇒ categoryId null (retour à « Virement »)', async () => {
+      const leg = tx('d1', { name: 'Épargne', transferId: 'tr1', categoryId: 'c1', version: 7 });
+      await open([leg]);
+      button('Modifier Épargne')!.click();
+      http.expectOne('/api/v1/transfers/tr1').flush({ ...transferDto(), debit: leg });
+      await stable();
+      expect(el.querySelector<HTMLSelectElement>('#e-category')!.value).toBe('c1');
+      type('e-category', '');
+      save();
+      expect(http.expectOne('/api/v1/transfers/tr1').request.body).toMatchObject({ categoryId: null });
+    });
   });
 });
 

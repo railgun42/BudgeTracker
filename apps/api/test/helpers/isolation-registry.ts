@@ -450,6 +450,14 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
   'PATCH /api/v1/transfers/:id': async (users) => {
     const { id, intact } = await transferOfB(users);
     await users.a.call('patch', `/api/v1/transfers/${id}`).send({ version: 1, amountCents: 1 }).expect(404);
+    // Son propre virement, rattaché à une catégorie ou un tag de B ⇒ 404, rien d'écrit.
+    const { id: categoryId } = await categoryOfB(users);
+    const { tagId } = await transactionOfB(users);
+    const [from, to] = [await accountOfA(users), await accountOfA(users)];
+    const { body: own } = await users.a.call('post', '/api/v1/transfers').send({ fromAccountId: from, toAccountId: to, amountCents: 100, date: '2026-03-01' }).expect(201);
+    await users.a.call('patch', `/api/v1/transfers/${own.id}`).send({ version: 1, categoryId }).expect(404);
+    await users.a.call('patch', `/api/v1/transfers/${own.id}`).send({ version: 1, tagIds: [tagId] }).expect(404);
+    expect((await users.a.call('get', `/api/v1/transfers/${own.id}`).expect(200)).body).toEqual(own);
     await intact();
   },
   'GET /api/v1/recurrences': async (users) => {

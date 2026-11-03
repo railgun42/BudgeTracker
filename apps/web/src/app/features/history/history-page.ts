@@ -14,14 +14,18 @@ import {
   TransactionListQuery,
   TransactionPage,
   TransactionType,
+  TransferDto,
   UNCATEGORIZED,
   UpdateTransactionInput,
+  UpdateTransferInput,
 } from '@budgetracker/shared';
 import { debounceTime, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api-client';
 import { amountValidator, SignedEurPipe } from '../../core/money';
+import { CategoryFields } from '../../shared-ui/category-fields';
 import { categoryIcon, NO_CATEGORY_ICON } from '../../shared-ui/category-icons';
-import { categoryLabel, NO_CATEGORY_LABEL } from '../../shared-ui/labels';
+import { categoryLabel, categoryOptions, NO_CATEGORY_LABEL } from '../../shared-ui/labels';
+import { TagInput } from '../../shared-ui/tag-input';
 import { UndoBanner } from '../../shared-ui/undo-banner';
 import { errorMessage } from '../auth/auth-form';
 import { AttachmentControl } from '../transactions/attachment-control';
@@ -29,6 +33,9 @@ import { AttachmentControl } from '../transactions/attachment-control';
 type GroupBy = 'day' | 'week' | 'month';
 
 export const FILTER_DELAY_MS = 300;
+
+/** Choix vide de la catégorie d'un virement : ses jambes retrouvent la catégorie système « Virement ». */
+const TRANSFER_DEFAULT_LABEL = 'Virement (par défaut)';
 
 // Affichage seulement : les dates restent 'YYYY-MM-DD' ; lues en UTC pour ne jamais changer de jour.
 const DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -46,7 +53,7 @@ function monday(date: string): string {
 // Historique paginé par curseur (50 par page côté API, « Charger plus »), filtres date/catégorie/tag/compte (SPEC §7).
 @Component({
   selector: 'app-history-page',
-  imports: [ReactiveFormsModule, RouterLink, SignedEurPipe, UndoBanner, AttachmentControl],
+  imports: [ReactiveFormsModule, RouterLink, SignedEurPipe, UndoBanner, AttachmentControl, CategoryFields, TagInput],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <h1>Historique des transactions</h1>
@@ -145,11 +152,25 @@ function monday(date: string): string {
               <li class="row">
                 @if (editing()?.id === t.id) {
                   <form class="form" [formGroup]="editForm" (ngSubmit)="save(t)" novalidate>
+                    <!-- Le sens et le compte d'un virement ne changent pas (les deux jambes sont liées). -->
+                    @if (!transfer()) {
+                      <fieldset class="field">
+                        <legend>Sens</legend>
+                        <div id="e-type" class="segmented">
+                          <button type="button" [attr.aria-pressed]="editForm.controls.type.value === DEBIT" (click)="editForm.controls.type.setValue(DEBIT)">
+                            Dépense
+                          </button>
+                          <button type="button" [attr.aria-pressed]="editForm.controls.type.value === CREDIT" (click)="editForm.controls.type.setValue(CREDIT)">
+                            Revenu
+                          </button>
+                        </div>
+                      </fieldset>
+                    }
                     <div class="field">
                       <label for="e-amount">Montant (€)</label>
-                      <!-- Le sens ne change pas ici : le signe le rappelle, en caractère et en couleur. -->
+                      <!-- Signe selon le sens : la couleur ne porte jamais seule l'information. -->
                       <div class="amount-input">
-                        @if (t.type === CREDIT) {
+                        @if (editForm.controls.type.value === CREDIT) {
                           <span class="amount-sign credit" aria-hidden="true">+</span>
                         } @else {
                           <span class="amount-sign debit" aria-hidden="true">−</span>
@@ -175,6 +196,22 @@ function monday(date: string): string {
                       <label for="e-date">Date</label>
                       <input id="e-date" type="date" formControlName="date" />
                     </div>
+                    @if (!transfer()) {
+                      <div class="field">
+                        <label for="e-account">Compte</label>
+                        <select id="e-account" formControlName="accountId">
+                          @for (a of accounts(); track a.id) {
+                            <option [value]="a.id">{{ a.name }}</option>
+                          }
+                        </select>
+                      </div>
+                    }
+                    <app-category-fields idPrefix="e" [categories]="categories()" [category]="editForm.controls.categoryId" [subcategory]="editForm.controls.subcategoryId" [emptyLabel]="editEmptyLabel()" />
+                    <div class="field wide">
+                      <label for="e-details">Notes</label>
+                      <textarea id="e-details" formControlName="details" maxlength="1000" rows="3"></textarea>
+                    </div>
+                    <app-tag-input inputId="e-tags" [(tags)]="tags" [(value)]="editTagIds" />
                     @if (editOnOpening()) {
                       <fieldset class="field question" aria-describedby="e-count-hint">
                         <legend>Compter dans le solde ?</legend>
@@ -210,12 +247,9 @@ function monday(date: string): string {
                     {{ (t.type === CREDIT ? t.amountCents : -t.amountCents) | signedEur }}
                   </span>
                   <div class="actions">
-                    <!-- Jambe de virement : modifiable seulement via /transfers (une version pour les deux jambes). -->
-                    @if (!t.transferId) {
-                      <button type="button" class="button button-secondary" (click)="edit(t)">
-                        Modifier<span class="visually-hidden"> {{ label(t) }}</span>
-                      </button>
-                    }
+                    <button type="button" class="button button-secondary" (click)="edit(t)">
+                      Modifier<span class="visually-hidden"> {{ label(t) }}</span>
+                    </button>
                     <button type="button" class="button button-secondary" (click)="remove(t)">
                       Supprimer<span class="visually-hidden"> {{ label(t) }}</span>
                     </button>
@@ -367,6 +401,8 @@ function monday(date: string): string {
           grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
           align-items: start;
           > .question,
+          > .wide,
+          > app-tag-input,
           > .actions {
             grid-column: 1 / -1;
           }
@@ -393,13 +429,14 @@ export class HistoryPage {
   protected readonly linked = ['from', 'to', 'accountId'].some((k) => this.linkedFilters.has(k));
 
   protected readonly CREDIT = TransactionType.CREDIT;
+  protected readonly DEBIT = TransactionType.DEBIT;
   protected readonly UNCATEGORIZED = UNCATEGORIZED;
   protected readonly NO_CATEGORY_LABEL = NO_CATEGORY_LABEL;
   protected readonly day = dayLabel;
 
   protected readonly accounts = signal<AccountDto[]>([]);
   protected readonly tags = signal<TagDto[]>([]);
-  private readonly categories = signal<CategoryDto[]>([]);
+  protected readonly categories = signal<CategoryDto[]>([]);
   private readonly categoryById = computed(() => new Map(this.categories().map((c) => [c.id, c])));
   protected readonly accountNames = computed(() => Object.fromEntries(this.accounts().map((a) => [a.id, a.name])));
   /** Libellé « Parent › Enfant ». */
@@ -460,14 +497,29 @@ export class HistoryPage {
     amount: ['', [Validators.required, amountValidator]],
     name: ['', Validators.maxLength(100)],
     date: ['', Validators.required],
+    type: [TransactionType.DEBIT],
+    accountId: ['', Validators.required],
+    categoryId: [''],
+    subcategoryId: [''],
+    details: ['', Validators.maxLength(1000)],
     countInBalance: [''],
   });
+  protected readonly editTagIds = signal<string[]>([]);
+  /** Virement en cours d'édition (sa `version` est le verrou des deux jambes) ; null pour une transaction ordinaire. */
+  protected readonly transfer = signal<TransferDto | null>(null);
+  protected readonly editEmptyLabel = signal(NO_CATEGORY_LABEL);
+  /** Catégorie telle que préremplie : seule une catégorie touchée est envoyée (une technique ou masquée reste intacte). */
+  private initialCategory = { categoryId: '', subcategoryId: '' };
   private readonly editValue = toSignal(this.editForm.valueChanges, { initialValue: this.editForm.value });
-  // Déplacée sur le jour du solde de départ de son compte : l'API exige le choix (SPEC §3.3).
+  // Déplacée (date ou compte) sur le jour du solde de départ du compte visé : l'API exige le choix (SPEC §3.3).
   protected readonly editOnOpening = computed(() => {
     const t = this.editing();
-    const date = this.editValue().date;
-    return !!t && date !== t.date && date === this.accounts().find((a) => a.id === t.accountId)?.openingDate;
+    if (!t) return false;
+    const { date, accountId } = this.editValue();
+    const transfer = this.transfer();
+    const accountIds = transfer ? [transfer.debit.accountId, transfer.credit?.accountId] : [accountId];
+    const moved = date !== t.date || (!transfer && accountId !== t.accountId);
+    return moved && !!date && accountIds.some((id) => this.accounts().find((a) => a.id === id)?.openingDate === date);
   });
   protected readonly editChoiceMissing = computed(() => this.editOnOpening() && !this.editValue().countInBalance);
 
@@ -556,28 +608,82 @@ export class HistoryPage {
   }
 
   protected edit(t: TransactionDto): void {
+    if (!t.transferId) return this.open(t, null);
+    // Le verrou d'un virement est sa propre version, pas celle de la jambe : on la lit avant d'éditer.
+    this.error.set(null);
+    this.api.get<TransferDto>(`/transfers/${t.transferId}`).subscribe({ next: (transfer) => this.open(t, transfer), error: (e) => this.fail(e) });
+  }
+
+  private open(t: TransactionDto, transfer: TransferDto | null): void {
+    const { categoryId, subcategoryId, emptyLabel } = this.placeCategory(t, !!transfer);
+    this.initialCategory = { categoryId, subcategoryId };
+    this.editEmptyLabel.set(emptyLabel);
+    this.editTagIds.set(t.tagIds);
+    this.transfer.set(transfer);
     this.editing.set(t);
-    this.editForm.reset({ amount: centsToEuros(t.amountCents), name: t.name, date: t.date, countInBalance: '' });
+    this.editForm.reset({
+      amount: centsToEuros(t.amountCents),
+      name: t.name,
+      date: t.date,
+      type: t.type,
+      accountId: t.accountId,
+      categoryId,
+      subcategoryId,
+      details: t.details ?? '',
+      countInBalance: '',
+    });
+  }
+
+  /** Catégorie de la ligne en catégorie + sous-catégorie ; hors des listes (technique, masquée, archivée) ⇒ choix vide, libellé par la catégorie actuelle. */
+  private placeCategory(t: TransactionDto, isTransfer: boolean): { categoryId: string; subcategoryId: string; emptyLabel: string } {
+    const current = t.categoryId ? this.categoryById().get(t.categoryId) : undefined;
+    const parent = current?.parentId ? this.categoryById().get(current.parentId) : undefined;
+    const [root, sub] = parent ? [parent, current] : [current, undefined];
+    const all = this.categories();
+    if (root && categoryOptions(all, null).some((c) => c.id === root.id) && (!sub || categoryOptions(all, root.id).some((c) => c.id === sub.id)))
+      return { categoryId: root.id, subcategoryId: sub?.id ?? '', emptyLabel: isTransfer ? TRANSFER_DEFAULT_LABEL : NO_CATEGORY_LABEL };
+    const emptyLabel = isTransfer ? TRANSFER_DEFAULT_LABEL : (current && this.categoryLabels()[current.id]) || NO_CATEGORY_LABEL;
+    return { categoryId: '', subcategoryId: '', emptyLabel };
   }
 
   protected save(t: TransactionDto): void {
     if (this.editForm.invalid || this.editChoiceMissing()) return;
-    const { amount, name, date, countInBalance } = this.editForm.getRawValue();
-    const body: UpdateTransactionInput = {
-      version: t.version,
-      amountCents: eurosToCents(amount)!,
-      name: name.trim(),
-      date,
-      ...(this.editOnOpening() ? { countInBalance: countInBalance === 'true' } : {}),
+    const f = this.editForm.getRawValue();
+    const transfer = this.transfer();
+    const tagIds = this.editTagIds();
+    const categoryChanged = f.categoryId !== this.initialCategory.categoryId || f.subcategoryId !== this.initialCategory.subcategoryId;
+    const sameTags = tagIds.length === t.tagIds.length && tagIds.every((id) => t.tagIds.includes(id));
+    // Champs communs aux deux routes ; catégorie, notes et tags ne partent que s'ils ont changé (catégorie effacée ⇒ null).
+    const common = {
+      amountCents: eurosToCents(f.amount)!,
+      name: f.name.trim(),
+      date: f.date,
+      ...(f.details.trim() === (t.details ?? '').trim() ? {} : { details: f.details.trim() || null }),
+      ...(categoryChanged ? { categoryId: f.categoryId || null, ...(f.categoryId && f.subcategoryId ? { subcategoryId: f.subcategoryId } : {}) } : {}),
+      ...(sameTags ? {} : { tagIds }),
+      ...(this.editOnOpening() ? { countInBalance: f.countInBalance === 'true' } : {}),
     };
     this.error.set(null);
-    this.api.patch<TransactionDto>(`/transactions/${t.id}`, body).subscribe({
-      next: (updated) => {
-        this.editing.set(null);
-        this.items.update((list) => list.map((x) => (x.id === updated.id ? updated : x)));
-      },
-      error: (e) => this.fail(e),
-    });
+    if (transfer) {
+      const body: UpdateTransferInput = { version: transfer.version!, ...common };
+      this.api.patch<TransferDto>(`/transfers/${transfer.id}`, body).subscribe({
+        next: (updated) => this.afterSave([updated.debit, ...(updated.credit ? [updated.credit] : [])]),
+        error: (e) => this.fail(e),
+      });
+      return;
+    }
+    const body: UpdateTransactionInput = {
+      version: t.version,
+      ...common,
+      ...(f.accountId === t.accountId ? {} : { accountId: f.accountId }),
+      ...(f.type === t.type ? {} : { type: f.type }),
+    };
+    this.api.patch<TransactionDto>(`/transactions/${t.id}`, body).subscribe({ next: (updated) => this.afterSave([updated]), error: (e) => this.fail(e) });
+  }
+
+  private afterSave(updated: TransactionDto[]): void {
+    this.editing.set(null);
+    this.items.update((list) => list.map((x) => updated.find((u) => u.id === x.id) ?? x));
   }
 
   protected setAttachment(t: TransactionDto, attachment: AttachmentDto | null): void {
@@ -609,6 +715,7 @@ export class HistoryPage {
         400: 'Filtres ou montant invalides.',
         404: 'Cette transaction n’existe plus. Rechargez la liste.',
         409: 'Cette transaction a été modifiée depuis un autre écran. Rechargez pour voir la dernière version.',
+        422: 'Modification refusée : un portefeuille non suivi n’accepte que des dépenses.',
       }),
     );
   }

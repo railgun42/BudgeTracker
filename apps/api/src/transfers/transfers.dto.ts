@@ -1,6 +1,6 @@
 import { CreateTransferInput, LocalDate, UpdateTransferInput } from '@budgetracker/shared';
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { IsLocalDate } from '../common/is-local-date';
 
 const trim = ({ value }: TransformFnParams) => (typeof value === 'string' ? value.trim() : value);
@@ -62,6 +62,22 @@ export class UpdateTransferDto implements UpdateTransferInput {
   @IsString()
   @MaxLength(1000)
   details?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  subcategoryId?: string | null;
+
+  @Present()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  tagIds?: string[];
+
   @Present()
   @IsBoolean()
   countInBalance?: boolean;

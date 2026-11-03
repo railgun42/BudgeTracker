@@ -1,14 +1,17 @@
 import { ConflictException, Injectable, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { TrackingType, TransactionType, TransferDto } from '@budgetracker/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { checkBalanceChoice, include, toDate, toTransactionDto } from '../transactions/transactions.service';
+import { checkBalanceChoice, include, toDate, toTransactionDto, TransactionsService } from '../transactions/transactions.service';
 import { CreateTransferDto, UpdateTransferDto } from './transfers.dto';
 
 // Une opération, deux transactions jumelées par transferId ; Transfer.version est le seul verrou (SPEC §3.4).
 // La suppression/restauration d'une jambe passe par TransactionsService (appliquée aux deux).
 @Injectable()
 export class TransfersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly transactions: TransactionsService,
+  ) {}
 
   private async account(userId: string, id: string) {
     const account = await this.prisma.account.findFirst({ where: { id, userId, deletedAt: null } });
@@ -61,17 +64,28 @@ export class TransfersService {
 
   // Verrou optimiste sur le Transfer : de deux PATCH sur la même version, le second ne trouve plus
   // la ligne (Postgres réévalue le WHERE après le verrou) ⇒ 409, et aucune jambe n'est écrite.
-  async update(userId: string, id: string, { version, amountCents, date, ...rest }: UpdateTransferDto): Promise<TransferDto> {
+  async update(userId: string, id: string, { version, amountCents, date, categoryId, subcategoryId, tagIds, ...rest }: UpdateTransferDto): Promise<TransferDto> {
     const { debit, credit } = await this.get(userId, id);
     if (date && date !== debit.date)
       for (const leg of [debit, credit!]) await checkBalanceChoice(this.prisma, userId, leg.accountId, date, rest.countInBalance ?? leg.countInBalance);
+    // Catégorie absente ⇒ inchangée ; effacée ⇒ catégorie système « Virement » ; sinon règles de PATCH /transactions.
+    const category =
+      categoryId === undefined && !subcategoryId
+        ? undefined
+        : ((await this.transactions.resolveCategory(userId, categoryId, subcategoryId)) ?? (await this.prisma.category.findUniqueOrThrow({ where: { nameKey: 'transfer' } })).id);
+    if (tagIds) await this.transactions.checkTags(userId, tagIds);
     await this.prisma.$transaction(async (tx) => {
       const { count } = await tx.transfer.updateMany({ where: { id, userId, deletedAt: null, version }, data: { version: { increment: 1 } } });
       if (count === 0) throw new ConflictException('Le virement a été modifié entre-temps');
       await tx.transaction.updateMany({
         where: { transferId: id, userId },
-        data: { ...rest, date: date && toDate(date), amountCents: amountCents === undefined ? undefined : BigInt(amountCents) },
+        data: { ...rest, categoryId: category, date: date && toDate(date), amountCents: amountCents === undefined ? undefined : BigInt(amountCents) },
       });
+      if (tagIds) {
+        const legs = [debit.id, credit!.id];
+        await tx.transactionTag.deleteMany({ where: { transactionId: { in: legs } } });
+        await tx.transactionTag.createMany({ data: legs.flatMap((transactionId) => tagIds.map((tagId) => ({ transactionId, tagId }))) });
+      }
     });
     return this.get(userId, id);
   }
