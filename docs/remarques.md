@@ -30,7 +30,7 @@
 - **Constat** : Le champs tags est manquant
 - **Souhait** : Un champs texte pour y ajouter des tags (écrire un/des mots, puis appuyer sur entrer pour créer une "etiquette" avec une croix pour la retirer si besoin, pouvoir mettre plusieur tags)
 - **Priorité** : moyen
-- **Statut** : planifiée (E41c)
+- **Statut** : fait (E41c, 2026-11-03)
 
 ---
 

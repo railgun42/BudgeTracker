@@ -108,7 +108,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ### Suivi : ce qu'il reste à faire, dans l'ordre
 
-E0 à E41b sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E41c et E41d (remarques R-1 et R-2) passent **avant** la fin d'E43 ; E42 reste bloquée. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+E0 à E41c sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E41d (remarque R-1) passe **avant** la fin d'E43 ; E42 reste bloquée. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
 
 | Étape | Sujet | Dépend de |
 |---|---|---|
@@ -393,7 +393,7 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Vérif : `test/e2e/documents.e2e-spec.ts` (liste, corbeille, dépôt 415/400/422, URL et nom téléchargé encodé, tags remplacés / dédoublonnés / tag supprimé, suppression base + S3), isolation, `gdpr.e2e-spec.ts` (export, reset, suppression) ; `vault-page.spec.ts`, `history-page.spec.ts` (lien entrant).
 - Non fait : rattacher un dépôt direct à une transaction, pagination de la liste (supportable jusqu'à quelques milliers de documents), vignettes.
 
-**E41c — Champ tags en puces (remarque R-2)**
+**E41c — Champ tags en puces (remarque R-2)** ✅ (2026-11-03)
 - Constat vérifié : l'API accepte déjà `tagIds` à la création (`transactions.dto.ts`) et `POST /tags` existe, mais `transaction-form-page.ts` n'a aucun champ tags (seul le filtre de l'historique les utilise). Étape purement front, sans migration ni nouvel endpoint.
 - Objectif : composant partagé de saisie de tags : texte libre, Entrée crée une puce (réutilise le tag existant de même nom, sinon `POST /tags`), croix pour la retirer, plusieurs tags, suggestions des tags existants, accessible au clavier (`aria-label` sur la croix, annonce de l'ajout/retrait). Intégré à « Nouvelle transaction » (bloc `details.more`, à côté des notes, aussi en modale).
 - Fichiers : `apps/web/src/app/shared-ui/tag-input.ts` (+ spec), `features/transactions/transaction-form-page.ts`.
