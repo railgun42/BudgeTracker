@@ -15,8 +15,10 @@ export const SYSTEM_CATEGORIES: Record<string, string[]> = {
   sport: ['subscription', 'license', 'session', 'equipment'],
   groceries: ['food', 'clothing', 'hygiene'],
   housing: ['rent', 'utilities', 'insurance'],
-  transport: ['fuel', 'public_transport', 'maintenance'],
+  transport: ['fuel', 'public_transport', 'maintenance', 'carpooling'],
   health: ['doctor', 'pharmacy'],
+  dining: ['fast_food', 'restaurant', 'snack'],
+  state: ['social_aid', 'taxes', 'fines', 'administrative_fees'],
   income: ['salary', 'refund'],
 };
 

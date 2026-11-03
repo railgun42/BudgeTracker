@@ -8,6 +8,8 @@ const CATEGORY_ICONS: Record<string, string> = {
   housing: 'M4 11l8-7 8 7M6 9.5V20h12V9.5M10 20v-5h4v5',
   transport: 'M4 16v-4l2-5h12l2 5v4zM4 12h16M7 16v2.5M17 16v2.5',
   health: 'M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z',
+  dining: 'M5 3v5a3 3 0 0 0 6 0V3M8 11v10M16 21V3c-2.2 1.2-3.5 3.6-3.5 6.5 0 1.8 1.4 3 3.5 3',
+  state: 'M3 9l9-5 9 5zM6 12v5M10 12v5M14 12v5M18 12v5M4 20h16',
   income: 'M12 4v10M7.5 9.5L12 14l4.5-4.5M4 15v4h16v-4',
   // Techniques (posées par le serveur) : visibles dans l'historique seulement.
   transfer: 'M4 8h15M15 4l4 4-4 4M20 16H5M9 12l-4 4 4 4',
