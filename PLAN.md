@@ -108,7 +108,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ### Suivi : ce qu'il reste à faire, dans l'ordre
 
-E0 à E29c sont terminées. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+E0 à E41b sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E41c et E41d (remarques R-1 et R-2) passent **avant** la fin d'E43 ; E42 reste bloquée. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
 
 | Étape | Sujet | Dépend de |
 |---|---|---|
@@ -124,8 +124,10 @@ E0 à E29c sont terminées. **Les numéros suivent l'ordre d'exécution** : on p
 | E39 | Retours utilisateurs et boîte de réception admin | E37 |
 | E40 | Notifications (cloche) et annonces | E37 |
 | E41 | Suggestion de catégorie et réponse à l'auteur | E36, E38, E40 |
+| E41c | Champ tags en puces dans la saisie de transaction (R-2) | E41b |
+| E41d | Modification complète d'une transaction dans l'historique (R-1) | E41c |
 | E42 | Tableau de bord (**bloquée** : à décrire par le propriétaire) | E30, E31, E34 |
-| E43 | Refonte du style | toutes les fonctionnalités (E30 à E41, et E42 si décrite) |
+| E43 | Refonte du style (inclut R-3, R-4, R-5 de `docs/remarques.md`) | toutes les fonctionnalités (E30 à E41d, et E42 si décrite) |
 | E44 | Conteneurs et déploiement (début du passage au serveur OVH) | E43 |
 | E45 | Sauvegardes | E44 |
 | E46 | Supervision et check-list de lancement | E45 |
@@ -391,12 +393,29 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Vérif : `test/e2e/documents.e2e-spec.ts` (liste, corbeille, dépôt 415/400/422, URL et nom téléchargé encodé, tags remplacés / dédoublonnés / tag supprimé, suppression base + S3), isolation, `gdpr.e2e-spec.ts` (export, reset, suppression) ; `vault-page.spec.ts`, `history-page.spec.ts` (lien entrant).
 - Non fait : rattacher un dépôt direct à une transaction, pagination de la liste (supportable jusqu'à quelques milliers de documents), vignettes.
 
+**E41c — Champ tags en puces (remarque R-2)**
+- Constat vérifié : l'API accepte déjà `tagIds` à la création (`transactions.dto.ts`) et `POST /tags` existe, mais `transaction-form-page.ts` n'a aucun champ tags (seul le filtre de l'historique les utilise). Étape purement front, sans migration ni nouvel endpoint.
+- Objectif : composant partagé de saisie de tags : texte libre, Entrée crée une puce (réutilise le tag existant de même nom, sinon `POST /tags`), croix pour la retirer, plusieurs tags, suggestions des tags existants, accessible au clavier (`aria-label` sur la croix, annonce de l'ajout/retrait). Intégré à « Nouvelle transaction » (bloc `details.more`, à côté des notes, aussi en modale).
+- Fichiers : `apps/web/src/app/shared-ui/tag-input.ts` (+ spec), `features/transactions/transaction-form-page.ts`.
+- Vérif : `tag-input.spec.ts` (Entrée crée, doublon ignoré sans tenir compte de la casse, croix retire, champ vide ignoré) ; `transaction-form-page.spec.ts` (le POST envoie `tagIds`) ; parcours manuel mobile et bureau ; `ng test`, `ng build` verts.
+
+**E41d — Modification complète d'une transaction (remarque R-1)**
+- Constat vérifié : `PATCH /transactions/:id` accepte déjà `categoryId`, `subcategoryId`, `details`, `tagIds`, `accountId`, `type` (`UpdateTransactionInput`) ; seul le formulaire d'édition de `history-page.ts` est limité à montant, libellé et date. Étape front (aucune migration). Les jambes de virement restent modifiées via `/transfers/:id` (inchangé).
+- Objectif : le formulaire d'édition de l'historique propose aussi catégorie puis sous-catégorie, notes et tags (composant d'E41c), préremplis ; le compte et le type restent non modifiables ici (hors souhait R-1, à demander si voulu). Un `version` périmé (409) propose de recharger ; effacer la catégorie envoie `categoryId: null`.
+- Fichiers : `features/history/history-page.ts` (+ spec). Réutiliser les sélecteurs de catégorie du formulaire de création, sans les dupliquer.
+- Vérif : `history-page.spec.ts` (le PATCH contient catégorie, sous-catégorie, notes, tags modifiés ; catégorie effacée ⇒ `null` ; 409 géré) ; e2e API existant couvre déjà ces champs, sinon l'ajouter à `transactions.e2e-spec.ts` ; contrôle manuel mobile et bureau.
+
 **E42 — Tableau de bord**
 - **Bloquée : attentes à décrire par l'utilisateur.** Ne pas démarrer avant la rédaction du besoin (contenu, indicateurs, comptes concernés) ; l'ajouter alors à SPEC §7 et détailler l'étape. Dépend d'E30, E31 et E34 pour ses chiffres.
 
 **E43 — Refonte du style (dernière étape fonctionnelle)**
 - Objectif : à faire **une fois toutes les fonctionnalités présentes** : couleurs, polices, dispositions, images, actions (modales pour certains formulaires, menus déroulants…). Une charte (tokens couleurs, typographie, composants) est fixée d'abord, puis appliquée écran par écran ; accessibilité AA conservée (`apps/web/.claude/CLAUDE.md`).
 - Fichiers : `apps/web/src/styles.scss`, `shared-ui/*`, templates des `features/*`.
+- Remarques d'usage rattachées (`docs/remarques.md`), à traiter dans cette étape :
+  - **R-3 — Statistiques qui débordent à droite sur mobile (/stats, 360 px).** Cause probable vérifiée : `.stats-section table { min-width: 22rem }` dans `stats-page.ts` (352 px + marges > 360 px). Corriger (tableau scrollable dans un conteneur `overflow-x: auto` ou colonnes réduites) et contrôler donut et histogramme.
+  - **R-4 — Barre du haut trop chargée sur mobile.** Aujourd'hui `app.html` y place menu, marque, cloche, « + Transaction » et avatar. Sur mobile seulement : cloche et « Mon compte » (avec Donner mon avis, thème, déconnexion) passent dans le menu déroulant de navigation ; la pastille rouge de notification s'affiche aussi sur le bouton du menu. Bureau inchangé.
+  - **R-5 — Indice de dépliage sur « Solde jour par jour » (/simulations).** Le `<summary>` de `cashflow-page.ts` est en `display: flex` : le marqueur natif disparaît. Ajouter un chevron (haut/bas selon `open`), purement CSS, sans changer la logique ; vérifier si d'autres `<details>` (filtres de l'historique) ont le même défaut.
+  - Vérif de ces trois points : parcours à 360 px sans défilement horizontal (/stats), pastille visible sur le bouton du menu mobile, chevron qui change d'état au clavier et à la souris.
 - Vérif : `ng test` et `ng build` verts, parcours manuel complet mobile et bureau, contrastes vérifiés ; aucune logique métier modifiée (diff limité aux templates/styles).
 
 ### Phase 11 — Déploiement, sauvegardes, supervision (SPEC §11.7)
