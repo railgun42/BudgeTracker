@@ -1111,9 +1111,10 @@ td.num {
 // Mobile : cloche et menu du compte quittent la barre du haut. Le composant de la cloche reste dans la page :
 // c'est lui qui relit les notifications à chaque navigation.
 @media (max-width: 47.99rem) {
+  // `button.avatar` : plus spécifique que le `display: inline-grid` de .avatar dans app.scss (ordre des feuilles non garanti).
   .header-actions {
     app-notification-bell,
-    .avatar {
+    button.avatar {
       display: none;
     }
   }
