@@ -15,6 +15,7 @@ import { AuthModule } from './auth/auth.module';
 import { BalanceModule } from './balance/balance.module';
 import { CategoriesModule } from './categories/categories.module';
 import { CsrfGuard } from './common/csrf.guard';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { FeedbackController } from './feedback/feedback.controller';
 import { FeedbackService } from './feedback/feedback.service';
 import { GdprController } from './gdpr/gdpr.controller';
@@ -42,7 +43,7 @@ import { TransfersModule } from './transfers/transfers.module';
 import { UsersController } from './users/users.controller';
 
 @Module({
-  imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule, RecurrencesModule, InterestModule, StorageModule, AttachmentsModule, StatsModule],
+  imports: [ScheduleModule.forRoot(), PrismaModule, AuthModule, AccountsModule, BalanceModule, CategoriesModule, TagsModule, TransactionsModule, TransfersModule, RecurrencesModule, InterestModule, StorageModule, AttachmentsModule, StatsModule, DashboardModule],
   controllers: [HealthController, AdminController, AdminCategoriesController, AdminFeedbackController, AdminNotificationsController, AdminSuggestionsController, UsersController, SimulationsController, CashflowSimulationsController, ScenariosController, FeedbackController, NotificationsController, GdprController],
   // CSRF global : toute nouvelle route non sûre est protégée par défaut.
   providers: [{ provide: APP_GUARD, useClass: CsrfGuard }, AdminService, AdminCategoriesService, AdminSuggestionsService, PurgeJob, RecurrenceJob, InterestJob, SimulationsService, CashflowSimulationsService, ScenariosService, FeedbackService, NotificationsService, GdprService],

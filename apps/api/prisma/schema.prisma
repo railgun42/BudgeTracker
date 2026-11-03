@@ -87,6 +87,7 @@ model User {
   notifications       Notification[]
   announcementReads   AnnouncementRead[]
   categorySuggestions CategorySuggestion[]
+  dashboardPreference DashboardPreference?
 }
 
 // Journal des actions d'administration (SPEC §13.1) : qui, quoi, quand ; jamais de donnée financière ni d'e-mail.
@@ -533,4 +534,16 @@ model CategorySuggestion {
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([categoryId])
+}
+
+// Préférences du tableau de bord (SPEC §7) : une ligne par utilisateur. Validées par le DTO à l'écriture ;
+// les comptes cités ne sont pas des clés étrangères (un compte supprimé est ignoré à la lecture).
+model DashboardPreference {
+  userId    String   @id @db.Uuid
+  prefs     Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

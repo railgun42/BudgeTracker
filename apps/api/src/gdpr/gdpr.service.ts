@@ -74,17 +74,19 @@ export class GdprService {
         // Annonces lues (l'annonce elle-même est commune à tous, pas une donnée de l'utilisateur).
         p.announcementRead.findMany({ where: mine }),
         p.categorySuggestion.findMany({ where: mine }),
+        p.dashboardPreference.findMany({ where: mine }),
       ],
       { isolationLevel: 'RepeatableRead' },
     );
-    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'AttachmentTag', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation', 'AdminAuditLog', 'Feedback', 'Notification', 'AnnouncementRead', 'CategorySuggestion'];
+    const names = ['User', 'OAuthIdentity', 'Account', 'Transfer', 'Transaction', 'Category', 'UserCategoryPreference', 'Tag', 'TransactionTag', 'Attachment', 'AttachmentTag', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation', 'AdminAuditLog', 'Feedback', 'Notification', 'AnnouncementRead', 'CategorySuggestion', 'DashboardPreference'];
     return Object.fromEntries(names.map((name, i) => [name, (tables[i] as object[]).map(plain)]));
   }
 
   // Réinitialisation : suppression réelle des comptes (cascade : transactions, tags de transaction, pièces jointes,
   // récurrences, taux, crédits d'intérêts), virements, documents du coffre sans transaction, scénarios et simulations,
   // puis des objets S3.
-  // Gardés : profil, sessions, catégories perso, préférences, tags, retours, notifications, suggestions.
+  // Gardés : profil, sessions, catégories perso, préférences (catégories, tableau de bord : les comptes cités sont
+  // ignorés à la lecture), tags, retours, notifications, suggestions.
   async resetData(userId: string): Promise<void> {
     const mine = { where: { userId } };
     await this.prisma.$transaction([

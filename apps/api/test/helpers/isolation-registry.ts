@@ -200,6 +200,12 @@ const cashflowSimulationOfB = async (users: TwoUsers) => {
   };
 };
 
+// Préférences du tableau de bord écrites à la version courante (d'autres entrées ont pu en enregistrer).
+const putDashboardPreferences = async (user: TestUser, prefs: object, status: number) => {
+  const { body } = await user.call('get', '/api/v1/dashboard/preferences').expect(200);
+  await user.call('put', '/api/v1/dashboard/preferences').send({ ...body, ...prefs }).expect(status);
+};
+
 export const isolationRegistry: Record<string, IsolationCheck> = {
   'GET /api/v1/me': async ({ a, b }) => {
     const [resA, resB] = await Promise.all([a.call('get', '/api/v1/me').expect(200), b.call('get', '/api/v1/me').expect(200)]);
@@ -664,6 +670,44 @@ export const isolationRegistry: Record<string, IsolationCheck> = {
     await a.call('post', `/api/v1/notifications/${id}/read`).expect(404);
     expect(await prisma.notification.findUniqueOrThrow({ where: { id } })).toMatchObject({ userId: b.id, readAt: null });
     await b.call('post', `/api/v1/notifications/${id}/read`).expect(204);
+  },
+  // Préférences de B (citant son compte) : absentes chez A.
+  'GET /api/v1/dashboard/preferences': async (users) => {
+    const { id } = await accountOfB(users);
+    await putDashboardPreferences(users.b, { accountIds: [id], curveAccountIds: [id] }, 200);
+    expect(JSON.stringify((await users.a.call('get', '/api/v1/dashboard/preferences').expect(200)).body)).not.toContain(id);
+    expect((await users.b.call('get', '/api/v1/dashboard/preferences').expect(200)).body).toMatchObject({ accountIds: [id], curveAccountIds: [id] });
+  },
+  // Compte de B cité par A ⇒ 404, rien d'écrit ; les préférences de B restent les siennes.
+  'PUT /api/v1/dashboard/preferences': async (users) => {
+    const { id, intact } = await accountOfB(users);
+    await putDashboardPreferences(users.b, { accountIds: [id] }, 200);
+    const before = (await users.b.call('get', '/api/v1/dashboard/preferences').expect(200)).body;
+    const ownBefore = (await users.a.call('get', '/api/v1/dashboard/preferences').expect(200)).body;
+    await putDashboardPreferences(users.a, { accountIds: [id] }, 404);
+    await putDashboardPreferences(users.a, { curveAccountIds: [id] }, 404);
+    expect((await users.a.call('get', '/api/v1/dashboard/preferences').expect(200)).body).toEqual(ownBefore);
+    await putDashboardPreferences(users.a, { period: 'LAST_12_MONTHS', accountIds: [await accountOfA(users)] }, 200);
+    expect((await users.b.call('get', '/api/v1/dashboard/preferences').expect(200)).body).toEqual(before);
+    await intact();
+  },
+  // Compte de B demandé par A ⇒ 404 ; sans filtre, la série de A ne le contient pas.
+  'GET /api/v1/dashboard/balance-series': async (users) => {
+    const { accountId } = await transactionOfB(users);
+    const path = '/api/v1/dashboard/balance-series?from=2026-03-01&to=2026-03-02';
+    await users.a.call('get', `${path}&accountIds=${accountId}`).expect(404);
+    await users.a.call('get', `${path}&accountIds=${await accountOfA(users)},${accountId}`).expect(404);
+    const { body } = await users.a.call('get', path).expect(200);
+    expect(body.accounts.map((s: { accountId: string }) => s.accountId)).not.toContain(accountId);
+    expect((await users.b.call('get', `${path}&accountIds=${accountId}`).expect(200)).body.accounts).toEqual([{ accountId, balancesCents: [-1234, -1234] }]);
+  },
+  // Échéance de B (2030-01-31) : absente chez A le même jour.
+  'GET /api/v1/dashboard/upcoming': async (users) => {
+    const { id, intact } = await recurrenceOfB(users);
+    const path = '/api/v1/dashboard/upcoming?today=2030-01-30&days=1';
+    expect((await users.a.call('get', path).expect(200)).body.map((o: { recurrenceId: string }) => o.recurrenceId)).not.toContain(id);
+    expect((await users.b.call('get', path).expect(200)).body).toContainEqual(expect.objectContaining({ recurrenceId: id, date: '2030-01-31', amountCents: 900 }));
+    await intact();
   },
   // Export de A : aucune donnée de B ; celui de B la contient.
   'GET /api/v1/me/export': async (users) => {

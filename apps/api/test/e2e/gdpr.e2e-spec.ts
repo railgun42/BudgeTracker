@@ -69,6 +69,10 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
     await user.call('post', '/api/v1/scenarios').send({ name: 'Netflix', params: { changes: [{ kind: 'SUBSCRIPTION', monthlyCents: 999 }] } }).expect(201);
     await user.call('post', '/api/v1/cashflow-simulations').send({ name: 'Été', params: { accountIds: [account.id], endDate: '2030-08-31' } }).expect(201);
     await user.call('post', '/api/v1/feedback').send({ type: 'IDEA', message: 'Un mode sombre' }).expect(201);
+    await user
+      .call('put', '/api/v1/dashboard/preferences')
+      .send({ version: 0, period: 'LAST_3_MONTHS', accountIds: [account.id], curveAccountIds: [account.id, savings.id], curveTotal: true, hiddenBlocks: ['CATEGORY_DONUT'] })
+      .expect(200);
     // Annonce datée de 2000 : invisible pour tous les utilisateurs de test (inscrits après), lecture insérée directement.
     const announcement = await prisma.announcement.create({ data: { message: 'Annonce RGPD', createdAt: new Date('2000-01-01T00:00:00Z') } });
     await prisma.announcementRead.create({ data: { userId: user.id, announcementId: announcement.id } });
@@ -117,6 +121,7 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       expect(data.AnnouncementRead).toEqual([expect.objectContaining({ userId: users.a.id, announcementId: expect.any(String) })]);
       expect(data.CategorySuggestion).toEqual([expect.objectContaining({ userId: users.a.id, name: 'Perso', status: 'PENDING' })]);
       expect(data.Feedback).toEqual([expect.objectContaining({ userId: users.a.id, type: 'IDEA', message: 'Un mode sombre', treatedAt: null })]);
+      expect(data.DashboardPreference).toEqual([expect.objectContaining({ userId: users.a.id, prefs: expect.objectContaining({ period: 'LAST_3_MONTHS', accountIds: [a.accountId] }) })]);
 
       const text = JSON.stringify(data);
       for (const id of [users.b.id, b.accountId, b.savingsId, b.txId, b.recurrenceId, b.tagId]) expect(text).not.toContain(id);
@@ -166,9 +171,11 @@ describe('RGPD — export et suppression de compte (e2e)', () => {
       const data = (await userA.call('get', '/api/v1/me/export').expect(200)).body as Record<string, unknown[]>;
       for (const table of ['Account', 'Transfer', 'Transaction', 'TransactionTag', 'Attachment', 'AttachmentTag', 'Recurrence', 'TransactionTemplate', 'TemplateTag', 'InterestRate', 'InterestCredit', 'Scenario', 'CashflowSimulation'])
         expect([table, data[table].length]).toEqual([table, 0]);
-      for (const table of ['User', 'OAuthIdentity', 'Category', 'UserCategoryPreference', 'Tag', 'Feedback', 'Notification', 'AnnouncementRead', 'CategorySuggestion', 'AdminAuditLog'])
+      for (const table of ['User', 'OAuthIdentity', 'Category', 'UserCategoryPreference', 'Tag', 'Feedback', 'Notification', 'AnnouncementRead', 'CategorySuggestion', 'AdminAuditLog', 'DashboardPreference'])
         expect([table, data[table].length]).not.toEqual([table, 0]);
       expect(data.Tag).toContainEqual(expect.objectContaining({ id: a.tagId }));
+      // Préférences gardées ; les comptes effacés qu'elles citent sont ignorés à la lecture.
+      expect((await userA.call('get', '/api/v1/dashboard/preferences').expect(200)).body).toMatchObject({ period: 'LAST_3_MONTHS', accountIds: [], curveAccountIds: [], hiddenBlocks: ['CATEGORY_DONUT'] });
       expect(await storage.exists(a.s3Key)).toBe(false);
       expect(await storage.exists(a.docKey)).toBe(false);
       expect(await storage.exists(b.s3Key)).toBe(true);
