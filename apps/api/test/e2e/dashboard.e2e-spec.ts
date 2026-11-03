@@ -66,14 +66,23 @@ describe('Tableau de bord (e2e)', () => {
     const series = async (from: string, to = TODAY, ids = [x, y, wallet]) =>
       (await a.call('get', `/api/v1/dashboard/balance-series?from=${from}&to=${to}&accountIds=${ids.join(',')}`).expect(200)).body;
 
-    it('solde de départ, countInBalance, virement, suppression : jour par jour ; NOT_TRACKED omis', async () => {
+    it('solde de départ, countInBalance, virement, suppression : jour par jour, historique d’avant reconstitué ; NOT_TRACKED omis', async () => {
       const body = await series('2026-03-01');
       expect(body.dates).toHaveLength(10);
       expect(body.accounts).toEqual([
-        { accountId: x, balancesCents: [0, 0, 9_800, 9_800, 12_350, 12_050, 12_050, 12_050, 12_050, 12_050] },
+        { accountId: x, balancesCents: [11_000, 11_000, 9_800, 9_800, 12_350, 12_050, 12_050, 12_050, 12_050, 12_050] },
         { accountId: y, balancesCents: [5_000, 5_000, 5_000, 5_000, 5_000, 5_300, 5_300, 5_300, 5_300, 5_300] },
       ]);
       expect(body.totalCents.slice(4)).toEqual([17_350, 17_350, 17_350, 17_350, 17_350, 17_350]); // virement : total plat
+    });
+
+    it('fenêtre avant le solde de départ : soldes reconstitués à rebours (700 puis 500 puis 1 000 € de mouvements déjà compris)', async () => {
+      const body = await series('2026-02-14', '2026-02-16', [x, y]);
+      expect(body.accounts).toEqual([
+        { accountId: x, balancesCents: [12_200, 11_500, 11_500] },
+        { accountId: y, balancesCents: [5_000, 5_000, 5_000] },
+      ]);
+      expect(body.totalCents).toEqual([17_200, 16_500, 16_500]);
     });
 
     it('le dernier point égale currentCents de /balance, pour chaque compte et pour le total', async () => {
@@ -145,7 +154,7 @@ describe('Tableau de bord (e2e)', () => {
     beforeAll(async () => ((pair = await createTwoUsers(app)), (u = pair.a)));
     afterAll(() => pair?.cleanup());
 
-    const prefs = { period: 'LAST_30_DAYS', accountIds: null, curveAccountIds: [], curveTotal: true, hiddenBlocks: [] };
+    const prefs = { period: 'LAST_6_MONTHS', accountIds: null, curveAccountIds: [], curveTotal: true, hiddenBlocks: [] };
     const put = (body: object) => u.call('put', '/api/v1/dashboard/preferences').send(body);
     const account = async () => (await u.call('post', '/api/v1/accounts').send({ name: 'Compte', trackingType: 'NORMAL' }).expect(201)).body.id as string;
 
@@ -165,6 +174,19 @@ describe('Tableau de bord (e2e)', () => {
       expect((await put({ ...prefs, version: 1 }).expect(200)).body).toEqual({ ...prefs, version: 2 });
       await put({ ...first, version: 1 }).expect(409); // version périmée
       expect((await u.call('get', '/api/v1/dashboard/preferences').expect(200)).body).toEqual({ ...prefs, version: 2 });
+    });
+
+    it('période retirée de la liste depuis l’enregistrement ⇒ lue comme « ce mois-ci »', async () => {
+      const { userId } = await prisma.dashboardPreference.upsert({
+        where: { userId: u.id },
+        create: { userId: u.id, prefs: { ...prefs, period: 'LAST_MONTH' } },
+        update: { prefs: { ...prefs, period: 'LAST_MONTH' } },
+      });
+      expect(userId).toBe(u.id);
+      expect((await u.call('get', '/api/v1/dashboard/preferences').expect(200)).body.period).toBe('THIS_MONTH');
+      const { version } = (await u.call('get', '/api/v1/dashboard/preferences').expect(200)).body;
+      await put({ ...prefs, version, period: 'LAST_MONTH' }).expect(400);
+      await put({ ...prefs, version, period: 'LAST_30_DAYS' }).expect(400);
     });
 
     it('JSON invalide ⇒ 400, rien n’est écrit', async () => {

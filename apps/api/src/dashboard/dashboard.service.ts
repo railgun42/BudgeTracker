@@ -3,6 +3,7 @@ import {
   addDays,
   BalanceSeriesDto,
   DASHBOARD_LIMITS,
+  DASHBOARD_PERIODS,
   DashboardPreferencesDto,
   LocalDate,
   TrackingType,
@@ -35,7 +36,9 @@ export class DashboardService {
     const prefs = row.prefs as unknown as Prefs; // validé par le DTO à l'écriture
     const live = await this.liveIds(userId);
     const keep = (ids: string[]) => ids.filter((id) => live.has(id));
-    return { ...prefs, accountIds: prefs.accountIds && keep(prefs.accountIds), curveAccountIds: keep(prefs.curveAccountIds), version: row.version };
+    // Période retirée de la liste depuis l'enregistrement : valeur par défaut.
+    const period = DASHBOARD_PERIODS.includes(prefs.period) ? prefs.period : DEFAULTS.period;
+    return { ...prefs, period, accountIds: prefs.accountIds && keep(prefs.accountIds), curveAccountIds: keep(prefs.curveAccountIds), version: row.version };
   }
 
   // Version 0 : première écriture (une ligne déjà là ⇒ 409, comme une version périmée).
@@ -64,7 +67,7 @@ export class DashboardService {
         const rows =
           trackingType === TrackingType.NOT_TRACKED
             ? []
-            : await this.prisma.$queryRaw<{ date: LocalDate | null; sameDay: boolean; cents: bigint }[]>(balanceDaysSql(userId, id, from, to));
+            : await this.prisma.$queryRaw<{ date: LocalDate | null; counted: boolean; opening: boolean; cents: bigint }[]>(balanceDaysSql(userId, id, from, to));
         return { accountId: id, trackingType, openingDate, rows: rows.map((r) => ({ ...r, cents: Number(r.cents) })) };
       }),
     );

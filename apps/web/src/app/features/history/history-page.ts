@@ -23,7 +23,7 @@ import { debounceTime, forkJoin } from 'rxjs';
 import { ApiClient } from '../../core/api-client';
 import { amountValidator, SignedEurPipe } from '../../core/money';
 import { CategoryFields } from '../../shared-ui/category-fields';
-import { categoryIcon, NO_CATEGORY_ICON } from '../../shared-ui/category-icons';
+import { transactionIcon } from '../../shared-ui/category-icons';
 import { categoryLabel, categoryOptions, NO_CATEGORY_LABEL } from '../../shared-ui/labels';
 import { TagInput } from '../../shared-ui/tag-input';
 import { UndoBanner } from '../../shared-ui/undo-banner';
@@ -554,9 +554,7 @@ export class HistoryPage {
 
   /** Icône de la catégorie racine (une sous-catégorie prend celle de son parent) ; sans catégorie ⇒ icône neutre. */
   protected iconOf(t: TransactionDto): string {
-    const c = t.categoryId ? this.categoryById().get(t.categoryId) : undefined;
-    const root = c?.parentId ? this.categoryById().get(c.parentId) : c;
-    return root ? categoryIcon(root) : NO_CATEGORY_ICON;
+    return transactionIcon(t.categoryId, this.categoryById());
   }
 
   protected label(t: TransactionDto): string {

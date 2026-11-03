@@ -2,13 +2,14 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { AccountDto, CashflowSimulationDto, DashboardPeriod, DashboardPreferencesDto, MonthlyStatDto, TrackingType, TransactionType, UpcomingOccurrenceDto } from '@budgetracker/shared';
+import { AccountDto, BalanceSeriesDto, CashflowSimulationDto, CategoryDto, CategoryStatDto, DashboardPeriod, DashboardPreferencesDto, MonthlyStatDto, TrackingType, TransactionDto, TransactionType, UpcomingOccurrenceDto } from '@budgetracker/shared';
 import { routes } from '../../app.routes';
 import { Session } from '../../core/auth/session';
 import { previousRange } from '../../core/date-range';
 import { provideApiHttp } from '../../core/http';
 import { QuickEntry } from '../../core/quick-entry';
 import { today } from '../../core/today';
+import { categoryLabel } from '../../shared-ui/labels';
 import { Notifications } from '../notifications/notifications';
 import { dashboardRange } from './dashboard-period';
 
@@ -21,6 +22,21 @@ const PREFS: DashboardPreferencesDto = { period: 'THIS_MONTH', accountIds: null,
 const ACTIVITY: MonthlyStatDto[] = [{ month: '2026-11', incomeCents: 1, expenseCents: 1 }];
 const rows = (incomeCents: number, expenseCents: number) => [{ categoryId: null, incomeCents, expenseCents }];
 const occurrence = (recurrenceId: string, date: string): UpcomingOccurrenceDto => ({ recurrenceId, accountId: 'a1', date, name: 'Loyer', amountCents: 50000, type: TransactionType.DEBIT, categoryId: null });
+const GROCERIES: CategoryDto = { id: 'c1', parentId: null, system: true, nameKey: 'groceries', name: null, color: null, hidden: false, customName: null, archived: false };
+const BAKERY: CategoryDto = { ...GROCERIES, id: 'c2', parentId: 'c1', nameKey: null, name: 'Boulangerie', system: false };
+const transaction = (id: string, patch: Partial<TransactionDto> = {}): TransactionDto => ({
+  id, accountId: 'a1', name: '', date: '2026-11-02', amountCents: 4210, type: TransactionType.DEBIT, details: null, categoryId: null,
+  tagIds: [], transferId: null, recurrenceId: null, countInBalance: null, attachment: null, version: 1, ...patch,
+});
+/** Deux jours, 10,00 € puis 20,00 € sur chaque compte suivi. */
+const seriesOf = (accounts: AccountDto[]): BalanceSeriesDto => {
+  const tracked = accounts.filter((a) => a.trackingType !== TrackingType.NOT_TRACKED);
+  return {
+    dates: ['2026-11-02', '2026-11-03'],
+    accounts: tracked.map((a) => ({ accountId: a.id, balancesCents: [1000, 2000] })),
+    totalCents: [1000 * tracked.length, 2000 * tracked.length],
+  };
+};
 const simulation = (id: string, name: string): CashflowSimulationDto => ({ id, name, params: {} as CashflowSimulationDto['params'], version: 1 });
 
 interface Data {
@@ -35,6 +51,11 @@ interface Data {
   simulations?: { sim: CashflowSimulationDto; belowFloor: boolean | null }[];
   /** Période puis période précédente : [revenus, dépenses]. */
   stats?: [[number, number], [number, number]];
+  /** Totaux par catégorie de la période (remplace `stats[0]`). */
+  statRows?: CategoryStatDto[];
+  series?: BalanceSeriesDto;
+  latest?: TransactionDto[];
+  categories?: CategoryDto[];
 }
 
 let harness: RouterTestingHarness;
@@ -54,11 +75,17 @@ const toggle = (box: HTMLInputElement, checked: boolean) => {
   box.dispatchEvent(new Event('change'));
 };
 
-function flushStats(period: DashboardPeriod, [now, before]: [[number, number], [number, number]]): void {
+function flushStats(period: DashboardPeriod, [now, before]: [[number, number], [number, number]], statRows?: CategoryStatDto[]): void {
   const range = dashboardRange(period, today());
   const prev = previousRange(range.from, range.to)!;
-  http.expectOne(`/api/v1/stats/by-category?from=${range.from}&to=${range.to}`).flush(rows(...now));
+  http.expectOne(`/api/v1/stats/by-category?from=${range.from}&to=${range.to}`).flush(statRows ?? rows(...now));
   http.expectOne(`/api/v1/stats/by-category?from=${prev.from}&to=${prev.to}`).flush(rows(...before));
+}
+
+/** La courbe s'arrête à aujourd'hui, même si la période finit plus tard. */
+function flushSeries(period: DashboardPeriod, series: BalanceSeriesDto): void {
+  const { from, to } = dashboardRange(period, today());
+  http.expectOne(`/api/v1/dashboard/balance-series?from=${from}&to=${to < today() ? to : today()}`).flush(series);
 }
 
 /** Répond à toutes les requêtes du chargement de la page. */
@@ -66,7 +93,8 @@ function respond(d: Data = {}): void {
   const accounts = d.accounts ?? [COURANT];
   const prefs = d.prefs ?? PREFS;
   http.expectOne('/api/v1/dashboard/preferences').flush(prefs);
-  flushStats(prefs.period, d.stats ?? [[0, 0], [0, 0]]);
+  flushStats(prefs.period, d.stats ?? [[0, 0], [0, 0]], d.statRows);
+  flushSeries(prefs.period, d.series ?? seriesOf(accounts));
   http.expectOne('/api/v1/stats/monthly').flush(d.monthly ?? ACTIVITY);
   http.expectOne('/api/v1/accounts').flush(accounts);
   for (const a of accounts.filter((a) => a.trackingType !== TrackingType.NOT_TRACKED)) {
@@ -77,6 +105,8 @@ function respond(d: Data = {}): void {
     http.expectOne(`/api/v1/accounts/${a.id}/interest-rates`).flush({ rates: [], missingRate: d.missingRate ?? false });
   }
   http.expectOne(`/api/v1/dashboard/upcoming?days=7&today=${today()}`).flush(d.upcoming ?? []);
+  http.expectOne('/api/v1/transactions?limit=5').flush({ items: d.latest ?? [], nextCursor: null });
+  http.expectOne('/api/v1/categories').flush(d.categories ?? []);
   http.expectOne('/api/v1/cashflow-simulations').flush((d.simulations ?? []).map((s) => s.sim));
   for (const { sim, belowFloor } of d.simulations ?? []) {
     const req = http.expectOne(`/api/v1/cashflow-simulations/${sim.id}/result?today=${today()}`);
@@ -157,7 +187,7 @@ describe('Tableau de bord : chiffres clés', () => {
     expect(cards()[0]).toContain('30,00 €');
   });
 
-  it('tout recocher ⇒ accountIds repasse à null ; bloc masqué ⇒ il disparaît (blocs d’une étape suivante conservés)', async () => {
+  it('tout recocher ⇒ accountIds repasse à null ; bloc masqué ⇒ il disparaît (les blocs déjà masqués restent masqués)', async () => {
     await open({ prefs: { ...PREFS, accountIds: ['a1'], hiddenBlocks: ['CATEGORY_DONUT'], version: 4 }, accounts: [COURANT, LIVRET], balances: { a1: [1, 1], a2: [2, 2] } });
     button('Personnaliser').click();
     await stable();
@@ -170,8 +200,8 @@ describe('Tableau de bord : chiffres clés', () => {
 
     toggle(checkbox('Dépenses et revenus de la période'), false);
     const second = http.expectOne({ method: 'PUT', url: '/api/v1/dashboard/preferences' });
-    expect(second.request.body).toMatchObject({ hiddenBlocks: ['CATEGORY_DONUT', 'PERIOD_SUMMARY'], version: 5 });
-    second.flush({ ...PREFS, hiddenBlocks: ['CATEGORY_DONUT', 'PERIOD_SUMMARY'], version: 6 });
+    expect(second.request.body).toMatchObject({ hiddenBlocks: ['PERIOD_SUMMARY', 'CATEGORY_DONUT'], version: 5 });
+    second.flush({ ...PREFS, hiddenBlocks: ['PERIOD_SUMMARY', 'CATEGORY_DONUT'], version: 6 });
     await stable();
 
     expect(el.querySelector('#h-period')).toBeNull();
@@ -206,22 +236,31 @@ describe('Tableau de bord : période', () => {
     expect(income).toContain('+500,00 € par rapport à la période précédente');
     expect(rest).toContain('Reste +1 876,55 €');
     expect(rest).toContain('+576,55 € par rapport à la période précédente');
-    expect(el.querySelector('#h-period')!.textContent).toBe('Ce mois-ci');
+    expect(el.querySelector('#h-period')!.textContent).toBe('Mois actuel');
+  });
+
+  it('le sélecteur propose mois actuel, 3, 6 et 12 mois, avec la période enregistrée sélectionnée', async () => {
+    await open({ prefs: { ...PREFS, period: 'LAST_3_MONTHS' } });
+
+    const select = el.querySelector<HTMLSelectElement>('#dash-period')!;
+    expect([...select.options].map((o) => o.textContent!.trim())).toEqual(['Mois actuel', '3 derniers mois', '6 derniers mois', '12 derniers mois']);
+    expect(select.options[select.selectedIndex].textContent!.trim()).toBe('3 derniers mois');
   });
 
   it('changer la période enregistre la préférence puis relit les deux totaux', async () => {
     await open();
 
     const select = el.querySelector<HTMLSelectElement>('#dash-period')!;
-    select.value = 'LAST_MONTH';
+    select.value = 'LAST_6_MONTHS';
     select.dispatchEvent(new Event('change'));
     const put = http.expectOne({ method: 'PUT', url: '/api/v1/dashboard/preferences' });
-    expect(put.request.body).toEqual({ ...PREFS, period: 'LAST_MONTH' });
-    put.flush({ ...PREFS, period: 'LAST_MONTH', version: 2 });
-    flushStats('LAST_MONTH', [[0, 5000], [0, 1000]]);
+    expect(put.request.body).toEqual({ ...PREFS, period: 'LAST_6_MONTHS' });
+    put.flush({ ...PREFS, period: 'LAST_6_MONTHS', version: 2 });
+    flushStats('LAST_6_MONTHS', [[0, 5000], [0, 1000]]);
+    flushSeries('LAST_6_MONTHS', seriesOf([COURANT]));
     await stable();
 
-    expect(el.querySelector('#h-period')!.textContent).toBe('Mois dernier');
+    expect(el.querySelector('#h-period')!.textContent).toBe('6 derniers mois');
     expect(cards().at(-3)).toContain('Dépenses 50,00 €');
   });
 });
@@ -268,5 +307,103 @@ describe('Tableau de bord : actions rapides', () => {
     expect(quick.open()).toBe('transaction');
     button('Virement').click();
     expect(quick.open()).toBe('transfer');
+  });
+});
+
+describe('Tableau de bord : courbe du solde', () => {
+  it('total plus épais que les comptes, motifs de trait distincts, alternative textuelle', async () => {
+    await open({ accounts: [COURANT, LIVRET], prefs: { ...PREFS, curveAccountIds: ['a1', 'a2'] } });
+
+    const lines = [...el.querySelectorAll('app-balance-chart polyline')];
+    const width = lines.map((l) => Number(l.getAttribute('stroke-width')));
+    expect(width).toHaveLength(3);
+    expect(width[0]).toBeGreaterThan(width[1]);
+    expect(width[1]).toBe(width[2]);
+    // Entre comptes, le motif de trait diffère (le total se distingue par son épaisseur).
+    expect(lines[1].getAttribute('stroke-dasharray')).not.toBe(lines[2].getAttribute('stroke-dasharray'));
+    const label = el.querySelector('app-balance-chart svg[role="img"]')!.getAttribute('aria-label')!.replace(/\s+/g, ' ');
+    expect(label).toContain('Évolution du solde du 2 nov. au 3 nov.');
+    expect(label).toContain('Total de 20,00 € à 40,00 €');
+    expect(label).toContain('Courant de 10,00 € à 20,00 €');
+    expect(el.querySelector('app-balance-chart .legend')!.textContent).toContain('Livret A');
+  });
+
+  it('par défaut le total seul ; décocher un compte retire sa courbe et enregistre ; décocher le total aussi', async () => {
+    await open({ accounts: [COURANT, LIVRET], prefs: { ...PREFS, curveAccountIds: ['a1', 'a2'], version: 3 } });
+
+    toggle(checkbox('Courant'), false);
+    const put = http.expectOne({ method: 'PUT', url: '/api/v1/dashboard/preferences' });
+    expect(put.request.body).toEqual({ ...PREFS, curveAccountIds: ['a2'], curveTotal: true, version: 3 });
+    put.flush({ ...PREFS, curveAccountIds: ['a2'], version: 4 });
+    await stable();
+    expect(el.querySelectorAll('app-balance-chart polyline')).toHaveLength(2);
+
+    toggle(checkbox('Total'), false);
+    http.expectOne({ method: 'PUT', url: '/api/v1/dashboard/preferences' }).flush({ ...PREFS, curveAccountIds: ['a2'], curveTotal: false, version: 5 });
+    await stable();
+    expect(el.querySelectorAll('app-balance-chart polyline')).toHaveLength(1);
+  });
+
+  it('aucune courbe cochée ⇒ message, pas de graphique', async () => {
+    await open({ prefs: { ...PREFS, curveTotal: false } });
+
+    expect(el.querySelector('app-balance-chart')).toBeNull();
+    expect(text()).toContain('Aucune courbe sélectionnée.');
+  });
+
+  it('une seule journée ⇒ tracé sans valeur invalide', async () => {
+    await open({ series: { dates: ['2026-11-03'], accounts: [{ accountId: 'a1', balancesCents: [1000] }], totalCents: [1000] } });
+    const points = el.querySelector('app-balance-chart polyline')!.getAttribute('points')!;
+    expect(points).not.toContain('NaN');
+  });
+});
+
+describe('Tableau de bord : dernières transactions et donut', () => {
+  it('5 dernières transactions : libellé (nom ou catégorie), compte, montant signé, lien vers l’historique', async () => {
+    await open({
+      categories: [GROCERIES],
+      latest: [transaction('t1', { name: 'Carrefour', categoryId: 'c1' }), transaction('t2', { type: TransactionType.CREDIT, amountCents: 150000, categoryId: 'c1', date: '2026-11-01' })],
+    });
+
+    const rowsText = [...el.querySelectorAll('.latest li')].map((li) => li.textContent!.replace(/\s+/g, ' ').trim());
+    expect(rowsText[0]).toContain('Carrefour');
+    expect(rowsText[0]).toContain('Courant');
+    expect(rowsText[0]).toContain('−42,10 €');
+    expect(rowsText[1]).toContain(categoryLabel(GROCERIES));
+    expect(rowsText[1]).toContain('+1 500,00 €');
+    expect(el.querySelector('.latest svg.category-icon')).not.toBeNull();
+    expect(el.querySelector('a[href="/history"]')).not.toBeNull();
+  });
+
+  it('donut : dépenses regroupées par catégorie racine, sans catégorie à part, lien vers les statistiques', async () => {
+    await open({
+      categories: [GROCERIES, BAKERY],
+      statRows: [
+        { categoryId: 'c1', incomeCents: 0, expenseCents: 3000 },
+        { categoryId: 'c2', incomeCents: 0, expenseCents: 2000 },
+        { categoryId: null, incomeCents: 9999, expenseCents: 500 },
+      ],
+    });
+
+    const legend = [...el.querySelectorAll('app-donut-chart .legend li')].map((li) => li.textContent!.replace(/\s+/g, ' ').trim());
+    expect(legend).toHaveLength(2);
+    expect(legend[0]).toContain(categoryLabel(GROCERIES));
+    expect(legend[0]).toContain('91 %');
+    expect(legend[1]).toContain('Sans catégorie');
+    expect(el.querySelector('a[href="/stats"]')).not.toBeNull();
+  });
+
+  it('aucune dépense ⇒ message à la place du donut', async () => {
+    await open();
+
+    expect(el.querySelector('app-donut-chart')).toBeNull();
+    expect(text()).toContain('Aucune dépense sur la période.');
+  });
+
+  it('blocs masqués ⇒ courbe, dernières transactions et donut absents', async () => {
+    await open({ prefs: { ...PREFS, hiddenBlocks: ['BALANCE_CURVE', 'LATEST_TRANSACTIONS', 'CATEGORY_DONUT'] } });
+
+    for (const id of ['h-curve', 'h-latest', 'h-donut']) expect(el.querySelector(`#${id}`)).toBeNull();
+    expect(el.querySelector('#h-figures')).not.toBeNull();
   });
 });

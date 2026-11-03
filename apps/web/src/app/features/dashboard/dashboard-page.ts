@@ -6,10 +6,11 @@ import { RouterLink } from '@angular/router';
 import {
   AccountBalanceDto,
   AccountDto,
+  BalanceSeriesDto,
   CashflowDto,
   CashflowSimulationDto,
+  CategoryDto,
   CategoryStatDto,
-  DASHBOARD_PERIODS,
   DashboardBlock,
   DashboardPeriod,
   DashboardPreferencesDto,
@@ -18,6 +19,9 @@ import {
   MonthlyStatDto,
   StatTotals,
   TrackingType,
+  TransactionDto,
+  TransactionPage,
+  TransactionType,
   UpcomingOccurrenceDto,
   UpdateDashboardPreferencesInput,
 } from '@budgetracker/shared';
@@ -27,8 +31,12 @@ import { previousRange } from '../../core/date-range';
 import { EurPipe, SignedEurPipe } from '../../core/money';
 import { QuickEntry } from '../../core/quick-entry';
 import { today } from '../../core/today';
+import { transactionIcon } from '../../shared-ui/category-icons';
+import { categoryLabel, NO_CATEGORY_LABEL } from '../../shared-ui/labels';
 import { errorMessage } from '../auth/auth-form';
 import { Notifications } from '../notifications/notifications';
+import { DonutChart, DonutPart } from '../stats/donut-chart';
+import { BalanceChart, BalanceLine } from './balance-chart';
 import { BLOCK_LABELS, dashboardRange, PERIOD_LABELS } from './dashboard-period';
 
 interface Alert {
@@ -44,6 +52,8 @@ interface PeriodStats {
   previous: { from: LocalDate; to: LocalDate };
   current: StatTotals;
   before: StatTotals;
+  /** Totaux par catégorie de la période (donut). */
+  rows: CategoryStatDto[];
 }
 
 const UPCOMING_DAYS = 7;
@@ -57,7 +67,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 // Tableau de bord (SPEC §7, PLAN E42b) : les chiffres viennent des endpoints existants, les préférences du serveur.
 @Component({
   selector: 'app-dashboard-page',
-  imports: [ReactiveFormsModule, RouterLink, EurPipe, SignedEurPipe],
+  imports: [ReactiveFormsModule, RouterLink, EurPipe, SignedEurPipe, BalanceChart, DonutChart],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="dash-head">
@@ -212,6 +222,79 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
             }
           </section>
         }
+
+        @if (shown('BALANCE_CURVE')) {
+          <section class="dash-wide card" aria-labelledby="h-curve">
+            <h2 id="h-curve">Évolution du solde</h2>
+            <form [formGroup]="curveForm">
+              <fieldset class="field">
+                <legend>Courbes affichées</legend>
+                <div class="inline-checks">
+                  <label class="checkbox"><input type="checkbox" formControlName="total" /> Total</label>
+                  <ng-container formGroupName="accounts">
+                    @for (a of tracked(); track a.id) {
+                      <label class="checkbox"><input type="checkbox" [formControlName]="a.id" /> {{ a.name }}</label>
+                    }
+                  </ng-container>
+                </div>
+              </fieldset>
+            </form>
+            @if (curve(); as c) {
+              @if (c.series.length) {
+                <app-balance-chart [dates]="c.dates" [series]="c.series" />
+              } @else {
+                <p class="muted">Aucune courbe sélectionnée.</p>
+              }
+            } @else {
+              <p class="muted" role="status">Chargement…</p>
+            }
+          </section>
+        }
+
+        @if (shown('LATEST_TRANSACTIONS')) {
+          <section class="card" aria-labelledby="h-latest">
+            <h2 id="h-latest">Dernières transactions</h2>
+            @if (latest(); as list) {
+              @if (list.length) {
+                <ul class="latest">
+                  @for (t of list; track t.id) {
+                    <li>
+                      <svg class="category-icon" viewBox="0 0 24 24" aria-hidden="true"><path [attr.d]="iconOf(t)" /></svg>
+                      <span class="latest-main">
+                        <strong>{{ labelOf(t) }}</strong>
+                        <span class="muted">{{ day(t.date) }} · {{ accountNames()[t.accountId] }}</span>
+                      </span>
+                      <span class="amount" [class.credit]="t.type === CREDIT" [class.debit]="t.type !== CREDIT">{{ (t.type === CREDIT ? t.amountCents : -t.amountCents) | signedEur }}</span>
+                    </li>
+                  }
+                </ul>
+              } @else {
+                <p class="muted">Aucune transaction.</p>
+              }
+              <a routerLink="/history">Tout l’historique</a>
+            } @else {
+              <p class="muted" role="status">Chargement…</p>
+            }
+          </section>
+        }
+
+        @if (shown('CATEGORY_DONUT')) {
+          <section class="card" aria-labelledby="h-donut">
+            <h2 id="h-donut">Dépenses par catégorie</h2>
+            @if (stats()) {
+              @if (donutParts().length) {
+                <app-donut-chart [parts]="donutParts()" title="Dépenses de la période" description="Dépenses par catégorie ; valeurs détaillées dans la légende">
+                  <a routerLink="/stats">Voir les statistiques</a>
+                </app-donut-chart>
+              } @else {
+                <p class="muted">Aucune dépense sur la période.</p>
+                <a routerLink="/stats">Voir les statistiques</a>
+              }
+            } @else {
+              <p class="muted" role="status">Chargement…</p>
+            }
+          </section>
+        }
       }
     </div>
   `,
@@ -221,10 +304,11 @@ export class DashboardPage {
   private readonly notifications = inject(Notifications);
   protected readonly quick = inject(QuickEntry);
 
-  protected readonly periods = DASHBOARD_PERIODS;
+  protected readonly periods = Object.keys(PERIOD_LABELS) as DashboardPeriod[];
   protected readonly periodLabels = PERIOD_LABELS;
   protected readonly blockLabels = BLOCK_LABELS;
   protected readonly blockKeys = Object.keys(BLOCK_LABELS) as DashboardBlock[];
+  protected readonly CREDIT = TransactionType.CREDIT;
 
   protected readonly accounts = signal<AccountDto[] | null>(null);
   protected readonly prefs = signal<DashboardPreferencesDto | null>(null);
@@ -234,6 +318,9 @@ export class DashboardPage {
   protected readonly hasTransaction = signal<boolean | null>(null);
   protected readonly upcoming = signal<UpcomingOccurrenceDto[]>([]);
   protected readonly belowFloor = signal<string[]>([]);
+  protected readonly series = signal<BalanceSeriesDto | null>(null);
+  protected readonly latest = signal<TransactionDto[] | null>(null);
+  protected readonly categories = signal<CategoryDto[]>([]);
   protected readonly customizing = signal(false);
   protected readonly error = signal('');
   protected readonly conflict = signal(false);
@@ -242,6 +329,10 @@ export class DashboardPage {
   protected readonly customForm = new FormGroup({
     accounts: new FormRecord<FormControl<boolean>>({}),
     blocks: new FormRecord<FormControl<boolean>>({}),
+  });
+  protected readonly curveForm = new FormGroup({
+    total: new FormControl(true, { nonNullable: true }),
+    accounts: new FormRecord<FormControl<boolean>>({}),
   });
 
   protected readonly period = computed(() => this.prefs()?.period ?? 'THIS_MONTH');
@@ -262,6 +353,37 @@ export class DashboardPage {
   });
   protected readonly rest = computed(() => (this.stats() ? this.stats()!.current.incomeCents - this.stats()!.current.expenseCents : 0));
   protected readonly restBefore = computed(() => (this.stats() ? this.stats()!.before.incomeCents - this.stats()!.before.expenseCents : 0));
+
+  protected readonly accountNames = computed(() => Object.fromEntries((this.accounts() ?? []).map((a) => [a.id, a.name])));
+  private readonly categoryById = computed(() => new Map(this.categories().map((c) => [c.id, c])));
+
+  /** Courbes à tracer : le total (de tous les comptes suivis) si coché, puis les comptes cochés dans l'ordre des comptes. */
+  protected readonly curve = computed(() => {
+    const data = this.series();
+    const prefs = this.prefs();
+    if (!data || !prefs) return null;
+    const lines: BalanceLine[] = [];
+    if (prefs.curveTotal) lines.push({ id: 'total', name: 'Total', total: true, cents: data.totalCents });
+    for (const s of data.accounts) {
+      if (prefs.curveAccountIds.includes(s.accountId)) lines.push({ id: s.accountId, name: this.accountNames()[s.accountId] ?? 'Compte', total: false, cents: s.balancesCents });
+    }
+    return { dates: data.dates, series: lines };
+  });
+
+  /** Dépenses de la période par catégorie racine (une racine additionne ses sous-catégories), décroissantes. */
+  protected readonly donutParts = computed<DonutPart[]>(() => {
+    const byRoot = new Map<string, DonutPart>();
+    for (const row of this.stats()?.rows ?? []) {
+      if (row.expenseCents <= 0) continue;
+      const c = row.categoryId ? this.categoryById().get(row.categoryId) : undefined;
+      const root = c?.parentId ? this.categoryById().get(c.parentId) : c;
+      const key = root?.id ?? row.categoryId ?? '';
+      const part = byRoot.get(key) ?? { key, label: root ? categoryLabel(root) : row.categoryId ? 'Catégorie' : NO_CATEGORY_LABEL, cents: 0 };
+      part.cents += row.expenseCents;
+      byRoot.set(key, part);
+    }
+    return [...byRoot.values()].sort((a, b) => b.cents - a.cents);
+  });
 
   protected readonly ready = computed(() => this.accounts() !== null && this.hasTransaction() !== null && this.prefs() !== null);
   // Sans compte suivi (portefeuille seul), il n'y a pas de solde de départ à saisir.
@@ -320,6 +442,11 @@ export class DashboardPage {
     this.periodsToLoad
       .pipe(switchMap((period) => this.loadStats(period)), takeUntilDestroyed())
       .subscribe((stats) => this.stats.set(stats));
+    this.periodsToLoad.pipe(switchMap((period) => this.loadCurve(period)), takeUntilDestroyed()).subscribe((series) => this.series.set(series));
+    this.curveForm.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => {
+      const { total, accounts } = this.curveForm.getRawValue();
+      this.patches.next({ curveTotal: total, curveAccountIds: Object.keys(accounts).filter((id) => accounts[id]) });
+    });
     this.periodControl.valueChanges.pipe(takeUntilDestroyed()).subscribe((period) => this.patches.next({ period }));
     this.customForm.valueChanges.pipe(takeUntilDestroyed()).subscribe(() => this.patches.next(this.customized()));
     // Transaction ou virement saisi dans la modale de la coquille : chiffres relus.
@@ -329,6 +456,15 @@ export class DashboardPage {
 
   protected shown(block: DashboardBlock): boolean {
     return !this.prefs()?.hiddenBlocks.includes(block);
+  }
+
+  protected iconOf(t: TransactionDto): string {
+    return transactionIcon(t.categoryId, this.categoryById());
+  }
+
+  protected labelOf(t: TransactionDto): string {
+    const c = t.categoryId ? this.categoryById().get(t.categoryId) : undefined;
+    return t.name || (c && categoryLabel(c)) || 'Transaction';
   }
 
   protected day = (date: LocalDate) => at(DAY, date);
@@ -363,6 +499,8 @@ export class DashboardPage {
       error: (e) => this.fail(e),
     });
     this.api.get<UpcomingOccurrenceDto[]>('/dashboard/upcoming', { days: UPCOMING_DAYS, today: today() }).subscribe({ next: (rows) => this.upcoming.set(rows), error: (e) => this.fail(e) });
+    this.api.get<TransactionPage>('/transactions', { limit: 5 }).subscribe({ next: (page) => this.latest.set(page.items), error: (e) => this.fail(e) });
+    this.api.get<CategoryDto[]>('/categories').subscribe({ next: (list) => this.categories.set(list), error: (e) => this.fail(e) });
     this.loadFloorAlerts();
   }
 
@@ -391,9 +529,16 @@ export class DashboardPage {
     const { from, to } = dashboardRange(period, today());
     const previous = previousRange(from, to)!;
     return forkJoin([this.api.get<CategoryStatDto[]>('/stats/by-category', { from, to }), this.api.get<CategoryStatDto[]>('/stats/by-category', previous)]).pipe(
-      map(([current, before]) => ({ from, to, previous, current: sum(current), before: sum(before) })),
+      map(([current, before]) => ({ from, to, previous, current: sum(current), before: sum(before), rows: current })),
       catchError((e) => (this.fail(e), EMPTY)),
     );
+  }
+
+  // Passé seulement : du début de la période à aujourd'hui (la période peut finir plus tard dans le mois). Total = tous les comptes suivis.
+  private loadCurve(period: DashboardPeriod): Observable<BalanceSeriesDto> {
+    const now = today();
+    const { from, to } = dashboardRange(period, now);
+    return this.api.get<BalanceSeriesDto>('/dashboard/balance-series', { from, to: to < now ? to : now }).pipe(catchError((e) => (this.fail(e), EMPTY)));
   }
 
   // Cases du panneau et sélecteur de période alignés sur les préférences, sans déclencher d'enregistrement.
@@ -411,17 +556,18 @@ export class DashboardPage {
     };
     sync(accounts, Object.fromEntries(this.tracked().map((a) => [a.id, prefs.accountIds === null || prefs.accountIds.includes(a.id)])));
     sync(blocks, Object.fromEntries(this.blockKeys.map((b) => [b, !prefs.hiddenBlocks.includes(b)])));
+    this.curveForm.controls.total.setValue(prefs.curveTotal, { emitEvent: false });
+    sync(this.curveForm.controls.accounts, Object.fromEntries(this.tracked().map((a) => [a.id, prefs.curveAccountIds.includes(a.id)])));
   }
 
-  // Comptes tous cochés ⇒ `null` (les comptes créés plus tard s'afficheront). Les blocs d'une étape suivante ne sont pas touchés.
+  // Comptes tous cochés ⇒ `null` (les comptes créés plus tard s'afficheront).
   private customized(): Partial<UpdateDashboardPreferencesInput> {
     const { accounts, blocks } = this.customForm.getRawValue();
     const ids = Object.keys(accounts);
     const checked = ids.filter((id) => accounts[id]);
-    const hidden = (this.prefs()?.hiddenBlocks ?? []).filter((b) => !this.blockKeys.includes(b));
     return {
       accountIds: checked.length === ids.length ? null : checked,
-      hiddenBlocks: [...hidden, ...this.blockKeys.filter((b) => !blocks[b])],
+      hiddenBlocks: this.blockKeys.filter((b) => !blocks[b]),
     };
   }
 

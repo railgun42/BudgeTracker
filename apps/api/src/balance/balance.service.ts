@@ -26,18 +26,22 @@ export const balanceSql = (userId: string, accountId: string, today: LocalDate) 
   FROM "Transaction" t, "opening" o
   WHERE t."accountId" = ${accountId}::uuid AND t."userId" = ${userId}::uuid AND t."deletedAt" IS NULL AND ${countedSql}`;
 
-// Série de soldes (tableau de bord) : une ligne `date` NULL pour tout ce qui précède `from` (règle ci-dessus appliquée),
-// puis les sommes par jour de [from, to] avec le choix du jour du solde de départ, que balanceSeries applique.
+// Série de soldes (tableau de bord) : sommes par jour de [from, to] (`date` NULL = avant `from`), séparées selon que la
+// règle du solde ci-dessus les compte (`counted`) ou non (déjà comprises dans le solde de départ). `opening` : le solde de
+// départ lui-même. Les lignes non comptées sont rendues jusqu'au solde de départ, même après `to` : balanceSeries s'en sert
+// pour reconstituer, à rebours, le solde d'avant le solde de départ.
+const COUNTED = Prisma.sql`COALESCE(${countedSql}, false)`;
 export const balanceDaysSql = (userId: string, accountId: string, from: LocalDate, to: LocalDate) => Prisma.sql`
   WITH ${openingCte(userId, accountId)}
   SELECT
     CASE WHEN t."date" < ${from}::date THEN NULL ELSE to_char(t."date", 'YYYY-MM-DD') END AS "date",
-    (t."countInBalance" IS NOT FALSE OR t."categoryId" = ${OPENING}) AS "sameDay",
+    ${COUNTED} AS "counted",
+    COALESCE(t."categoryId" = ${OPENING}, false) AS "opening",
     SUM(CASE WHEN t."type" = 'CREDIT' THEN t."amountCents" ELSE -t."amountCents" END)::bigint AS "cents"
   FROM "Transaction" t, "opening" o
   WHERE t."accountId" = ${accountId}::uuid AND t."userId" = ${userId}::uuid AND t."deletedAt" IS NULL
-    AND t."date" <= ${to}::date AND (t."date" >= ${from}::date OR ${countedSql})
-  GROUP BY 1, 2`;
+    AND (t."date" <= ${to}::date OR NOT ${COUNTED} OR t."categoryId" = ${OPENING})
+  GROUP BY 1, 2, 3`;
 
 @Injectable()
 export class BalanceService {

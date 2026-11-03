@@ -108,7 +108,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ### Suivi : ce qu'il reste à faire, dans l'ordre
 
-E0 à E41d sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+E0 à E42c sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
 
 | Étape | Sujet | Dépend de |
 |---|---|---|
@@ -408,9 +408,9 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Fichiers : `features/history/history-page.ts`, `shared-ui/category-fields.ts` (extrait de `transaction-form-page.ts`), `packages/shared/src/dto/transfer.ts`, `apps/api/src/transfers/*` (aucune migration, aucun nouvel endpoint) (+ specs).
 - Vérif : `history-page.spec.ts` (PATCH avec catégorie, sous-catégorie, notes, tags ; catégorie effacée ⇒ `null` ; catégorie technique non envoyée ; compte et sens ; 409 et 422 ; virement : GET puis PATCH `/transfers` avec sa version) ; `transfers.e2e-spec.ts` (catégorie, sous-catégorie et tags sur les deux jambes, `null` ⇒ « Virement », 422 sous-catégorie orpheline, 404 tag inconnu) ; registre d'isolation (catégorie et tag d'un autre utilisateur ⇒ 404) ; `npm test` racine, `shared`, `api`, `web`, lint et build verts ; contrôle manuel mobile et bureau.
 
-**E42 — Tableau de bord (route `/`, SPEC §7)** : trois sous-étapes, une à la fois.
+**E42 — Tableau de bord (route `/`, SPEC §7)** ✅ (2026-11-03) : trois sous-étapes, une à la fois.
 - Réutilise les endpoints existants : `/accounts/:id/balance`, `/accounts/:id/interest-rates`, `/stats/by-category` (totaux de la période, virements exclus), `/transactions?limit=5`, `/notifications`, `/cashflow-simulations/:id/result` (`belowFloor`) et `QuickEntry`. Seuls nouveaux : la série de soldes, les échéances à venir et les préférences (E42a).
-- Période unique (ce mois-ci par défaut, mois dernier, 30 jours, 3 mois, 12 mois) : elle pilote dépenses/revenus, donut et fenêtre de la courbe. L'enveloppe de simulation n'est pas au tableau de bord (seul son plancher intervient dans l'alerte).
+- Période unique (mois actuel par défaut, 3 mois, 6 mois, 12 mois ; changé après E42c à la demande du propriétaire, les anciennes valeurs enregistrées repassent à « mois actuel ») : elle pilote dépenses/revenus, donut et fenêtre de la courbe. L'enveloppe de simulation n'est pas au tableau de bord (seul son plancher intervient dans l'alerte).
 - Cochée (✅ avec la date) seulement après le retour du propriétaire sur les contrôles manuels (360 px et 1280 px).
 
 **E42a — API : préférences, série de soldes, échéances** ✅ (2026-11-03) (dépend d'E30)
@@ -426,10 +426,11 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Fichiers : `features/dashboard/*`, `app.routes.ts` ; styles partagés dans `styles.scss` (budget de 4 ko par composant).
 - Vérif : tests de composant — état vide ⇒ checklist, étapes faites cochées ; total sans compte `NOT_TRACKED` ; compte masqué ⇒ disparaît et `PUT` envoyé ; alertes présentes ou non selon les données ; montants formatés depuis les centimes, aucun `Date` ; `ng test` et `ng build` verts. À contrôler à la main : 360 px sans défilement horizontal, 1280 px sur deux colonnes, focus et contrastes AA.
 
-- Choix validés en E42a/E42b : blocs masquables `KEY_FIGURES`, `PERIOD_SUMMARY`, `BALANCE_CURVE`, `LATEST_TRANSACTIONS`, `CATEGORY_DONUT` (le panneau « Personnaliser » n'affiche que ceux déjà présents) ; premier `PUT` des préférences en `version: 0` ; série limitée à 400 jours (422 au-delà) ; périodes en mois entiers (« 30 jours » finit aujourd'hui) ; « Solde total » et alerte de prévisionnel négatif sur tous les comptes suivis ; première transaction détectée par `/stats/monthly`.
+- Choix validés en E42a/E42b : blocs masquables `KEY_FIGURES`, `PERIOD_SUMMARY`, `BALANCE_CURVE`, `LATEST_TRANSACTIONS`, `CATEGORY_DONUT` (le panneau « Personnaliser » n'affiche que ceux déjà présents) ; premier `PUT` des préférences en `version: 0` ; série limitée à 400 jours (422 au-delà) ; périodes en mois entiers ; « Solde total » et alerte de prévisionnel négatif sur tous les comptes suivis ; première transaction détectée par `/stats/monthly`.
+- Modifié après E42c à la demande du propriétaire : la série de soldes ne laisse plus à plat l'historique d'avant le solde de départ, elle le reconstitue à rebours (la Vérif d'E42a « transaction antérieure au solde de départ ⇒ courbe inchangée » ne vaut plus que pour le solde actuel et les jours depuis le solde de départ).
 - Écart connu, hors E42 : le solde de départ ne se saisit qu'à la création du compte ; l'étape 2 de la checklist renvoie vers `/accounts`, sans moyen d'en ajouter un à un compte existant.
 
-**E42c — Page : courbe, dernières transactions, donut** (dépend d'E42b)
+**E42c — Page : courbe, dernières transactions, donut** ✅ (2026-11-03) (dépend d'E42b)
 - Objectif : composant `balance-chart` en SVG sur le modèle de `projection-chart` : un ou plusieurs comptes, total plus épais, légende et trait distincts sans dépendre de la couleur seule, alternative textuelle. Plus les 5 dernières transactions et le donut (`app-donut-chart` réutilisé), tous deux masquables.
 - Vérif : tests de composant — total plus épais que les comptes, décocher un compte retire sa courbe, `PUT` des préférences correct, alternative textuelle présente ; lint, build et les quatre suites vertes ; contrôle manuel de la lisibilité à 360 px.
 

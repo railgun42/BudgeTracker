@@ -24,3 +24,10 @@ export const NO_CATEGORY_ICON = 'M12 3a9 9 0 1 0 0 18 9 9 0 1 0 0-18zM8 12h8';
 
 /** Icône d'une catégorie racine (une sous-catégorie prend celle de son parent, voir l'appelant). */
 export const categoryIcon = (c: CategoryDto): string => CATEGORY_ICONS[c.nameKey ?? ''] ?? TAG_ICON;
+
+/** Icône de la catégorie racine d'une transaction (une sous-catégorie prend celle de son parent) ; sans catégorie ⇒ icône neutre. */
+export function transactionIcon(categoryId: string | null, byId: Map<string, CategoryDto>): string {
+  const c = categoryId ? byId.get(categoryId) : undefined;
+  const root = c?.parentId ? byId.get(c.parentId) : c;
+  return root ? categoryIcon(root) : NO_CATEGORY_ICON;
+}

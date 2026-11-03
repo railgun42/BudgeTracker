@@ -4,8 +4,8 @@ import type { LocalDate } from '../local-date';
 // Tableau de bord (SPEC §7). Bornes validées par l'API.
 export const DASHBOARD_LIMITS = { maxAccountIds: 50, maxSeriesDays: 400, maxUpcomingDays: 31 } as const;
 
-/** Période unique du tableau de bord ; THIS_MONTH par défaut. */
-export const DASHBOARD_PERIODS = ['THIS_MONTH', 'LAST_MONTH', 'LAST_30_DAYS', 'LAST_3_MONTHS', 'LAST_12_MONTHS'] as const;
+/** Période unique du tableau de bord ; THIS_MONTH par défaut. Mois entiers, finissant avec le mois courant. */
+export const DASHBOARD_PERIODS = ['THIS_MONTH', 'LAST_3_MONTHS', 'LAST_6_MONTHS', 'LAST_12_MONTHS'] as const;
 export type DashboardPeriod = (typeof DASHBOARD_PERIODS)[number];
 
 /** Blocs masquables (les alertes ne le sont pas). */
@@ -26,11 +26,13 @@ export interface UpdateDashboardPreferencesInput {
 }
 
 // GET /dashboard/preferences : valeurs par défaut (version 0) si rien n'est enregistré ; les comptes supprimés
-// depuis (ou effacés par la réinitialisation) sont retirés à la lecture.
+// depuis (ou effacés par la réinitialisation) sont retirés à la lecture, une période devenue inconnue repasse à THIS_MONTH.
 export type DashboardPreferencesDto = UpdateDashboardPreferencesInput;
 
-// GET /dashboard/balance-series?from&to[&accountIds=id1,id2] (défaut : tous les comptes). Solde de fin de journée,
-// même règle que GET /accounts/:id/balance (solde de départ, countInBalance, virements). from ≤ to, au plus
+// GET /dashboard/balance-series?from&to[&accountIds=id1,id2] (défaut : tous les comptes). Solde de fin de journée.
+// Depuis le jour du solde de départ : même règle que GET /accounts/:id/balance (countInBalance, virements). Avant lui :
+// solde reconstitué à rebours (solde de départ moins les mouvements antérieurs, déjà compris dedans), pour que l'historique
+// recopié de la banque apparaisse sur la courbe. Le dernier point égale donc toujours le solde actuel. from ≤ to, au plus
 // DASHBOARD_LIMITS.maxSeriesDays jours (sinon 422) ; compte étranger ⇒ 404 ; comptes NOT_TRACKED omis.
 export interface BalanceSeriesDto {
   /** Chaque jour de from à to inclus. */
