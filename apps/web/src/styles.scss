@@ -1270,3 +1270,76 @@ main#main > :not(router-outlet) {
     padding-right: var(--tap);
   }
 }
+
+// --- Tableau de bord (route /) : une colonne sur mobile, deux à partir du bureau ; `.dash-wide` occupe toute la largeur ---
+
+.dash-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.dash-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--space-2);
+}
+
+.dash-grid {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+
+  > * {
+    min-width: 0;
+  }
+
+  h2 {
+    margin-top: 0;
+  }
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.alerts,
+.checklist {
+  display: grid;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+
+  .alert {
+    margin: 0;
+  }
+}
+
+.checklist li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--tap);
+}
+
+@media (min-width: 48rem) {
+  .dash-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .dash-wide {
+    grid-column: 1 / -1;
+  }
+}

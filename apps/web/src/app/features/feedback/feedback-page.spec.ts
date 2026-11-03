@@ -117,8 +117,7 @@ describe('Donner mon avis', () => {
 
 describe('Donner mon avis : chargement et liste vide', () => {
   it('« Chargement… » puis état vide', async () => {
-    await harness.navigateByUrl('/');
-    http.match(() => true).forEach((r) => r.flush([]));
+    await harness.navigateByUrl('/mentions-legales'); // page précédente sans requête
     await harness.navigateByUrl('/feedback');
     el = harness.routeNativeElement!;
     expect(clean(el.querySelector('[role="status"]')?.textContent)).toBe('Chargement…');

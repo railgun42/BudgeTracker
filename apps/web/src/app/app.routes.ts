@@ -1,12 +1,15 @@
 import { Routes } from '@angular/router';
 import { adminGuard, authGuard } from './core/auth/auth.guard';
 
-// Écrans issus de docs/wireframes ; chaque étape E15+ remplace son placeholder par la vraie page.
-const placeholder = () => import('./shared-ui/placeholder-page').then((m) => m.PlaceholderPage);
 const authed = { canActivate: [authGuard] };
 
 export const routes: Routes = [
-  { path: '', title: 'Tableau de bord', ...authed, loadComponent: placeholder },
+  {
+    path: '',
+    title: 'Tableau de bord',
+    ...authed,
+    loadComponent: () => import('./features/dashboard/dashboard-page').then((m) => m.DashboardPage),
+  },
   {
     path: 'accounts',
     title: 'Mes comptes',

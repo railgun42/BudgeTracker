@@ -413,7 +413,7 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Période unique (ce mois-ci par défaut, mois dernier, 30 jours, 3 mois, 12 mois) : elle pilote dépenses/revenus, donut et fenêtre de la courbe. L'enveloppe de simulation n'est pas au tableau de bord (seul son plancher intervient dans l'alerte).
 - Cochée (✅ avec la date) seulement après le retour du propriétaire sur les contrôles manuels (360 px et 1280 px).
 
-**E42a — API : préférences, série de soldes, échéances** (dépend d'E30)
+**E42a — API : préférences, série de soldes, échéances** ✅ (2026-11-03) (dépend d'E30)
 - Objectif : trois endpoints, aucun écran.
   - `GET` et `PUT /v1/dashboard/preferences` : JSON validé par DTO (période, `accountIds` — null = tous —, `curveAccountIds`, `curveTotal`, `hiddenBlocks`), limité à 50 identifiants, verrouillé par version.
   - `GET /v1/dashboard/balance-series?from&to&accountIds` : solde de chaque jour pour chaque compte, plus le total, avec le calcul de `balanceSql` (solde de départ, transactions antérieures exclues, `countInBalance`, virements pris en compte). Fonction pure dans `dashboard/engine/balance-series.ts`.
@@ -421,10 +421,13 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Fichiers : `prisma/schema.prisma` et migration versionnée (table `DashboardPreference`), `src/dashboard/*`, `packages/shared/src/dto/dashboard.ts`, `src/gdpr/*` (export, suppression de compte, réinitialisation), registre d'isolation, specs et e2e.
 - Vérif : tests purs — transaction antérieure au solde de départ (courbe inchangée), jour du solde de départ avec les deux valeurs de `countInBalance`, virement entre deux comptes (total plat), compte `NOT_TRACKED` exclu, fenêtre d'un jour ; e2e — le dernier point de la série égale `currentCents` de `/balance`, préférences d'un utilisateur invisibles à un autre, `accountId` étranger ⇒ 404, JSON invalide ⇒ 400, version périmée ⇒ 409, préférences exportées et supprimées avec le compte, conservées par la réinitialisation ; `EXPLAIN` utilise l'index `(accountId, date)` ; lint, build, `npm test` racine, `shared`, `api`, `web` verts.
 
-**E42b — Page : socle, chiffres clés, alertes, personnalisation** (dépend d'E42a)
+**E42b — Page : socle, chiffres clés, alertes, personnalisation** ✅ (2026-11-03) (dépend d'E42a)
 - Objectif : la route `/` charge la page à la place du placeholder. Actions rapides (« + Transaction », « Virement »), checklist d'état vide en 3 étapes, carte « Solde total » et comptes choisis, sélecteur de période, dépenses/revenus/reste avec comparaison à la période précédente, quatre alertes (taux manquant, prévisionnel négatif ou sous le plancher, récurrences des 7 jours, notifications non lues), panneau « Personnaliser » (case par compte et par bloc, enregistré par `PUT`).
 - Fichiers : `features/dashboard/*`, `app.routes.ts` ; styles partagés dans `styles.scss` (budget de 4 ko par composant).
 - Vérif : tests de composant — état vide ⇒ checklist, étapes faites cochées ; total sans compte `NOT_TRACKED` ; compte masqué ⇒ disparaît et `PUT` envoyé ; alertes présentes ou non selon les données ; montants formatés depuis les centimes, aucun `Date` ; `ng test` et `ng build` verts. À contrôler à la main : 360 px sans défilement horizontal, 1280 px sur deux colonnes, focus et contrastes AA.
+
+- Choix validés en E42a/E42b : blocs masquables `KEY_FIGURES`, `PERIOD_SUMMARY`, `BALANCE_CURVE`, `LATEST_TRANSACTIONS`, `CATEGORY_DONUT` (le panneau « Personnaliser » n'affiche que ceux déjà présents) ; premier `PUT` des préférences en `version: 0` ; série limitée à 400 jours (422 au-delà) ; périodes en mois entiers (« 30 jours » finit aujourd'hui) ; « Solde total » et alerte de prévisionnel négatif sur tous les comptes suivis ; première transaction détectée par `/stats/monthly`.
+- Écart connu, hors E42 : le solde de départ ne se saisit qu'à la création du compte ; l'étape 2 de la checklist renvoie vers `/accounts`, sans moyen d'en ajouter un à un compte existant.
 
 **E42c — Page : courbe, dernières transactions, donut** (dépend d'E42b)
 - Objectif : composant `balance-chart` en SVG sur le modèle de `projection-chart` : un ou plusieurs comptes, total plus épais, légende et trait distincts sans dépendre de la couleur seule, alternative textuelle. Plus les 5 dernières transactions et le donut (`app-donut-chart` réutilisé), tous deux masquables.

@@ -3,7 +3,6 @@ import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, NonNullableFormBuilder, ReactiveFormsModule } from '@angular/forms';
 import {
   AccountDto,
-  addDays,
   addMonths,
   CategoryDto,
   CategoryStatDto,
@@ -16,6 +15,7 @@ import {
 } from '@budgetracker/shared';
 import { debounceTime, forkJoin, of } from 'rxjs';
 import { ApiClient } from '../../core/api-client';
+import { previousRange } from '../../core/date-range';
 import { SignedEurPipe } from '../../core/money';
 import { today } from '../../core/today';
 import { categoryIcon, NO_CATEGORY_ICON } from '../../shared-ui/category-icons';
@@ -25,6 +25,7 @@ import { DonutChart, DonutPart } from './donut-chart';
 import { MonthlyChart, monthLabel } from './monthly-chart';
 
 export { monthLabel } from './monthly-chart';
+export { previousRange } from '../../core/date-range';
 
 interface Row extends StatTotals {
   key: string;
@@ -64,18 +65,6 @@ export function fillMonths(rows: MonthlyStatDto[]): MonthlyStatDto[] {
   const out: MonthlyStatDto[] = [];
   for (let m = rows[0].month; m <= rows[rows.length - 1].month; m = nextMonth(m)) out.push(byMonth.get(m) ?? { month: m, incomeCents: 0, expenseCents: 0 });
   return out;
-}
-
-/** Période précédente de même durée : mêmes nombres de mois si la période couvre des mois entiers, sinon de jours. */
-export function previousRange(from: string, to: string): { from: string; to: string } | null {
-  if (from > to) return null;
-  const end = addDays(from, -1);
-  if (from.endsWith('-01') && to.slice(8) === lastDayOfMonth(to.slice(0, 7))) {
-    const months = (+to.slice(0, 4) - +from.slice(0, 4)) * 12 + (+to.slice(5, 7) - +from.slice(5, 7)) + 1;
-    return { from: addMonths(from, -months), to: end };
-  }
-  const days = (Date.parse(to) - Date.parse(from)) / 86_400_000 + 1;
-  return { from: addDays(from, -days), to: end };
 }
 
 /** Périodes rapides, relatives à aujourd'hui. */
