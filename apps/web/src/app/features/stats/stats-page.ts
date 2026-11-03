@@ -340,8 +340,9 @@ function periodRange(period: Period): { from: string; to: string } {
         margin: 0 0 var(--space-3);
         font-size: var(--text-lg);
       }
+      // Jamais plus large que l'écran : en dessous de 22rem le tableau se resserre, puis défile dans son conteneur.
       table {
-        min-width: 22rem;
+        min-width: min(22rem, 100%);
       }
     }
     tbody th {

@@ -1,12 +1,33 @@
 <a class="skip-link" href="#main">Aller au contenu</a>
 
 <div class="shell" [class.signed-in]="!!session.user()">
+  <!-- Actions du compte, rendues dans le menu de l'avatar (bureau) et dans le tiroir (mobile) ; `id` garde les ids uniques. -->
+  <ng-template #accountActions let-id>
+    <a routerLink="/me" routerLinkActive="active" ariaCurrentWhenActive="page">Mon compte</a>
+    <a routerLink="/feedback" routerLinkActive="active" ariaCurrentWhenActive="page">Donner mon avis</a>
+    <div class="theme" role="group" [attr.aria-labelledby]="'theme-label-' + id">
+      <span [id]="'theme-label-' + id">Thème</span>
+      <div class="segmented">
+        @for (t of themes; track t.value) {
+          <button type="button" [attr.aria-pressed]="theme() === t.value" (click)="theme.set(t.value)">{{ t.label }}</button>
+        }
+      </div>
+    </div>
+    <button type="button" class="logout" (click)="logout()">
+      Se déconnecter<span class="visually-hidden"> ({{ session.user()?.name }})</span>
+    </button>
+  </ng-template>
+
   <header class="header">
     @if (session.user()) {
-      <button type="button" class="icon-button menu-button" popovertarget="main-nav" aria-label="Menu">
+      <button type="button" class="icon-button menu-button" popovertarget="main-nav" [attr.aria-label]="menuLabel()">
         <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
           <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none" />
         </svg>
+        <!-- Mobile : la cloche est dans le tiroir ; ce point rouge y signale des notifications non lues. -->
+        @if (unread() > 0) {
+          <span class="menu-dot" aria-hidden="true"></span>
+        }
       </button>
     }
 
@@ -33,35 +54,40 @@
         <p class="account-name">
           {{ user.name }}<br /><span class="muted">{{ user.email }}</span>
         </p>
-        <a routerLink="/me" routerLinkActive="active" ariaCurrentWhenActive="page">Mon compte</a>
-        <a routerLink="/feedback" routerLinkActive="active" ariaCurrentWhenActive="page">Donner mon avis</a>
-        <div class="theme" role="group" aria-labelledby="theme-label">
-          <span id="theme-label">Thème</span>
-          <div class="segmented">
-            @for (t of themes; track t.value) {
-              <button type="button" [attr.aria-pressed]="theme() === t.value" (click)="theme.set(t.value)">{{ t.label }}</button>
-            }
-          </div>
-        </div>
-        <button type="button" class="logout" (click)="logout()">
-          Se déconnecter<span class="visually-hidden"> ({{ user.name }})</span>
-        </button>
+        <ng-container [ngTemplateOutlet]="accountActions" [ngTemplateOutletContext]="{ $implicit: 'menu' }" />
       </div>
     }
   </header>
 
   @if (session.user()) {
-    <nav id="main-nav" class="sidebar" popover aria-label="Navigation principale" (toggle)="onPopoverToggle($event)">
-      @for (link of links(); track link.path) {
-        <a
-          [routerLink]="link.path"
-          routerLinkActive="active"
-          ariaCurrentWhenActive="page"
-          [routerLinkActiveOptions]="{ exact: link.exact }"
-          >{{ link.label }}</a
-        >
+    <div id="main-nav" class="sidebar" popover (toggle)="onPopoverToggle($event)">
+      <nav aria-label="Navigation principale">
+        @for (link of links(); track link.path) {
+          <a
+            [routerLink]="link.path"
+            routerLinkActive="active"
+            ariaCurrentWhenActive="page"
+            [routerLinkActiveOptions]="{ exact: link.exact }"
+            >{{ link.label }}</a
+          >
+        }
+      </nav>
+      <!-- Mobile seulement : notifications et compte en bas du tiroir, navigation en haut. -->
+      @if (session.user(); as user) {
+        <div class="drawer-account">
+          <a routerLink="/notifications" routerLinkActive="active" ariaCurrentWhenActive="page" [attr.aria-label]="notificationsLabel()">
+            Notifications
+            @if (unread() > 0) {
+              <span class="badge" aria-hidden="true">{{ unread() > 99 ? '99+' : unread() }}</span>
+            }
+          </a>
+          <p class="account-name">
+            {{ user.name }}<br /><span class="muted">{{ user.email }}</span>
+          </p>
+          <ng-container [ngTemplateOutlet]="accountActions" [ngTemplateOutletContext]="{ $implicit: 'drawer' }" />
+        </div>
       }
-    </nav>
+    </div>
   }
 
   <main id="main" tabindex="-1">

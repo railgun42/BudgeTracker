@@ -63,6 +63,37 @@ describe('Shell', () => {
     expect(el.querySelector('header button[popovertarget="notifications-panel"]')?.getAttribute('aria-label')).toBe('Notifications (2 non lues)');
   });
 
+  it('mobile (R-4) : notifications et compte en bas du tiroir, point rouge sur le bouton du menu s’il y a des non lues', async () => {
+    await restore(USER);
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    const menuButton = () => el.querySelector('header button[popovertarget="main-nav"]')!;
+
+    expect(menuButton().getAttribute('aria-label')).toBe('Menu');
+    expect(menuButton().querySelector('.menu-dot')).toBeNull();
+    TestBed.inject(HttpTestingController).match('/api/v1/notifications').forEach((r) => r.flush({ unreadCount: 2, items: [] }));
+    await fixture.whenStable();
+    expect(menuButton().getAttribute('aria-label')).toBe('Menu (2 notifications non lues)');
+    expect(menuButton().querySelector('.menu-dot')?.getAttribute('aria-hidden')).toBe('true');
+
+    // Le tiroir est un popover : navigation en tête, compte en bas, hors de la navigation principale.
+    const drawer = el.querySelector('#main-nav[popover]')!;
+    expect(drawer.firstElementChild!.matches('nav[aria-label="Navigation principale"]')).toBe(true);
+    const account = drawer.querySelector('.drawer-account')!;
+    expect(drawer.querySelector('nav')!.contains(account)).toBe(false);
+    expect([...account.querySelectorAll('a')].map((a) => [a.getAttribute('aria-label') ?? a.textContent?.trim(), a.getAttribute('href')])).toEqual([
+      ['Notifications (2 notifications non lues)', '/notifications'],
+      ['Mon compte', '/me'],
+      ['Donner mon avis', '/feedback'],
+    ]);
+    expect(account.querySelector('button.logout')?.textContent).toContain('Se déconnecter');
+    // Les deux copies du choix de thème ont des ids distincts, chacune reliée à son libellé.
+    const labelled = [...el.querySelectorAll('.theme')].map((t) => t.getAttribute('aria-labelledby'));
+    expect(new Set(labelled).size).toBe(2);
+    for (const id of labelled) expect(el.querySelectorAll(`#${id}`).length).toBe(1);
+  });
+
   it('lien Administration : absent pour un utilisateur ordinaire, présent pour un admin', async () => {
     const adminLinks = async (user: typeof USER) => {
       TestBed.resetTestingModule();

@@ -1,4 +1,4 @@
-import { DOCUMENT } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
@@ -6,6 +6,7 @@ import { Role } from '@budgetracker/shared';
 import { filter, finalize } from 'rxjs';
 import { initialsOf, Session } from './core/auth/session';
 import { QuickEntry } from './core/quick-entry';
+import { Notifications } from './features/notifications/notifications';
 import { NotificationBell } from './features/notifications/notification-bell';
 import { TransactionFormPage } from './features/transactions/transaction-form-page';
 import { TransferFormPage } from './features/transactions/transfer-form-page';
@@ -27,7 +28,7 @@ function readTheme(): Theme {
 @Component({
   selector: 'app-root',
   // Formulaires de saisie rapide : importés pour la modale, mais chargés en différé (@defer).
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NotificationBell, TransactionFormPage, TransferFormPage],
+  imports: [NgTemplateOutlet, RouterOutlet, RouterLink, RouterLinkActive, NotificationBell, TransactionFormPage, TransferFormPage],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './app.html',
   styleUrl: './app.scss',
@@ -53,6 +54,13 @@ export class App {
   );
 
   protected readonly initials = computed(() => initialsOf(this.session.user()));
+
+  // Notifications non lues (relues par la cloche à chaque navigation) : pastille du tiroir mobile.
+  private readonly notifications = inject(Notifications);
+  protected readonly unread = computed(() => this.notifications.state().unreadCount);
+  private readonly unreadText = computed(() => (this.unread() === 1 ? '1 notification non lue' : `${this.unread()} notifications non lues`));
+  protected readonly menuLabel = computed(() => (this.unread() > 0 ? `Menu (${this.unreadText()})` : 'Menu'));
+  protected readonly notificationsLabel = computed(() => (this.unread() > 0 ? `Notifications (${this.unreadText()})` : 'Notifications'));
 
   protected readonly themes = [
     { value: 'auto', label: 'Auto' },
