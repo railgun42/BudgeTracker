@@ -41,7 +41,7 @@
 - **Constat** : La page statistique dépasse de l'écran vers la droite
 - **Souhait** : voir la page en entiere sur tout l'écrant (sauf défillement vers le bas évidemment)
 - **Priorité** : faible
-- **Statut** : planifiée (E43)
+- **Statut** : fait (E43, 2026-11-03)
 
 ---
 
@@ -54,7 +54,7 @@
 à penser : il faidrait donc rajouté la petite icone rouge de notification AUSSI si le bouton de menu déroulant pour l'indiquer
 SEULEMENT MOBILE
 - **Priorité** : faible
-- **Statut** : planifiée (E43)
+- **Statut** : fait (E43, 2026-11-03)
 
 ---
 
@@ -65,7 +65,7 @@ SEULEMENT MOBILE
 - **Constat** : Lorsque qu'une simulation est calculé, dans les résultat, l'affichage du solde jour par jour se fait en claquant sur ce titre le faisant déroulé. mais il s'agit seulement du texte en gras
 - **Souhait** : il faudrait rajouter une petite fleche vers le haut ou le bas (suivant l'état) pour indiquer qu'il est possible de cliquer afin de le faire déroulé
 - **Priorité** : faible
-- **Statut** : planifiée (E43)
+- **Statut** : fait (E43, 2026-11-03)
 
 ---
 
