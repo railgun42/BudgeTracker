@@ -19,7 +19,7 @@
 - **Constat** : la modification d'une transaction ne permet de modifier que le montant, la date et le libéllé
 - **Souhait** : il faudrait aussi pouvoir modifier la catégorie, les note (tout)
 - **Priorité** : haute 
-- **Statut** : planifiée (E41d)
+- **Statut** : fait (E41d, 2026-11-03)
 
 ---
 

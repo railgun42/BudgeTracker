@@ -108,7 +108,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ### Suivi : ce qu'il reste à faire, dans l'ordre
 
-E0 à E41c sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E41d (remarque R-1) passe **avant** la fin d'E43 ; E42 reste bloquée. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+E0 à E41d sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E42 reste bloquée. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
 
 | Étape | Sujet | Dépend de |
 |---|---|---|
@@ -399,7 +399,7 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Fichiers : `apps/web/src/app/shared-ui/tag-input.ts` (+ spec), `features/transactions/transaction-form-page.ts`.
 - Vérif : `tag-input.spec.ts` (Entrée crée, doublon ignoré sans tenir compte de la casse, croix retire, champ vide ignoré) ; `transaction-form-page.spec.ts` (le POST envoie `tagIds`) ; parcours manuel mobile et bureau ; `ng test`, `ng build` verts.
 
-**E41d — Modification complète d'une transaction (remarque R-1)**
+**E41d — Modification complète d'une transaction (remarque R-1)** ✅ (2026-11-03)
 - Constat vérifié : `PATCH /transactions/:id` accepte déjà `categoryId`, `subcategoryId`, `details`, `tagIds`, `accountId`, `type` ; seul le formulaire d'édition de `history-page.ts` était limité à montant, libellé et date. Les jambes de virement étaient refusées par `PATCH /transactions/:id` (422) et `PATCH /transfers/:id` n'acceptait ni catégorie ni tags.
 - Décisions du propriétaire : compte et sens (dépense/revenu) modifiables pour une transaction ordinaire ; catégorie et tags aussi modifiables sur un virement (comptes et sens d'un virement inchangés).
 - Objectif : le formulaire d'édition de l'historique propose, préremplis, le sens, le compte, catégorie puis sous-catégorie, notes et tags (composants `category-fields` et `tag-input`, partagés avec la saisie). Seuls les champs changés partent (catégorie, notes, tags, compte, sens) : une catégorie technique, masquée ou archivée n'est jamais écrasée ; effacer la catégorie envoie `categoryId: null`. Virement : « Modifier » lit `GET /transfers/:id` (le verrou est la version du virement, pas celle d'une jambe), masque sens et compte, puis `PATCH /transfers/:id` applique tout aux deux jambes. `UpdateTransferInput` gagne `categoryId`, `subcategoryId`, `tagIds` (`categoryId: null` rétablit la catégorie système « Virement »). Version périmée (409) : proposer de recharger ; 422 : message portefeuille non suivi.
