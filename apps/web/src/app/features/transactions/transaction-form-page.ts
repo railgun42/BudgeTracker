@@ -7,6 +7,7 @@ import {
   CategoryDto,
   CreateTransactionInput,
   eurosToCents,
+  TagDto,
   TrackingType,
   TransactionType,
 } from '@budgetracker/shared';
@@ -16,6 +17,7 @@ import { amountValidator } from '../../core/money';
 import { QuickEntry } from '../../core/quick-entry';
 import { today } from '../../core/today';
 import { categoryOptions } from '../../shared-ui/labels';
+import { TagInput } from '../../shared-ui/tag-input';
 import { errorMessage } from '../auth/auth-form';
 
 // Saisie en 3 champs (SPEC §7) : montant, catégorie, compte. Date = aujourd'hui, le reste est replié.
@@ -23,7 +25,7 @@ import { errorMessage } from '../auth/auth-form';
 // Page (/transactions/new) ou modale de la coquille (« + Transaction »), selon `modal`.
 @Component({
   selector: 'app-transaction-form-page',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, TagInput],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="entry-head">
@@ -137,6 +139,7 @@ import { errorMessage } from '../auth/auth-form';
             <label for="tx-details">Notes</label>
             <textarea id="tx-details" formControlName="details" maxlength="1000" rows="3"></textarea>
           </div>
+          <app-tag-input inputId="tx-tags" [(tags)]="tags" [(value)]="tagIds" />
         </div>
       </details>
 
@@ -207,6 +210,8 @@ export class TransactionFormPage {
   protected readonly accounts = signal<AccountDto[]>([]);
   private readonly allCategories = signal<CategoryDto[]>([]);
   protected readonly categories = computed(() => categoryOptions(this.allCategories(), null));
+  protected readonly tags = signal<TagDto[]>([]);
+  protected readonly tagIds = signal<string[]>([]);
   protected readonly pending = signal(false);
   protected readonly error = signal<string | null>(null);
 
@@ -235,10 +240,11 @@ export class TransactionFormPage {
   protected readonly choiceMissing = computed(() => this.submitted() && this.onOpening() && !this.value().countInBalance);
 
   constructor() {
-    forkJoin([this.api.get<AccountDto[]>('/accounts'), this.api.get<CategoryDto[]>('/categories')]).subscribe({
-      next: ([accounts, categories]) => {
+    forkJoin([this.api.get<AccountDto[]>('/accounts'), this.api.get<CategoryDto[]>('/categories'), this.api.get<TagDto[]>('/tags')]).subscribe({
+      next: ([accounts, categories, tags]) => {
         this.accounts.set(accounts);
         this.allCategories.set(categories);
+        this.tags.set(tags);
         // Un seul compte : présélectionné, la saisie tombe à 2 champs.
         if (accounts.length === 1) this.form.controls.accountId.setValue(accounts[0].id);
       },
@@ -267,6 +273,7 @@ export class TransactionFormPage {
       type,
       ...(name.trim() ? { name: name.trim() } : {}),
       ...(details.trim() ? { details: details.trim() } : {}),
+      ...(this.tagIds().length ? { tagIds: this.tagIds() } : {}),
       ...(this.onOpening() ? { countInBalance: countInBalance === 'true' } : {}),
     };
     this.pending.set(true);

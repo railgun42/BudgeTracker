@@ -171,6 +171,7 @@ describe('Saisie rapide en modale (coquille)', () => {
     expect(TestBed.inject(Router).url).toBe('/accounts');
     http.expectOne('/api/v1/accounts').flush([COURANT]);
     http.expectOne('/api/v1/categories').flush([]);
+    http.expectOne('/api/v1/tags').flush([]);
     await fixture.whenStable();
 
     fill('tx-amount', '12,34');

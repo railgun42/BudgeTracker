@@ -32,6 +32,7 @@ const CATEGORIES = [
   cat('c6', null, null, 'Animaux'),
   cat('c7', 'cash'),
 ];
+const TAGS = [{ id: 'g1', name: 'Vacances' }];
 const status = (code: number) => ({ status: code, statusText: String(code) });
 
 let harness: RouterTestingHarness;
@@ -68,6 +69,18 @@ async function openExpense(accounts = [COURANT, WALLET]): Promise<void> {
   await navigate('/transactions/new');
   http.expectOne('/api/v1/accounts').flush(accounts);
   http.expectOne('/api/v1/categories').flush(CATEGORIES);
+  http.expectOne('/api/v1/tags').flush(TAGS);
+  await stable();
+}
+
+/** Saisie dans le champ tags puis Entrée (le formulaire ne doit pas être envoyé). */
+async function addTag(name: string): Promise<void> {
+  const input = el.querySelector<HTMLInputElement>('#tx-tags')!;
+  input.value = name;
+  input.dispatchEvent(new Event('input'));
+  const enter = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true });
+  input.dispatchEvent(enter);
+  expect(enter.defaultPrevented).toBe(true);
   await stable();
 }
 
@@ -135,6 +148,22 @@ describe('Saisie d’une dépense', () => {
       name: 'Prime',
       details: 'annuelle',
     });
+  });
+
+  it('tags : un existant (casse ignorée) et un nouveau (POST /tags) partent en tagIds', async () => {
+    await openExpense();
+    type('tx-amount', '5');
+    type('tx-account', 'a1');
+    await addTag('vacances');
+    await addTag('Cadeau');
+    const create = http.expectOne('/api/v1/tags');
+    expect(create.request.body).toEqual({ name: 'Cadeau' });
+    create.flush({ id: 'g2', name: 'Cadeau' });
+    await stable();
+    expect([...el.querySelectorAll('.tag-chip > span')].map((s) => s.textContent)).toEqual(['Vacances', 'Cadeau']);
+
+    await submit();
+    expect(http.expectOne('/api/v1/transactions').request.body).toMatchObject({ amountCents: 500, tagIds: ['g1', 'g2'] });
   });
 
   const options = (id: string) => [...el.querySelectorAll(`#${id} option`)].map((o) => o.textContent?.trim());
