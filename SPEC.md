@@ -114,7 +114,15 @@ Fonctions **pures**, testées unitairement, indépendantes de la BDD :
 - **Icône de catégorie** : chaque catégorie racine a une icône (catégories du seed et techniques ; icône générique pour les personnelles et celles de l'administrateur) ; une sous-catégorie prend celle de son parent. Affichée dans « Mes catégories » et devant chaque transaction de l'historique (icône propre « sans catégorie »). Décorative : le nom reste écrit.
 - **Notifications** : cloche dans la barre de navigation avec le nombre de nouvelles notifications (§13).
 - **Page 404** : le libellé du bouton de retour correspond à la page réellement atteinte (connecté ou non).
-- **Tableau de bord** : prévu, contenu **à décrire** par le propriétaire du produit avant spécification.
+- **Tableau de bord** (`/`) : page personnalisable. Les chiffres suivent les règles des soldes (§3.3) et des statistiques (§6) : les virements sont exclus des dépenses et revenus, les comptes `NOT_TRACKED` n'ont pas de solde. De haut en bas sur mobile (360 px), sur deux colonnes à partir du bureau :
+  1. **Actions rapides** : « + Transaction » et « Virement » (modale de saisie rapide).
+  2. **Alertes** (bandeau, masqué s'il n'y en a pas) : taux d'intérêt manquant (lien « Définir le taux »), solde prévisionnel négatif ou sous le plancher d'une simulation sauvegardée, récurrences des 7 prochains jours, notifications non lues.
+  3. **Chiffres clés** : carte « Solde total » (actuel, et prévisionnel s'il diffère), puis les comptes choisis par l'utilisateur. Par défaut, le total et tous les comptes suivis ; on peut ne garder que le total et un compte.
+  4. **Période** (ce mois-ci par défaut, mois dernier, 30 jours, 3 mois, 12 mois) : dépenses, revenus et reste de la période, avec comparaison à la période précédente de même durée.
+  5. **Évolution du solde** : courbe sur le passé de la période, jour par jour. L'utilisateur choisit un ou plusieurs comptes ; le total est tracé plus épais que les comptes, et chaque courbe se distingue par plus que la couleur.
+  6. **5 dernières transactions** (lien vers l'historique) et **donut des dépenses par catégorie** (lien vers les statistiques).
+- **Personnalisation du tableau de bord** : comptes affichés dans les chiffres clés, comptes de la courbe, période et blocs masquables (alertes exceptées) sont enregistrés côté serveur par utilisateur. Ils sont exportés avec les données et supprimés avec le compte ; la réinitialisation les conserve (les comptes supprimés qu'ils citent sont ignorés à la lecture).
+- **État vide du tableau de bord** : tant qu'il manque un compte, un solde de départ ou une transaction, une checklist en 3 étapes (créer un compte, saisir le solde de départ, ajouter une première transaction) remplace les blocs de chiffres. Chaque étape faite est cochée et mène à la bonne modale ou page.
 - **Style** : refonte complète (couleurs, disposition, police, images, modales, menus) en dernière étape, une fois les fonctionnalités terminées.
 - Comptes `NOT_TRACKED` : aucun solde affiché.
 - Accessibilité de base : contrastes, navigation clavier, libellés de formulaire.

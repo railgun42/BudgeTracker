@@ -108,7 +108,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ### Suivi : ce qu'il reste à faire, dans l'ordre
 
-E0 à E41d sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E42 reste bloquée. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+E0 à E41d sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
 
 | Étape | Sujet | Dépend de |
 |---|---|---|
@@ -126,8 +126,10 @@ E0 à E41d sont terminées, E43 est commencée (plusieurs écrans déjà refaits
 | E41 | Suggestion de catégorie et réponse à l'auteur | E36, E38, E40 |
 | E41c | Champ tags en puces dans la saisie de transaction (R-2) | E41b |
 | E41d | Modification complète d'une transaction dans l'historique (R-1) | E41c |
-| E42 | Tableau de bord (**bloquée** : à décrire par le propriétaire) | E30, E31, E34 |
-| E43 | Refonte du style (inclut R-3, R-4, R-5 de `docs/remarques.md`) | toutes les fonctionnalités (E30 à E41d, et E42 si décrite) |
+| E42a | Tableau de bord : API (préférences, série de soldes, échéances) | E30, E31, E34 |
+| E42b | Tableau de bord : socle, chiffres clés, alertes, personnalisation | E42a |
+| E42c | Tableau de bord : courbe du solde, dernières transactions, donut | E42b |
+| E43 | Refonte du style (inclut R-3, R-4, R-5 de `docs/remarques.md`) | toutes les fonctionnalités (E30 à E41d, et E42a à E42c) |
 | E44 | Conteneurs et déploiement (début du passage au serveur OVH) | E43 |
 | E45 | Sauvegardes | E44 |
 | E46 | Supervision et check-list de lancement | E45 |
@@ -383,7 +385,7 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 
 ### Phase 10 — Finalisation fonctionnelle
 
-> E42 est bloquée tant que le tableau de bord n'est pas décrit : la sauter si besoin, elle ne bloque pas la suite. E43 se fait en dernier, une fois toutes les fonctionnalités présentes.
+> E42 (tableau de bord) est décrite dans SPEC §7 et se fait en trois sous-étapes, une à la fois (E42a → E42b → E42c). E43 se fait en dernier, une fois toutes les fonctionnalités présentes.
 
 **E41b — Coffre-fort (`/me/coffre`)** ✅ (2026-10-19)
 - Objectif : liste de tous les documents (pièces de transactions + dépôts directs), tri / filtres / recherche côté client, tags (réutilise `Tag`), aperçu, téléchargement, suppression, espace utilisé (SPEC §4).
@@ -406,8 +408,27 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Fichiers : `features/history/history-page.ts`, `shared-ui/category-fields.ts` (extrait de `transaction-form-page.ts`), `packages/shared/src/dto/transfer.ts`, `apps/api/src/transfers/*` (aucune migration, aucun nouvel endpoint) (+ specs).
 - Vérif : `history-page.spec.ts` (PATCH avec catégorie, sous-catégorie, notes, tags ; catégorie effacée ⇒ `null` ; catégorie technique non envoyée ; compte et sens ; 409 et 422 ; virement : GET puis PATCH `/transfers` avec sa version) ; `transfers.e2e-spec.ts` (catégorie, sous-catégorie et tags sur les deux jambes, `null` ⇒ « Virement », 422 sous-catégorie orpheline, 404 tag inconnu) ; registre d'isolation (catégorie et tag d'un autre utilisateur ⇒ 404) ; `npm test` racine, `shared`, `api`, `web`, lint et build verts ; contrôle manuel mobile et bureau.
 
-**E42 — Tableau de bord**
-- **Bloquée : attentes à décrire par l'utilisateur.** Ne pas démarrer avant la rédaction du besoin (contenu, indicateurs, comptes concernés) ; l'ajouter alors à SPEC §7 et détailler l'étape. Dépend d'E30, E31 et E34 pour ses chiffres.
+**E42 — Tableau de bord (route `/`, SPEC §7)** : trois sous-étapes, une à la fois.
+- Réutilise les endpoints existants : `/accounts/:id/balance`, `/accounts/:id/interest-rates`, `/stats/by-category` (totaux de la période, virements exclus), `/transactions?limit=5`, `/notifications`, `/cashflow-simulations/:id/result` (`belowFloor`) et `QuickEntry`. Seuls nouveaux : la série de soldes, les échéances à venir et les préférences (E42a).
+- Période unique (ce mois-ci par défaut, mois dernier, 30 jours, 3 mois, 12 mois) : elle pilote dépenses/revenus, donut et fenêtre de la courbe. L'enveloppe de simulation n'est pas au tableau de bord (seul son plancher intervient dans l'alerte).
+- Cochée (✅ avec la date) seulement après le retour du propriétaire sur les contrôles manuels (360 px et 1280 px).
+
+**E42a — API : préférences, série de soldes, échéances** (dépend d'E30)
+- Objectif : trois endpoints, aucun écran.
+  - `GET` et `PUT /v1/dashboard/preferences` : JSON validé par DTO (période, `accountIds` — null = tous —, `curveAccountIds`, `curveTotal`, `hiddenBlocks`), limité à 50 identifiants, verrouillé par version.
+  - `GET /v1/dashboard/balance-series?from&to&accountIds` : solde de chaque jour pour chaque compte, plus le total, avec le calcul de `balanceSql` (solde de départ, transactions antérieures exclues, `countInBalance`, virements pris en compte). Fonction pure dans `dashboard/engine/balance-series.ts`.
+  - `GET /v1/dashboard/upcoming?days=7` : occurrences de `occurrencesBetween` sur ]aujourd'hui, +7 jours].
+- Fichiers : `prisma/schema.prisma` et migration versionnée (table `DashboardPreference`), `src/dashboard/*`, `packages/shared/src/dto/dashboard.ts`, `src/gdpr/*` (export, suppression de compte, réinitialisation), registre d'isolation, specs et e2e.
+- Vérif : tests purs — transaction antérieure au solde de départ (courbe inchangée), jour du solde de départ avec les deux valeurs de `countInBalance`, virement entre deux comptes (total plat), compte `NOT_TRACKED` exclu, fenêtre d'un jour ; e2e — le dernier point de la série égale `currentCents` de `/balance`, préférences d'un utilisateur invisibles à un autre, `accountId` étranger ⇒ 404, JSON invalide ⇒ 400, version périmée ⇒ 409, préférences exportées et supprimées avec le compte, conservées par la réinitialisation ; `EXPLAIN` utilise l'index `(accountId, date)` ; lint, build, `npm test` racine, `shared`, `api`, `web` verts.
+
+**E42b — Page : socle, chiffres clés, alertes, personnalisation** (dépend d'E42a)
+- Objectif : la route `/` charge la page à la place du placeholder. Actions rapides (« + Transaction », « Virement »), checklist d'état vide en 3 étapes, carte « Solde total » et comptes choisis, sélecteur de période, dépenses/revenus/reste avec comparaison à la période précédente, quatre alertes (taux manquant, prévisionnel négatif ou sous le plancher, récurrences des 7 jours, notifications non lues), panneau « Personnaliser » (case par compte et par bloc, enregistré par `PUT`).
+- Fichiers : `features/dashboard/*`, `app.routes.ts` ; styles partagés dans `styles.scss` (budget de 4 ko par composant).
+- Vérif : tests de composant — état vide ⇒ checklist, étapes faites cochées ; total sans compte `NOT_TRACKED` ; compte masqué ⇒ disparaît et `PUT` envoyé ; alertes présentes ou non selon les données ; montants formatés depuis les centimes, aucun `Date` ; `ng test` et `ng build` verts. À contrôler à la main : 360 px sans défilement horizontal, 1280 px sur deux colonnes, focus et contrastes AA.
+
+**E42c — Page : courbe, dernières transactions, donut** (dépend d'E42b)
+- Objectif : composant `balance-chart` en SVG sur le modèle de `projection-chart` : un ou plusieurs comptes, total plus épais, légende et trait distincts sans dépendre de la couleur seule, alternative textuelle. Plus les 5 dernières transactions et le donut (`app-donut-chart` réutilisé), tous deux masquables.
+- Vérif : tests de composant — total plus épais que les comptes, décocher un compte retire sa courbe, `PUT` des préférences correct, alternative textuelle présente ; lint, build et les quatre suites vertes ; contrôle manuel de la lisibilité à 360 px.
 
 **E43 — Refonte du style (dernière étape fonctionnelle)**
 - Objectif : à faire **une fois toutes les fonctionnalités présentes** : couleurs, polices, dispositions, images, actions (modales pour certains formulaires, menus déroulants…). Une charte (tokens couleurs, typographie, composants) est fixée d'abord, puis appliquée écran par écran ; accessibilité AA conservée (`apps/web/.claude/CLAUDE.md`).
