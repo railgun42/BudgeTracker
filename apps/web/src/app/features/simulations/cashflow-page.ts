@@ -686,6 +686,10 @@ type Params = Omit<CashflowInput, 'today'>;
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
       gap: var(--space-3);
       align-items: start;
+      // Sans ça, la largeur minimale d'un <input type="date"> pousse le champ hors de la carte (375 px).
+      > * {
+        min-width: 0;
+      }
     }
 
     // Résultat : grand chiffre, cartes chiffrées, enveloppe, courbe, tableaux.
@@ -736,12 +740,10 @@ type Params = Omit<CashflowInput, 'today'>;
     }
     .daily {
       margin-bottom: var(--space-3);
+      // flex, centrage et curseur : règle globale « details > summary » (styles.scss).
       summary {
-        display: flex;
-        align-items: center;
         min-height: var(--tap);
         font-weight: var(--weight-bold);
-        cursor: pointer;
       }
     }
     tbody th {

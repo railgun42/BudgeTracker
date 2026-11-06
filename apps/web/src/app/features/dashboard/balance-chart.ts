@@ -14,7 +14,8 @@ export interface BalanceLine {
 
 const W = 640;
 const H = 220;
-const PAD = { top: 18, right: 8, bottom: 24, left: 8 };
+// Dates sous le SVG : plus besoin de place en bas pour elles.
+const PAD = { top: 10, right: 8, bottom: 10, left: 8 };
 // Comptes : couleur (--chart-1…5) ET motif de trait, pour ne pas dépendre de la couleur seule ; le total est plein, épais, couleur du texte.
 const DASHES = ['', '7 3', '2 3', '9 3 2 3', '1 4'];
 const DAY = new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -34,46 +35,59 @@ const dayLabel = (d: LocalDate) => DAY.format(new Date(`${d}T00:00:00Z`));
         </li>
       }
     </ul>
+    <!-- Libellés d'axes en HTML, hors du SVG : leur taille ne suit pas la mise à l'échelle du viewBox, et les montants restent dans leur gouttière, jamais sur la courbe. -->
     <div class="plot">
-      <svg [attr.viewBox]="'0 0 ' + W + ' ' + H" role="img" [attr.aria-label]="description()" tabindex="0" (pointermove)="hover($event)" (pointerleave)="active.set(null)" (blur)="active.set(null)" (keydown)="key($event)">
+      <div class="y-axis" aria-hidden="true">
         @for (t of chart().ticks; track t.value) {
-          <line class="grid" [attr.x1]="PAD.left" [attr.x2]="W - PAD.right" [attr.y1]="t.y" [attr.y2]="t.y" />
+          <span class="tick" [style.top.%]="(t.y / H) * 100">{{ t.value | eur }}</span>
         }
-        @if (chart().zeroY !== null) {
-          <line class="zero" [attr.x1]="PAD.left" [attr.x2]="W - PAD.right" [attr.y1]="chart().zeroY" [attr.y2]="chart().zeroY" />
-        }
-        <text class="tick" [attr.x]="PAD.left" [attr.y]="H - 6">{{ chart().first }}</text>
-        <text class="tick" text-anchor="end" [attr.x]="W - PAD.right" [attr.y]="H - 6">{{ chart().last }}</text>
-        @if (active() !== null) {
-          <line class="cursor" [attr.x1]="chart().x(active()!)" [attr.x2]="chart().x(active()!)" [attr.y1]="PAD.top" [attr.y2]="H - PAD.bottom" />
-        }
-        @for (l of chart().lines; track l.id) {
-          <polyline class="line" [attr.points]="l.points" [attr.stroke]="l.color" [attr.stroke-width]="l.width" [attr.stroke-dasharray]="l.dash" />
-          <circle class="dot" r="4" [attr.cx]="chart().x(active() ?? chart().n - 1)" [attr.cy]="l.ys[active() ?? chart().n - 1]" [attr.fill]="l.color" />
-        }
-        @for (t of chart().ticks; track t.value) {
-          <text class="tick" [attr.x]="PAD.left" [attr.y]="t.y - 4">{{ t.value | eur }}</text>
-        }
-      </svg>
-      @if (active() !== null) {
-        <div class="tooltip" [class.flip]="active()! > chart().n / 2" [style.left.%]="(chart().x(active()!) / W) * 100" role="status">
-          <strong>{{ dates()[active()!] }}</strong>
-          @for (l of lines(); track l.id) {
-            <span>{{ l.name }} : {{ l.cents[active()!] | eur }}</span>
+      </div>
+      <div class="canvas">
+        <svg [attr.viewBox]="'0 0 ' + W + ' ' + H" role="img" [attr.aria-label]="description()" tabindex="0" (pointermove)="hover($event)" (pointerleave)="active.set(null)" (blur)="active.set(null)" (keydown)="key($event)">
+          @for (t of chart().ticks; track t.value) {
+            <line class="grid" [attr.x1]="PAD.left" [attr.x2]="W - PAD.right" [attr.y1]="t.y" [attr.y2]="t.y" />
           }
-        </div>
-      }
+          @if (chart().zeroY !== null) {
+            <line class="zero" [attr.x1]="PAD.left" [attr.x2]="W - PAD.right" [attr.y1]="chart().zeroY" [attr.y2]="chart().zeroY" />
+          }
+          @if (active() !== null) {
+            <line class="cursor" [attr.x1]="chart().x(active()!)" [attr.x2]="chart().x(active()!)" [attr.y1]="PAD.top" [attr.y2]="H - PAD.bottom" />
+          }
+          @for (l of chart().lines; track l.id) {
+            <polyline class="line" [attr.points]="l.points" [attr.stroke]="l.color" [attr.stroke-width]="l.width" [attr.stroke-dasharray]="l.dash" />
+            <circle class="dot" r="4" [attr.cx]="chart().x(active() ?? chart().n - 1)" [attr.cy]="l.ys[active() ?? chart().n - 1]" [attr.fill]="l.color" />
+          }
+        </svg>
+        @if (active() !== null) {
+          <div class="tooltip" [class.flip]="active()! > chart().n / 2" [style.left.%]="(chart().x(active()!) / W) * 100" role="status">
+            <strong>{{ dates()[active()!] }}</strong>
+            @for (l of lines(); track l.id) {
+              <span>{{ l.name }} : {{ l.cents[active()!] | eur }}</span>
+            }
+          </div>
+        }
+      </div>
+      <div class="x-axis" aria-hidden="true">
+        <span class="tick">{{ chart().first }}</span>
+        <span class="tick">{{ chart().last }}</span>
+      </div>
     </div>
   `,
   styles: `
     :host { display: block; }
     .legend { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); padding: 0; margin: 0 0 var(--space-2); list-style: none; font-size: var(--text-sm); }
     .legend li { display: flex; align-items: center; gap: var(--space-1); }
-    .plot { position: relative; }
+    /* Gouttière des montants (aussi large que le plus long) | courbe ; dates en dessous. */
+    .plot { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: var(--space-2); }
+    .canvas { position: relative; }
+    .tick { color: var(--color-text-muted); font-size: var(--text-xs); line-height: 1.2; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    /* Tous les montants dans la même cellule, chacun décalé jusqu'à sa ligne de grille (top en % de la hauteur de la courbe). */
+    .y-axis { display: grid; }
+    .y-axis .tick { grid-area: 1 / 1; align-self: start; position: relative; translate: 0 -50%; text-align: right; }
+    .x-axis { grid-column: 2; display: flex; justify-content: space-between; gap: var(--space-2); padding-top: var(--space-1); }
     svg[role='img'] { display: block; width: 100%; height: auto; background: var(--color-surface); border-radius: var(--radius); touch-action: pan-y; }
     .grid { stroke: var(--color-border); }
     .zero, .cursor { stroke: var(--color-text-muted); }
-    .tick { fill: var(--color-text-muted); font-size: 11px; paint-order: stroke; stroke: var(--color-surface); stroke-width: 3px; stroke-linejoin: round; }
     .line { fill: none; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
     .dot { stroke: var(--color-surface); stroke-width: 2; }
     .tooltip { position: absolute; top: var(--space-2); display: grid; gap: 2px; margin-left: var(--space-2); padding: var(--space-2); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); font-size: var(--text-sm); white-space: nowrap; pointer-events: none; }

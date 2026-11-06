@@ -108,7 +108,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ### Suivi : ce qu'il reste à faire, dans l'ordre
 
-E0 à E42c sont terminées, E43 est commencée (plusieurs écrans déjà refaits) ; l'audit navigateur du 2026-11-06 a ouvert E43b (corrections), à finir avant E44. E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+E0 à E43b sont terminées (E43 cochée le 2026-11-06 avec la fin d'E43b) ; prochaine étape : E44. E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
 
 | Étape | Sujet | Dépend de |
 |---|---|---|
@@ -435,7 +435,7 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Objectif : composant `balance-chart` en SVG sur le modèle de `projection-chart` : un ou plusieurs comptes, total plus épais, légende et trait distincts sans dépendre de la couleur seule, alternative textuelle. Plus les 5 dernières transactions et le donut (`app-donut-chart` réutilisé), tous deux masquables.
 - Vérif : tests de composant — total plus épais que les comptes, décocher un compte retire sa courbe, `PUT` des préférences correct, alternative textuelle présente ; lint, build et les quatre suites vertes ; contrôle manuel de la lisibilité à 360 px.
 
-**E43 — Refonte du style (dernière étape fonctionnelle)**
+**E43 — Refonte du style (dernière étape fonctionnelle)** ✅ (2026-11-06)
 - Objectif : à faire **une fois toutes les fonctionnalités présentes** : couleurs, polices, dispositions, images, actions (modales pour certains formulaires, menus déroulants…). Une charte (tokens couleurs, typographie, composants) est fixée d'abord, puis appliquée écran par écran ; accessibilité AA conservée (`apps/web/.claude/CLAUDE.md`).
 - Fichiers : `apps/web/src/styles.scss`, `shared-ui/*`, templates des `features/*`.
 - Remarques d'usage rattachées (`docs/remarques.md`), à traiter dans cette étape :
@@ -445,7 +445,7 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
   - Vérif de ces trois points : parcours à 360 px sans défilement horizontal (/stats), pastille visible sur le bouton du menu mobile, chevron qui change d'état au clavier et à la souris.
 - Vérif : `ng test` et `ng build` verts, parcours manuel complet mobile et bureau, contrastes vérifiés ; aucune logique métier modifiée (diff limité aux templates/styles).
 
-**E43b — Corrections de l'audit navigateur d'E43 (2026-11-06)**
+**E43b — Corrections de l'audit navigateur d'E43 (2026-11-06)** ✅ (2026-11-06)
 - Contexte : audit réel (Chromium, 375/768/1280 px, clair/sombre, axe-core) : lint, build et tests verts, aucun scroll horizontal de page, aucun défaut de contraste. E43 reste ouverte tant que les points ci-dessous ne sont pas corrigés ; ne cocher E43 qu'à la fin d'E43b. Seuls templates et styles sont touchés, aucune logique métier.
 - **D1 (important) — /stats, régions défilantes non focusables** (axe `scrollable-region-focusable`, mobile et tablette). Dans `features/stats/stats-page.ts`, les conteneurs `.scroll` des sections `h-monthly` et `h-category` reçoivent `tabindex="0"`, `role="region"` et un `aria-labelledby` vers leur titre ; ajouter un indice visuel de défilement (ombre de bord ou colonnes réduites) pour que « Dépenses » du tableau « Par catégorie » ne soit plus coupé sans signal (complète R-3).
 - **D2 (important) — Dashboard, courbe du solde** (`features/dashboard/balance-chart.ts`) : sur mobile, les libellés d'axes sont écrasés par la mise à l'échelle du SVG (taille de police en unités du viewBox) ; sur bureau, le libellé « 9 420,00 € » chevauche le début de la courbe (marge gauche). Conserver `role="img"`, l'`aria-label` et la navigation clavier existants.
@@ -455,6 +455,8 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - **R-4 à confirmer** : pastille rouge sur le bouton du menu mobile à vérifier avec une notification non lue (en créer une depuis `/admin/notifications`).
 - Contrôles complémentaires restés partiels à l'audit : navigation clavier et modales sur toutes les pages (Tab/Maj+Tab, Échap, pas de piège de focus), états vide/erreur/chargement des formulaires, modale d'édition de l'historique.
 - Vérif : `npm run lint`, `npm run build`, `npm test`, `npm test -w @budgetracker/shared`, `npm test -w api`, `npm test -w web` verts (sans exécuter le build de `shared` en parallèle : deux échecs transitoires « no tests » vus à la 1re exécution, verts à la 2e) ; nouvel audit axe sur /stats à 375 et 768 px sans violation ; aucun scroll horizontal ; D2 lisible à 375 px ; D3 sans débordement ; D4 sans cible < 24 px hors texte courant ; R-4 et R-5 confirmés au navigateur ; puis cocher E43.
+- Fait : D1 (`.scroll` focusable, `role="region"` nommé par la légende du tableau, car la section porte déjà le nom du titre ; ombre de bord en CSS sur tous les `.scroll`) ; D2 (libellés d'axes sortis du SVG en HTML, montants dans une gouttière à gauche) ; D3 (`min-width: 0` sur les champs) ; D4 (`padding-block` sur les liens autonomes, neutre pour la hauteur de ligne) ; historique : « Chargement… » et `aria-busy` pendant le chargement de la liste. Audit : axe /stats sans violation à 375/768/1280, clair et sombre ; aucun scroll horizontal ; aucune cible < 24 px hors texte ; R-4 (pastille clair/sombre) et R-5 (souris, Entrée, Espace) confirmés ; 9 modales : focus initial dedans, Tab ne sort pas, Échap ferme, focus rendu au déclencheur.
+- Écarts restants, hors E43b (ils demandent du TypeScript, pas seulement templates/styles) : dans l'historique, ouvrir ou annuler l'édition en ligne laisse le focus sur `body` (le bouton « Modifier » disparaît du DOM) ; `projection-chart` (simulations) garde des libellés d'axes en unités du viewBox, donc le même écrasement que D2 sur mobile.
 
 ### Phase 11 — Déploiement, sauvegardes, supervision (SPEC §11.7)
 

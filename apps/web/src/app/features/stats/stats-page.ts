@@ -168,9 +168,10 @@ function periodRange(period: Period): { from: string; to: string } {
               description="Répartition des dépenses par catégorie ; valeurs détaillées dans le tableau ci-dessous"
             />
           }
-          <div class="scroll">
+          <!-- Région défilante atteignable au clavier ; nommée par la légende du tableau (pas par le h2 : la section porte déjà ce nom). -->
+          <div class="scroll" tabindex="0" role="region" [attr.aria-labelledby]="'t-' + section.id">
             <table>
-              <caption class="visually-hidden">{{ section.title }} : revenus, dépenses et solde</caption>
+              <caption class="visually-hidden" [id]="'t-' + section.id">{{ section.title }} : revenus, dépenses et solde</caption>
               <thead>
                 <tr>
                   <th scope="col">{{ section.head }}</th>

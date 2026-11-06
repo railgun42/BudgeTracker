@@ -136,7 +136,7 @@ function monday(date: string): string {
       </div>
     </div>
 
-    <ul class="rows" aria-label="Transactions">
+    <ul class="rows" aria-label="Transactions" [attr.aria-busy]="loading()">
       @for (g of groups(); track g.key; let last = $last) {
         <li class="group">
           <h2 class="group-head">
@@ -263,6 +263,8 @@ function monday(date: string): string {
       } @empty {
         @if (!loading()) {
           <li class="empty muted">Aucune transaction. <a routerLink="/transactions/new">Ajouter une transaction</a></li>
+        } @else {
+          <li class="empty muted">Chargement…</li>
         }
       }
     </ul>

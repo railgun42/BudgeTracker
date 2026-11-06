@@ -178,6 +178,14 @@ a {
   }
 }
 
+// Liens autonomes (pied de page, « ← Administration », « Mot de passe oublié ? »…) : cible ≥ 24 px (WCAG 2.5.8).
+// Padding vertical d'un élément inline : la zone cliquable grandit sans changer la hauteur de ligne ni la mise en page,
+// même si une phrase à lien unique est touchée. Spécificité nulle et liens sans classe seulement : boutons-liens et menus gardent leurs styles.
+:where(nav, section, div, figcaption, header, footer, li) > a:where(:not([class])),
+:where(p) > a:where(:only-child:not([class])) {
+  padding-block: 0.25rem;
+}
+
 :focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 2px;
@@ -393,6 +401,7 @@ input[type='file']::file-selector-button {
   select,
   textarea {
     width: 100%;
+    min-width: 0; // un <input type="date"> a une largeur minimale propre : sans ça il déborde d'une colonne étroite
     min-height: var(--tap);
     padding: var(--space-2) var(--space-3);
     border: 1px solid var(--color-border-strong);
@@ -678,9 +687,22 @@ fieldset.field {
 
 // --- Tableaux : compacts, chiffres alignés à droite ---
 
+// Indice de défilement : une ombre marque le bord derrière lequel il reste du contenu.
+// Les caches (couleur de la carte, `local`) suivent le contenu et recouvrent l'ombre (`scroll`) une fois le bord atteint.
 .scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  --scroll-shade: color-mix(in srgb, var(--color-text) 22%, transparent);
+  background:
+    linear-gradient(to right, var(--color-surface) 40%, transparent) left / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--color-surface) 40%, transparent) right / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, var(--scroll-shade), transparent) left / 0.75rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, var(--scroll-shade), transparent) right / 0.75rem 100% no-repeat scroll;
+  background-color: var(--color-surface);
+
+  > table {
+    background: transparent;
+  }
 }
 
 table {
