@@ -29,7 +29,7 @@ Monorepo : `apps/web`, `apps/api`, package `shared` pour les types/enums du doma
 ### 3.1 Règles transverses
 - **Montants** : entiers en **centimes** (`BIGINT`), jamais de `float`. Devise **EUR** figée ; colonne `currency` présente mais non exploitée.
 - **Dates** : une transaction porte une **date de jour** (`LocalDate`, sans heure ni fuseau). Les horodatages techniques (`createdAt`…) sont en UTC.
-- **Isolation** : toute table métier porte `userId`, et chaque requête filtre dessus (test automatisé obligatoire sur chaque endpoint). Les routes d'administration (§13) font exception côté accès, jamais côté confidentialité : elles ne servent que des agrégats et les messages adressés à l'administrateur, jamais les transactions d'un utilisateur.
+- **Isolation** : toute table métier porte `userId`, et chaque requête filtre dessus (test automatisé obligatoire sur chaque endpoint). Les routes d'administration (§13) font exception côté accès, jamais côté confidentialité : elles ne servent que des agrégats et les messages adressés à l'administrateur, jamais les transactions d'un utilisateur. Seule exception : la liste des utilisateurs (§13.7), limitée à l'identité, au rôle, à l'offre et au stockage de pièces jointes.
 - **Concurrence** : colonne `version` sur les entités modifiables ; une écriture sur une version périmée renvoie **409** et l'UI propose de recharger.
 - **Suppression logique** : `deletedAt` sur transactions, comptes, récurrences. Annulation possible depuis l'UI. Purge définitive après **30 jours** et immédiate lors de la suppression du compte utilisateur. Toutes les requêtes filtrent `deletedAt IS NULL`.
 
@@ -77,7 +77,7 @@ Un virement est **une opération, deux transactions** jumelées par `transferId`
 - Type vérifié côté serveur par signature de fichier, pas seulement par extension. Nom de fichier jamais utilisé comme chemin.
 - Stockage S3 OVH, accès par URL signée de courte durée, jamais publique.
 - **Quota par utilisateur** (200 Mo) pour limiter l'abus.
-- Offre payante à quota élevé : **non implémentée**, mais le quota est une valeur par utilisateur (pas une constante) pour l'autoriser plus tard.
+- Offre payante à quota élevé : **paiement non implémenté**. Le quota est une valeur par utilisateur ; l'administrateur peut attribuer l'offre **premium** ou ajuster le quota d'un utilisateur (§13.7).
 - Supprimées avec la transaction (après purge) et avec le compte.
 - **Coffre-fort** (`/me/coffre`, amendé le 2026-10-19) : tous les documents de l'utilisateur au même endroit, c'est-à-dire les pièces de ses transactions et les documents **déposés directement** (sans transaction ; mêmes types, taille et quota). Pour chacun : nom, type, taille, date d'ajout, transaction liée (lien vers l'historique filtré), tags. Tri (date, nom, taille, type), filtres par type et par tag, recherche par nom. Tags = les tags de l'utilisateur (communs aux transactions) ; plusieurs par document ; création, renommage et suppression depuis le coffre. Actions : aperçu (image en modale, PDF dans la visionneuse du navigateur), téléchargement sous le nom d'origine, gestion des tags, suppression (fichier effacé ; la transaction liée reste, sans justificatif). Les pièces des transactions à la corbeille n'y figurent pas mais comptent dans le quota jusqu'à leur purge.
 
@@ -198,6 +198,17 @@ Une page permet à l'utilisateur de créer ses catégories et sous-catégories (
 - **Annonce à tous** (`Announcement`, ex. « Ajout d'une catégorie par défaut ») : un seul enregistrement, l'état « lu » étant suivi par utilisateur (pas de duplication par destinataire).
 - **Notification personnelle** (`Notification` ciblée), par exemple en réponse à un retour ou à une suggestion.
 - **Modification des CGU** : e-mail obligatoire (RGPD, envoi hors application, procédure d'exploitation) **et** annonce dans l'application, avec un **préavis de 30 jours** avant l'entrée en vigueur. La poursuite de l'utilisation vaut acceptation ; **aucune ré-acceptation explicite** n'est imposée, sauf changement important touchant un traitement fondé sur le consentement (alors à ajouter explicitement). `termsVersion` conserve la version acceptée à l'inscription.
+
+### 13.7 Liste des utilisateurs (ajouté le 2026-11-06)
+- **Page `/admin/users`** : un tableau des utilisateurs avec nom, e-mail, e-mail vérifié (oui/non), rôle (`USER`, `ADMIN`), offre (`FREE`, `PREMIUM`), stockage de pièces jointes utilisé sur le quota (octets et %, pièces à la corbeille comprises, comme le contrôle d'envoi), date d'inscription et dernière connexion. **Jamais de donnée financière** : ni comptes, ni soldes, ni transactions, ni nombre de transactions.
+- **Recherche** : texte libre sur le nom ou l'e-mail (contient, sans tenir compte de la casse ni des accents).
+- **Filtres** (combinables) : rôle, offre, e-mail vérifié, activité (connecté depuis 30 jours / inactif / jamais connecté), stockage au-delà de 80 % du quota.
+- **Tri** : nom, e-mail, inscription, dernière connexion, stockage utilisé, part du quota ; croissant ou décroissant. Par défaut : inscription la plus récente d'abord.
+- **Pagination côté serveur** : 50 lignes par page, nombre total de résultats affiché. Les critères (recherche, filtres, tri, page) sont dans l'URL pour être partagés et conservés au retour.
+- **Offre** : `User.plan` (`FREE` par défaut, `PREMIUM`) est **distincte du rôle** (droits d'accès) ; un administrateur peut être premium. Quota par défaut : **200 Mo** en `FREE`, **2 Go** en `PREMIUM` (constantes modifiables). Changer l'offre remet le quota à la valeur par défaut de la nouvelle offre.
+- **Actions de l'administrateur** (modale de confirmation, verrou de version, 409 si la ligne a changé) : changer l'offre ; fixer un quota personnalisé (de 10 Mo à 50 Go). Un quota inférieur au stockage déjà utilisé est accepté : il bloque seulement les nouveaux envois. Chaque action est **journalisée** (`AdminAuditLog` : administrateur, utilisateur visé par son identifiant, ancienne et nouvelle valeur ; jamais l'e-mail).
+- **Rôle** : affiché seulement, **jamais modifiable depuis l'écran** (§13.1, l'élévation reste un script d'exploitation).
+- **Confidentialité** : la politique de confidentialité indique que l'administrateur voit le nom, l'e-mail, l'offre, le stockage utilisé et les dates d'inscription et de connexion de chaque compte, pour l'exploitation du service.
 - Contenu affiché comme du texte brut (jamais interprété comme HTML).
 
 ### 13.7 RGPD

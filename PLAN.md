@@ -108,7 +108,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ### Suivi : ce qu'il reste à faire, dans l'ordre
 
-E0 à E43b sont terminées (E43 cochée le 2026-11-06 avec la fin d'E43b) ; prochaine étape : E44. E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+E0 à E43b sont terminées (E43 cochée le 2026-11-06 avec la fin d'E43b) ; prochaine étape : E43c (liste des utilisateurs, ajoutée le 2026-11-06), puis E44. E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
 
 | Étape | Sujet | Dépend de |
 |---|---|---|
@@ -131,7 +131,8 @@ E0 à E43b sont terminées (E43 cochée le 2026-11-06 avec la fin d'E43b) ; proc
 | E42c | Tableau de bord : courbe du solde, dernières transactions, donut | E42b |
 | E43 | Refonte du style (inclut R-3, R-4, R-5 de `docs/remarques.md`) | toutes les fonctionnalités (E30 à E41d, et E42a à E42c) |
 | E43b | Corrections issues de l'audit navigateur d'E43 (D1 à D4, R-3/R-5 à confirmer) | E43 |
-| E44 | Conteneurs et déploiement (début du passage au serveur OVH) | E43b |
+| E43c | Administration : liste des utilisateurs, offre premium et quota (SPEC §13.7) | E43b |
+| E44 | Conteneurs et déploiement (début du passage au serveur OVH) | E43c |
 | E45 | Sauvegardes | E44 |
 | E46 | Supervision et check-list de lancement | E45 |
 
@@ -457,6 +458,13 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
 - Vérif : `npm run lint`, `npm run build`, `npm test`, `npm test -w @budgetracker/shared`, `npm test -w api`, `npm test -w web` verts (sans exécuter le build de `shared` en parallèle : deux échecs transitoires « no tests » vus à la 1re exécution, verts à la 2e) ; nouvel audit axe sur /stats à 375 et 768 px sans violation ; aucun scroll horizontal ; D2 lisible à 375 px ; D3 sans débordement ; D4 sans cible < 24 px hors texte courant ; R-4 et R-5 confirmés au navigateur ; puis cocher E43.
 - Fait : D1 (`.scroll` focusable, `role="region"` nommé par la légende du tableau, car la section porte déjà le nom du titre ; ombre de bord en CSS sur tous les `.scroll`) ; D2 (libellés d'axes sortis du SVG en HTML, montants dans une gouttière à gauche) ; D3 (`min-width: 0` sur les champs) ; D4 (`padding-block` sur les liens autonomes, neutre pour la hauteur de ligne) ; historique : « Chargement… » et `aria-busy` pendant le chargement de la liste. Audit : axe /stats sans violation à 375/768/1280, clair et sombre ; aucun scroll horizontal ; aucune cible < 24 px hors texte ; R-4 (pastille clair/sombre) et R-5 (souris, Entrée, Espace) confirmés ; 9 modales : focus initial dedans, Tab ne sort pas, Échap ferme, focus rendu au déclencheur.
 - Écarts restants, hors E43b (ils demandent du TypeScript, pas seulement templates/styles) : dans l'historique, ouvrir ou annuler l'édition en ligne laisse le focus sur `body` (le bouton « Modifier » disparaît du DOM) ; `projection-chart` (simulations) garde des libellés d'axes en unités du viewBox, donc le même écrasement que D2 sur mobile.
+
+**E43c — Administration : liste des utilisateurs, offre premium et quota (SPEC §13.7)** (dépend d'E43b)
+- Objectif : page `/admin/users` (tableau, recherche, filtres, tri, pagination côté serveur, critères dans l'URL) et actions d'administration sur l'offre et le quota, sans aucune donnée financière.
+- Données : migration `User.plan` (enum `Plan` : `FREE`, `PREMIUM`, défaut `FREE`) et `User.version` (verrou des actions admin). Constantes de quota par offre (200 Mo, 2 Go) et bornes du quota personnalisé (10 Mo à 50 Go) dans `packages/shared`.
+- API : `GET /api/v1/admin/users?q&role&plan&verified&activity&storageOver80&sort&dir&page` (50 par page ; renvoie `items`, `total`). Stockage utilisé calculé par agrégat SQL sur `Attachment.sizeBytes` (pièces à la corbeille comprises), sans requête N+1. `PATCH /api/v1/admin/users/:id` (`plan` ou `storageQuotaBytes`, avec `version`) : 409 si la version est périmée, 422 hors bornes, quota remis à la valeur de l'offre quand l'offre change, entrée `AdminAuditLog` (identifiant visé, ancienne et nouvelle valeur, sans e-mail). Toutes les routes : `JwtAuthGuard` + `AdminGuard`, et ajout à `adminRoutes` du registre d'isolation. Le DTO ne contient que les champs de §13.7 : aucun champ de compte ni de transaction.
+- Front : `features/admin/users/` avec un lien depuis l'accueil admin. Tableau dans un conteneur `.scroll` focusable (motif d'E43b) ; tri par en-têtes boutons avec `aria-sort` ; recherche différée (debounce) ; état vide, erreur et chargement ; modale d'action (offre ou quota) avec le message 409 « rechargez ». Page Confidentialité complétée (§13.7).
+- Vérif : tests API (401 anonyme, 403 non-admin, recherche insensible à la casse et aux accents, chaque filtre, chaque tri, pagination et `total`, stockage corbeille comprise, 409, 422, journal écrit sans e-mail, aucun champ financier dans la réponse) ; registre d'isolation à jour ; tests de composant (critères ↔ URL, `aria-sort`, modale) ; `npm run lint`, `npm run build` et les quatre suites vertes ; axe sans violation et aucun défilement horizontal sur `/admin/users` à 375, 768 et 1280 px, en clair et en sombre.
 
 ### Phase 11 — Déploiement, sauvegardes, supervision (SPEC §11.7)
 
