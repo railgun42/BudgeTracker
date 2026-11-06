@@ -108,7 +108,7 @@ Catégories système seedées : *Intérêts*, *Espèces*, *Solde de départ* + u
 
 ### Suivi : ce qu'il reste à faire, dans l'ordre
 
-E0 à E42c sont terminées, E43 est commencée (plusieurs écrans déjà refaits). E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
+E0 à E42c sont terminées, E43 est commencée (plusieurs écrans déjà refaits) ; l'audit navigateur du 2026-11-06 a ouvert E43b (corrections), à finir avant E44. E42 est décrite (SPEC §7) et découpée en E42a à E42c. **Les numéros suivent l'ordre d'exécution** : on prend la première ligne non terminée dont les dépendances sont faites.
 
 | Étape | Sujet | Dépend de |
 |---|---|---|
@@ -130,7 +130,8 @@ E0 à E42c sont terminées, E43 est commencée (plusieurs écrans déjà refaits
 | E42b | Tableau de bord : socle, chiffres clés, alertes, personnalisation | E42a |
 | E42c | Tableau de bord : courbe du solde, dernières transactions, donut | E42b |
 | E43 | Refonte du style (inclut R-3, R-4, R-5 de `docs/remarques.md`) | toutes les fonctionnalités (E30 à E41d, et E42a à E42c) |
-| E44 | Conteneurs et déploiement (début du passage au serveur OVH) | E43 |
+| E43b | Corrections issues de l'audit navigateur d'E43 (D1 à D4, R-3/R-5 à confirmer) | E43 |
+| E44 | Conteneurs et déploiement (début du passage au serveur OVH) | E43b |
 | E45 | Sauvegardes | E44 |
 | E46 | Supervision et check-list de lancement | E45 |
 
@@ -443,6 +444,17 @@ L'ancien front est ignoré : pas d'audit ni de migration. On repart d'un front v
   - **R-5 — Indice de dépliage sur « Solde jour par jour » (/simulations).** ✅ (2026-11-03) Le `<summary>` de `cashflow-page.ts` est en `display: flex` : le marqueur natif disparaît. Ajouter un chevron (haut/bas selon `open`), purement CSS, sans changer la logique ; vérifier si d'autres `<details>` (filtres de l'historique) ont le même défaut.
   - Vérif de ces trois points : parcours à 360 px sans défilement horizontal (/stats), pastille visible sur le bouton du menu mobile, chevron qui change d'état au clavier et à la souris.
 - Vérif : `ng test` et `ng build` verts, parcours manuel complet mobile et bureau, contrastes vérifiés ; aucune logique métier modifiée (diff limité aux templates/styles).
+
+**E43b — Corrections de l'audit navigateur d'E43 (2026-11-06)**
+- Contexte : audit réel (Chromium, 375/768/1280 px, clair/sombre, axe-core) : lint, build et tests verts, aucun scroll horizontal de page, aucun défaut de contraste. E43 reste ouverte tant que les points ci-dessous ne sont pas corrigés ; ne cocher E43 qu'à la fin d'E43b. Seuls templates et styles sont touchés, aucune logique métier.
+- **D1 (important) — /stats, régions défilantes non focusables** (axe `scrollable-region-focusable`, mobile et tablette). Dans `features/stats/stats-page.ts`, les conteneurs `.scroll` des sections `h-monthly` et `h-category` reçoivent `tabindex="0"`, `role="region"` et un `aria-labelledby` vers leur titre ; ajouter un indice visuel de défilement (ombre de bord ou colonnes réduites) pour que « Dépenses » du tableau « Par catégorie » ne soit plus coupé sans signal (complète R-3).
+- **D2 (important) — Dashboard, courbe du solde** (`features/dashboard/balance-chart.ts`) : sur mobile, les libellés d'axes sont écrasés par la mise à l'échelle du SVG (taille de police en unités du viewBox) ; sur bureau, le libellé « 9 420,00 € » chevauche le début de la courbe (marge gauche). Conserver `role="img"`, l'`aria-label` et la navigation clavier existants.
+- **D3 (mineur) — /simulations, étape « Période », 375 px** (`features/simulations/cashflow-page.ts`) : l'input « Date de fin » dépasse du bord droit de sa carte (grille à deux colonnes avec `min-width: 0` sur les champs, ou passage en une colonne sur mobile).
+- **D4 (mineur) — cibles tactiles** : liens autonomes de 19 à 21 px de haut (« Mot de passe oublié ? », « Tout l'historique », « Voir les statistiques », « ← Administration », liens du pied de page, liens de l'accueil admin). Ajouter un `min-height`/padding global dans `styles.scss` pour atteindre 24 px sans changer la mise en page des liens dans le texte courant.
+- **R-5 à confirmer** : le chevron global existe (`styles.scss` ~l. 1129, visible sur « Filtres ») mais « Solde jour par jour » (`details.daily`, `cashflow-page.ts`) n'a pas été contrôlé : calculer une simulation (comptes, date de fin, ligne de mouvement), vérifier que le chevron change d'état à la souris et à Entrée/Espace.
+- **R-4 à confirmer** : pastille rouge sur le bouton du menu mobile à vérifier avec une notification non lue (en créer une depuis `/admin/notifications`).
+- Contrôles complémentaires restés partiels à l'audit : navigation clavier et modales sur toutes les pages (Tab/Maj+Tab, Échap, pas de piège de focus), états vide/erreur/chargement des formulaires, modale d'édition de l'historique.
+- Vérif : `npm run lint`, `npm run build`, `npm test`, `npm test -w @budgetracker/shared`, `npm test -w api`, `npm test -w web` verts (sans exécuter le build de `shared` en parallèle : deux échecs transitoires « no tests » vus à la 1re exécution, verts à la 2e) ; nouvel audit axe sur /stats à 375 et 768 px sans violation ; aucun scroll horizontal ; D2 lisible à 375 px ; D3 sans débordement ; D4 sans cible < 24 px hors texte courant ; R-4 et R-5 confirmés au navigateur ; puis cocher E43.
 
 ### Phase 11 — Déploiement, sauvegardes, supervision (SPEC §11.7)
 
